@@ -168,8 +168,11 @@ func process_weapon_hits() -> void:
 		now_pts[bname] = rig.blade_world(bname)
 	if opponent != null and opponent.can_be_hit():
 		var cap := opponent.hurt_capsule()
-		for i in anim.clip.hits.size():
-			var h: Dictionary = anim.clip.hits[i]
+		# A contact can switch our clip (a deflect that breaks posture, a recoil, a mikiri), so
+		# walk the clip we started with and stop once it's gone.
+		var clip := anim.clip
+		for i in clip.hits.size():
+			var h: Dictionary = clip.hits[i]
 			if _hits_done.has(i):
 				continue
 			if t < float(h["from"]) or t > float(h["to"]):
@@ -190,12 +193,15 @@ func process_weapon_hits() -> void:
 				continue
 			var info := h.duplicate()
 			info["index"] = i
-			info["clip"] = anim.clip.name
+			info["clip"] = clip.name
 			info["point"] = res["point"]
 			# Contact moment inside this tick (sub-tick precise game time).
 			info["time"] = Game.clock - Game.tick_delta * (1.0 - float(res["frac"]))
+			var outcome := _on_weapon_contact(info)
+			if anim.clip != clip:
+				break          # the contact ended this attack; its other hit windows are gone
 			# A strike dodged with i-frames isn't used up: it can still land when they end.
-			if _on_weapon_contact(info) != Combat.RESULT_EVADED:
+			if outcome != Combat.RESULT_EVADED:
 				_hits_done[i] = true
 	for bname in now_pts:
 		_blade_prev[bname] = now_pts[bname]

@@ -6,7 +6,7 @@ extends Node3D
 ## Run (from the project folder):
 ##   godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--verbose]
 ## Suites: reach, deflect, spam, mikiri, dodge, sweep, shuriken, attack, cancel, soak (default: all).
-## Exit code 0 when every check passes.
+## Exit code 0 when every check passes, including "no engine or script errors during the run".
 
 const DT := 1.0 / 120.0
 
@@ -19,9 +19,32 @@ var checks := 0
 
 var _sched: Array = []          ## [game time, Callable]
 var _results: Array = []        ## hit_resolved records for the current scenario
+var _errors := ErrorLog.new()
+
+
+## Collects engine and script errors (not warnings) raised while the lab runs, so a run that
+## hits any runtime error fails even if every gameplay check passes.
+class ErrorLog extends Logger:
+	var lines: Array[String] = []
+	var _mutex := Mutex.new()
+
+	func _log_error(function: String, file: String, line: int, code: String, rationale: String,
+			_editor_notify: bool, error_type: int, _script_backtraces: Array[ScriptBacktrace]) -> void:
+		if error_type == ERROR_TYPE_WARNING:
+			return
+		_mutex.lock()
+		lines.append("%s:%d %s: %s" % [file.get_file(), line, function, rationale if rationale != "" else code])
+		_mutex.unlock()
+
+	func count() -> int:
+		_mutex.lock()
+		var n := lines.size()
+		_mutex.unlock()
+		return n
 
 
 func _ready() -> void:
+	OS.add_logger(_errors)
 	process_physics_priority = -500   # after Game's clock tick, before the fighters
 	Game.deterministic = true
 	Game.time_effects_enabled = false
@@ -37,6 +60,10 @@ func _ready() -> void:
 	for s in suites:
 		print("\n=== suite: %s ===" % s)
 		await call("suite_" + s)
+	var errs := _errors.lines.duplicate()
+	check(errs.is_empty(), "no engine or script errors during the run (%d)%s" % [errs.size(),
+		"" if errs.is_empty() else ": " + " | ".join(errs.slice(0, 5))])
+	OS.remove_logger(_errors)
 	print("\n%d checks, %d failures" % [checks, failures.size()])
 	for f in failures:
 		print("  FAIL: " + f)
@@ -256,6 +283,24 @@ func suite_deflect() -> void:
 	await run_until_boss_done()
 	check(first_result() == Combat.RESULT_DEFLECT and player.state != Player.S.GUARD_BREAK,
 		"deflect at full posture does not guard-break (state %s)" % Player.S.keys()[player.state])
+	# A deflect that breaks his posture partway through a multi-hit attack switches his clip
+	# while that attack's hit windows are being processed: he must go down cleanly, with no
+	# runtime error (this used to index the new clip's hits with the old clip's indices).
+	for clip in ["b_whirl", "b_jab"]:
+		var cts3 := await contact_times(clip, 2.2)
+		await setup(2.2)
+		var e0 := _errors.count()
+		var t2 := boss_attack(clip)
+		var pk: float = t2 + float(cts3[0]["rel"]) - 0.06
+		at(pk, func():
+			boss.posture = boss.max_posture - 0.5       # one deflect from breaking (after regen)
+			player.press_guard(pk))
+		await run_until_boss_done()
+		await ticks(30)
+		check(first_result() == Combat.RESULT_DEFLECT and boss.state == Boss.S.STAGGER,
+			"%s: a deflect that breaks his posture mid-attack staggers him (%s, %s)" % [clip,
+			res_name(first_result()), Boss.S.keys()[boss.state]])
+		check(_errors.count() == e0, "%s: posture break mid-attack raises no runtime error (%d)" % [clip, _errors.count() - e0])
 
 
 ## Spam penalty: window per press depends on the time since the last *release*.

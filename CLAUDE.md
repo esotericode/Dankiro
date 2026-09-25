@@ -25,7 +25,8 @@ the script backs off and retries, so let it run. For another version, set
 
 ## Testing in the engine
 
-- Combat lab (headless, about 6 min for everything, exits 0 when all checks pass):
+- Combat lab (headless, about 6 min for everything, exits 0 when all checks pass; any engine or
+  script error during the run also fails it):
   `godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--verbose]`
   Suites: reach, deflect, spam, mikiri, dodge, sweep, shuriken, attack, cancel, soak.
 - Rendered frames (to actually *see* a change), using Movie Maker with software Vulkan:
