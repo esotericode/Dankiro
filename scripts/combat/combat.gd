@@ -43,6 +43,13 @@ const PLAYER_POSTURE := 100.0
 const PLAYER_POSTURE_REGEN := 14.0          ## per second, after the delay
 const PLAYER_POSTURE_REGEN_GUARD := 1.6     ## multiplier while holding guard
 const PLAYER_POSTURE_DELAY := 0.9
+## Hit-stun before your guard can come back up (held or pressed): light blows (flurry hits,
+## jabs, shuriken: damage up to LIGHT_HIT_DMG) barely stagger you, so holding guard blocks the
+## rest of a string after one missed deflect. Heavy blows (thrusts, sweeps, big finishers)
+## knock you down instead.
+const LIGHT_HIT_DMG := 20.0
+const HIT_STUN_LIGHT := 0.12
+const HIT_STUN := 0.22
 const HEAL_CHARGES := 3
 const HEAL_AMOUNT := 0.55                   ## fraction of max HP
 

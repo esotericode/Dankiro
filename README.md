@@ -64,6 +64,12 @@ The input map is registered in code (`scripts/autoload/game_input.gd`); actions 
   guard breaks. Pressing too early therefore blocks; only a very early tap lets a strike through.
 - Deflecting several strikes in a row (each within 1.2 s) hits his posture harder: +12% per
   deflect, up to +36%.
+- **Flurries** (the whirl, the jabs, a shuriken volley): missing one deflect doesn't cost you the
+  string. A light blow knocks your guard down for only 0.12 s (0.22 s for a heavier one), and if
+  you're holding guard it comes straight back up, so you block the rest; any press in that
+  time is kept and comes up the moment you can guard. Mashing guard through a flurry keeps
+  your guard up the whole time (your character just holds the guard pose), so everything
+  gets blocked, and the spam penalty shrinks your deflect window, as in Sekiro.
 - Timing is measured precisely. Physics runs at 120 Hz with agile input flushing. Presses are
   stamped with sub-tick game time, and blade contact time is found by a swept blade-versus-capsule
   test (`Combat.blade_vs_capsule`), so the window isn't rounded to frames. Press **F3** to see how
@@ -78,7 +84,14 @@ The input map is registered in code (`scripts/autoload/game_input.gd`); actions 
   the blade has passed. Pressed during the committed swing, the guard is queued: it comes up
   (with its deflect window) as soon as the recovery opens.
 - When he blocks a slash, your sword bounces and the next one comes a beat later. Keep hitting
-  his guard and he **parries** you, knocking your sword away, then counters.
+  his guard and he **parries** you, knocking your sword away, then counters, and often keeps
+  pressing after the counter.
+- Deflecting the end of his string, a kick or a punished recovery staggers him, and your first
+  hits make him reel. After two (one or two in phase two) he **breaks out** instead of reeling
+  again: he parries your next swing, hops back out of reach (your swings whiff while he's in
+  the air) into a thrust or a leap, or takes the blow and answers with a fast cut or a sweep.
+  Once he's back on his feet he often backs off, throws shuriken or attacks at once, and he
+  avoids opening with the attack you just punished. You can't stun-lock him.
 
 ### Dodging
 
@@ -125,7 +138,7 @@ The kanji flashes red above him with a deep warning sound and his blades glow ho
 - He moves with intent: he stalks at a varying pace, sometimes stops to watch you, runs to a new
   spot and opens with a special from there, and **runs at you** to flow into a running cut.
   Backing off or running away makes him charge or leap after you. If you keep your distance he
-  may twirl his staff at you, which leaves him open.
+  may plant his staff with a stamp and a slow breath, daring you in, which leaves him open.
 - He guards most attacks from neutral and often strikes right after you stop hitting his guard.
 - He punishes healing at range with thrusts and leaping cleaves.
 - His attack strings end in mix-ups: combo → combo → *(delayed overhead | perilous thrust | perilous sweep)*.
@@ -133,11 +146,11 @@ The kanji flashes red above him with a deep warning sound and his blades glow ho
 | Attack | Tell | Answer |
 | --- | --- | --- |
 | Rising Fang → Turning Fang → Heaven's Fall | Coils right, low blade trails behind | Deflect each hit. The overhead finisher is **delayed**, so wait for it. |
-| Fang Jabs | Draws the staff back at the hip (no kanji) | Deflect twice. Mikiri doesn't work on these. |
+| Fang Jabs | Stamps and lifts the staff to head height, drawn back with the blade over you, and holds it for a beat (no kanji) | Deflect twice: each stab drops the blade into your chest. Mikiri doesn't work on these. |
 | Perilous Thrust 危 | Turns side-on, draws the staff back and holds at full coil | Mikiri (neutral dodge on the release) or deflect |
 | Perilous Sweep 危 | Slides his grip to the staff's end, sinks low and coils to his left | Jump, then kick |
-| Whirling Fangs | Raises the staff level overhead with a whoosh, then drops it into a windmill at his side | Deflect the rhythm (4 hits), then the finishing cut |
-| Shuriken volley | Quick crouch, hand to his belt with a glint of steel, then leaps back | Deflect each throw: **3 fast + 1 delayed**, or **5 fast** |
+| Whirling Fangs | Raises the staff level overhead with a whoosh, then cocks it at his side and the windmill spins up | Deflect each blade as it comes down on you (4 chops, one every 0.375 s, each with a whoosh that peaks on contact), then the finishing cut after a pause |
+| Shuriken volley | Quick crouch, hand to his belt with a glint of steel, leaps back and hangs for a beat at the top, throwing hand glinting | Deflect each glowing star as it reaches you: **3 in the air + 1 delayed**, or **5 in the air** |
 | Running Cut | Runs at you, staff swinging up behind his shoulder | Deflect (it tracks hard) |
 | Falling Crescent | Crouches at range, leaps with the staff overhead | Deflect on landing (high) |
 | Parry Counter | Deflects your attack | Guard right away |
@@ -158,25 +171,30 @@ godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--v
 | Suite | What it checks |
 | --- | --- |
 | `reach` | Every hit window of every boss attack (including the running cut) connects from point-blank to the edge of its range, straight on and 25° off-axis |
+| `tells` | When each attack's blows land from 1.4 to 2.6 m: every blow lands as the blade reaches you (not the instant its hit window opens, which would mean the blade was already touching you), and every opener gives at least 0.45 s of warning |
 | `deflect` | Presses 0–200 ms before contact deflect; earlier ones block (held, or a tap still up); late ones get hit; perilous thrusts can't be blocked; a deflect never guard-breaks you; a deflect that breaks his posture partway through a multi-hit attack staggers him cleanly |
+| `flurry` | After a blow of the whirl, the jabs or a shuriken volley lands, holding guard blocks the rest; mashing guard through them never lets a blow through |
+| `punish` | Deflect an attack, then mash attack: he reels from at most a few hits, then answers (a parry or a blow) |
+| `loop` | Two 90 s fights against bots that deflect everything, one hitting him only when he's open and one hitting whenever he's in reach: no more than 3 hits leave him reeling between his attacks, and he rarely reopens with the attack he was just punished for |
 | `spam` | The window shrinks 200/133/100/67/0 ms when mashing, clears after 0.5 s and on a deflect |
 | `mikiri` | Only a neutral step from the release on counters the thrust; during the pull-back is too early; forward-held and side steps never counter. Backstepping (once or twice), an early side step, or a backstep into a sprint all still get stabbed, from 2.4 to 4.4 m |
 | `dodge` | Steps are short (1.5 m, 1.1 m for the neutral step) and have Sekiro's i-frames (0.2 s, 0.3 s forward, forward not against thrusts) |
 | `sweep` | Guarding and dodge i-frames fail against the sweep, and so does getting away (stepping back or aside, two backsteps, sprinting or walking away, from 1.5 to 3.4 m); jumping clears it, and the kick deals posture |
-| `shuriken` | Volley rhythms (3 fast + 1 delayed, 5 fast), a readable tell before the first, every throw deflectable (no posture to him) or blockable |
+| `shuriken` | Volley rhythms (3 in the air + 1 delayed, 5 in the air), a readable tell before the first, every throw deflectable (no posture to him) or blockable |
 | `attack` | Slash reach, and that mashing is rate-limited (no two hits within 0.38 s) |
 | `cancel` | Guard cancels a slash only in the early wind-up and in the recovery |
 | `soak` | A full fight against the real AI (charges, repositioning, volleys) with a bot player that reacts to the blade and to incoming shuriken: deflects, blocks, posture breaks, deathblows, phase two |
 
-The run exits with code 0 when every check passes (520 checks, including the soak). It also
+The run exits with code 0 when every check passes (620 checks, including the soak). It also
 fails if the engine or a script reports any error during the run (it listens through a
 `Logger`), so runtime errors can't hide behind passing gameplay checks.
 
 **Captures**: `tests/capture.tscn` stages shots (`overview`, `deflect`, `deflect_offcenter`,
 `block`, `mikiri`, `thrust_backstep`, `sweep`, `sweep_flee`, `whirl`, `shuriken`, `shuriken5`,
-`charge`, `slashes`, `parried`, and the model close-ups `model`, `model_head`, `model_face`,
-`model_face_p2`, `model_combo`) in the real scene, with a bot reacting to his hit windows. It
-records them with Godot's Movie Maker:
+`charge`, `slashes`, `parried`, `attack <clip> [distance]` for any single boss attack from
+the lock-on camera, and the model close-ups `model`, `model_head`, `model_face`,
+`model_face_p2`, `model_combo`, `model_flourish`) in the real scene, with a bot reacting to his
+hit windows. It records them with Godot's Movie Maker:
 
 ```
 godot --write-movie out/frame.png --fixed-fps 30 res://tests/capture.tscn -- deflect
@@ -267,11 +285,32 @@ How the boss model is built (PS2-style: ~25k triangles, one 2048 px atlas with b
 
 ## Status
 
-This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (520 checks, including
+This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (620 checks, including
 a full-fight soak), the game boots and runs with no script errors, and every change to the
 visuals was checked on frames rendered with Movie Maker.
 
-**Latest: Sojin's PS2-style model.** The boss was a set of flat-coloured primitives bolted to
+**Latest: a combat readability pass** (from playtesting):
+
+- **No more awkward staff twirl.** The flourish he did after some attacks (and in his intro)
+  is now a staff plant: he drives the butt of the staff into the flagstones with a stamp and
+  takes a slow breath, daring you in.
+- **Fang Jabs** keep their two quick stabs, but first he stamps, lifts the staff to head
+  height and holds the aim for a beat: the first stab lands at ~0.55 s instead of ~0.38 s.
+- **Whirling Fangs** is slower (a chop every 0.375 s instead of 0.28 s). The wheel spins up
+  from a cocked start, so you see the first blade rise and fall, and each chop has a whoosh
+  that peaks on contact. Every blow of every attack now lands as the blade reaches you (the
+  new `tells` lab suite checks it), not the instant its hit window opens.
+- **Blocking a flurry after a missed deflect works:** light blows only knock your guard down
+  for 0.12 s, and a held guard comes back up by itself.
+- **No stun-lock:** he reels from your first couple of hits, then breaks out (parry, a hop
+  back into a thrust or leap, or a counter through your combo), and his parry counter no
+  longer hands you a free stagger.
+- **Shuriken:** he hangs at the top of his jump for a beat, throwing hand glinting, before he
+  throws; the throws are further apart, fly slower, and the stars are bigger and glow.
+- **Camera:** the lock-on camera sits a little higher and further right, so his arms and staff
+  show above and beside your character instead of behind it.
+
+**Before that: Sojin's PS2-style model.** The boss was a set of flat-coloured primitives bolted to
 the joints. He is now a skinned, textured model built by a Blender script: black-lacquered
 armour with scarlet lacing, a suji-bachi helmet with gilt kuwagata and a white horsehair mane,
 a snarling red oni mask with ember eyes, and a rebuilt Twin Fang staff with tempered, glowing

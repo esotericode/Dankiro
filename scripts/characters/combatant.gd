@@ -30,6 +30,9 @@ var hurt_radius := 0.3
 
 var _blade_prev: Dictionary = {}    ## blade -> PackedVector3Array (last tick)
 var _hits_done: Dictionary = {}     ## hit index -> true, reset per clip start
+## hit index -> {part: true}: parts of a whole-weapon hit (not the striking blade) that were
+## already resting inside the target when that window opened; they don't count until they leave.
+var _parked: Dictionary = {}
 var _hit_clip := ""
 var _extra_velocity := Vector3.ZERO ## pushes (knockback), decays
 var _was_on_floor := true
@@ -162,6 +165,7 @@ func process_weapon_hits() -> void:
 	if anim.clip.name != _hit_clip:
 		_hit_clip = anim.clip.name
 		_hits_done.clear()
+		_parked.clear()
 	var t := anim.time
 	var now_pts := {}
 	for bname in rig.blades:
@@ -183,10 +187,26 @@ func process_weapon_hits() -> void:
 			# Staff-type weapons hit with their whole length (both blades and the shaft), so a
 			# swing can't pass through someone standing inside the blades' arc.
 			var names: Array = rig.blades.keys() if rig.hit_whole_weapon else [blade]
+			var reach := float(cap[2]) + 0.03
+			if names.size() > 1 and not _parked.has(i):
+				# The rest of the weapon only counts when it sweeps into them: the back blade of a
+				# raised staff resting on someone at close range as the window opens would land
+				# the blow before the striking blade has moved.
+				var parked := {}
+				for bn in names:
+					var was: PackedVector3Array = _blade_prev.get(bn, PackedVector3Array())
+					if bn != blade and not Combat.blade_vs_capsule(was, was, cap[0], cap[1], reach, 1).is_empty():
+						parked[bn] = true
+				_parked[i] = parked
 			var res := {}
 			for bn in names:
 				var prev: PackedVector3Array = _blade_prev.get(bn, PackedVector3Array())
-				var r := Combat.blade_vs_capsule(prev, now_pts[bn], cap[0], cap[1], float(cap[2]) + 0.03)
+				var parked_now: Dictionary = _parked.get(i, {})
+				if parked_now.has(bn):
+					if not Combat.blade_vs_capsule(now_pts[bn], now_pts[bn], cap[0], cap[1], reach, 1).is_empty():
+						continue
+					parked_now.erase(bn)
+				var r := Combat.blade_vs_capsule(prev, now_pts[bn], cap[0], cap[1], reach)
 				if not r.is_empty() and (res.is_empty() or float(r["frac"]) < float(res["frac"])):
 					res = r
 			if res.is_empty():
@@ -210,6 +230,7 @@ func process_weapon_hits() -> void:
 ## Clears per-clip hit bookkeeping (call when (re)starting a clip).
 func reset_hits() -> void:
 	_hits_done.clear()
+	_parked.clear()
 	_blade_prev.clear()
 	_hit_clip = anim.clip.name if anim.clip != null else ""
 

@@ -11,7 +11,10 @@ var distance := 4.3
 var height := 1.62
 ## Over-the-shoulder offset (to the right) so the boss stays visible beside you instead of
 ## being hidden behind your character during his wind-ups.
-var shoulder := 0.55
+var shoulder := 0.75
+## Lock-on looks this much further down than the line to the boss's chest: the camera rides
+## high enough that his arms and staff show above your head at fighting distance.
+var lock_tilt := 0.20
 var mouse_sensitivity := GameInput.MOUSE_SENSITIVITY
 var stick_sensitivity := GameInput.STICK_SENSITIVITY
 
@@ -109,7 +112,7 @@ func _process(delta: float) -> void:
 		if flat_d > 0.35:
 			var want_yaw := Combat.yaw_of(Combat.flat(to))
 			yaw = lerp_angle(yaw, want_yaw, 1.0 - exp(-delta * 8.0))
-		var want_pitch := clampf(atan2(to.y, maxf(flat_d, 0.5)) - 0.16, -0.75, 0.3)
+		var want_pitch := clampf(atan2(to.y, maxf(flat_d, 0.5)) - lock_tilt, -0.75, 0.3)
 		pitch = lerpf(pitch, want_pitch, 1.0 - exp(-delta * 5.0))
 	else:
 		var look := Input.get_vector("cam_left", "cam_right", "cam_up", "cam_down")

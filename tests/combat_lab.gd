@@ -5,7 +5,7 @@ extends Node3D
 ##
 ## Run (from the project folder):
 ##   godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--verbose]
-## Suites: reach, deflect, spam, mikiri, dodge, sweep, shuriken, attack, cancel, soak (default: all).
+## Suites: reach, tells, deflect, flurry, punish, loop, spam, mikiri, dodge, sweep, shuriken, attack, cancel, soak (default: all).
 ## Exit code 0 when every check passes, including "no engine or script errors during the run".
 
 const DT := 1.0 / 120.0
@@ -55,7 +55,7 @@ func _ready() -> void:
 		if not a.begins_with("--"):
 			suites.append(a)
 	if suites.is_empty():
-		suites = ["reach", "deflect", "spam", "mikiri", "dodge", "sweep", "shuriken", "attack", "cancel", "soak"]
+		suites = ["reach", "tells", "deflect", "flurry", "punish", "loop", "spam", "mikiri", "dodge", "sweep", "shuriken", "attack", "cancel", "soak"]
 	await get_tree().physics_frame
 	for s in suites:
 		print("\n=== suite: %s ===" % s)
@@ -232,6 +232,35 @@ func suite_reach() -> void:
 		print("  %-16s %s" % [clip, " ".join(row)])
 
 
+## How each attack reads from where you stand: when its blows land (seconds from the start of
+## the attack) at a few distances. Every blow must land when the blade actually reaches you,
+## not the instant its hit window opens (that means the blade was already inside you, and the
+## deflect timing wouldn't match what you see), and an attack that opens a string must give
+## at least TELL_MIN of warning before its first blow.
+const TELL_MIN := 0.45
+const TELL_OPENERS := ["b_combo_1", "b_backhand", "b_jab", "b_whirl", "b_thrust", "b_sweep", "b_leap",
+	"b_dash_cut", "b_parry_counter"]
+
+
+func suite_tells() -> void:
+	for clip in BOSS_ATTACKS:
+		var c := AnimLibrary.get_clip(clip)
+		var dists: Array = [5.0, 6.5] if clip == "b_leap" else [1.4, 2.0, 2.6]
+		for d in dists:
+			var cts := await contact_times(clip, d)
+			var row := PackedStringArray()
+			for r in cts:
+				var h: Dictionary = c.hits[int(r["index"])]
+				var at_open := float(r["rel"]) - float(h["from"]) < 1.5 * DT
+				row.append("%.3f%s" % [float(r["rel"]), "*" if at_open else ""])
+				check(not at_open, "%s at %.1f m: blow %d lands the instant its window opens (%.3f s)" % [clip, d,
+					int(r["index"]), float(r["rel"])])
+			if not cts.is_empty() and clip in TELL_OPENERS:
+				check(float(cts[0]["rel"]) >= TELL_MIN, "%s at %.1f m: first blow after %.3f s (want >= %.2f)" % [clip, d,
+					float(cts[0]["rel"]), TELL_MIN])
+			print("  %-16s %.1fm: %s" % [clip, d, " ".join(row)])
+
+
 ## Pressing guard `o` seconds before contact: deflect for 0 <= o <= 0.200, block after that
 ## while the guard is up (held, or within GUARD_MIN_TIME of a tap), hit when late.
 ## Perilous thrusts can be deflected but not blocked.
@@ -301,6 +330,45 @@ func suite_deflect() -> void:
 			"%s: a deflect that breaks his posture mid-attack staggers him (%s, %s)" % [clip,
 			res_name(first_result()), Boss.S.keys()[boss.state]])
 		check(_errors.count() == e0, "%s: posture break mid-attack raises no runtime error (%d)" % [clip, _errors.count() - e0])
+
+
+## Flurries (whirl, jabs, shuriken): one missed deflect must not cost the whole string. After
+## the first blow lands, holding guard blocks (or deflects) everything that follows, and
+## spamming guard through a string never lets a blow through.
+func suite_flurry() -> void:
+	for clip in ["b_whirl", "b_jab", "b_shuriken_4", "b_shuriken_5"]:
+		var cts := await contact_times(clip, 2.4)
+		if cts.size() < 2:
+			check(false, "%s: expected several blows against a still player (%d)" % [clip, cts.size()])
+			continue
+		var first := float(cts[0]["rel"])
+		# Get hit by the first blow, then press and hold guard.
+		await setup(2.4)
+		var t0 := boss_attack(clip)
+		var pg: float = t0 + first + 0.02
+		at(pg, func(): player.press_guard(pg))
+		await run_until_boss_done(4.5)
+		await ticks(60)
+		var got: Array = _results.map(func(r): return res_name(int(r["res"])))
+		print("  %-13s hit, then hold guard: %s" % [clip, " ".join(got)])
+		check(got.size() == cts.size() and got[0] == "HIT" and not got.slice(1).has("HIT"),
+			"%s: after the first blow lands, holding guard stops the rest (%s)" % [clip, " ".join(got)])
+		# Tap guard every 0.14 s from well before the first blow to the end.
+		await setup(2.4)
+		t0 = boss_attack(clip)
+		for k in 32:
+			var tp: float = t0 + first - 0.5 + 0.14 * k
+			at(tp, func():
+				if player.guard_held:
+					player.release_guard(tp)
+				player.press_guard(tp))
+			var tr: float = tp + 0.07
+			at(tr, func(): player.release_guard(tr))
+		await run_until_boss_done(4.5)
+		await ticks(60)
+		got = _results.map(func(r): return res_name(int(r["res"])))
+		print("  %-13s spamming guard:     %s" % [clip, " ".join(got)])
+		check(got.size() == cts.size() and not got.has("HIT"), "%s: spamming guard blocks every blow (%s)" % [clip, " ".join(got)])
 
 
 ## Spam penalty: window per press depends on the time since the last *release*.
@@ -552,6 +620,171 @@ func suite_shuriken() -> void:
 		got = _results.map(func(r): return res_name(int(r["res"])))
 		check(got.count("BLOCK") == n_throws, "%s: holding guard blocks every throw (%s)" % [clip, str(got)])
 		player.release_guard(Game.clock)
+
+
+## The punish loop over whole fights (three seeds each) against bots that deflect everything:
+## one hits him only when he's open, the other whenever he's in reach. Deflecting should earn
+## hits, but he must not be locked into "attack, get deflected, eat a combo, same attack again"
+## (or "guard, parry, get deflected, eat a combo"): a string of hits that leave him reeling is
+## short, and after being punished he changes his plan.
+const LOOP_TIME := 90.0
+
+
+func suite_loop() -> void:
+	for style in ["punisher", "aggressor"]:
+		var agg := {"cycles": 0, "reeling": 0, "worst": 0, "punished": 0, "repeats": 0}
+		for sd in [4242, 777, 31337]:
+			var r := await _loop_fight(style, sd)
+			for k in agg:
+				agg[k] = maxi(int(agg[k]), int(r[k])) if k == "worst" else int(agg[k]) + int(r[k])
+		print("  %-9s %d of his attacks, %d hits left him reeling (%.2f per attack, most %d in a row), punished %d times, same attack right after %d" % [
+			style, agg["cycles"], agg["reeling"], float(agg["reeling"]) / maxf(1.0, agg["cycles"]), agg["worst"],
+			agg["punished"], agg["repeats"]])
+		check(int(agg["worst"]) <= 3, "loop (%s): at most 3 hits leave him reeling between his attacks (%d)" % [style, agg["worst"]])
+		check(int(agg["repeats"]) * 5 <= maxi(int(agg["punished"]), 1), "loop (%s): after being punished he rarely opens with the same attack (%d of %d)" % [
+			style, agg["repeats"], agg["punished"]])
+
+
+## "punisher" only swings when he's open (recoil, flinch, recovery); "aggressor" swings
+## whenever he's in reach and no blow is about to land. Returns the fight's tallies.
+func _loop_fight(style: String, sd: int) -> Dictionary:
+	seed(sd)
+	await setup(3.0)
+	player.max_hp = 1.0e6
+	player.hp = player.max_hp
+	boss.passive = false
+	boss.start_fight()
+	var t_end := Game.clock + LOOP_TIME
+	var cycles: Array = []          ## [sequence, hits that left him reeling before his next sequence]
+	var cur := ["", 0]
+	var prev_state := [boss.state]
+	var was_counter := [false, 0.0]
+	boss.struck.connect(func(r):
+		if int(r) == Combat.RESULT_HIT and boss.state == Boss.S.REACT:
+			cur[1] = int(cur[1]) + 1)
+	var handled := {}
+	var serial := [0, ""]
+	var next_attack := 0.0
+	var breaks := [0]
+	boss.posture_broken.connect(func(): breaks[0] += 1)
+	while Game.clock < t_end:
+		await ticks(1)
+		var now := Game.clock
+		# A new "cycle" whenever he starts attacking again: a sequence, or his parry counter.
+		var in_counter := boss.state == Boss.S.ATTACK and boss.anim.clip != null and not boss.anim.loco_active \
+				and boss.anim.clip.name == "b_parry_counter"
+		var counter := in_counter and (not bool(was_counter[0]) or boss.anim.time < float(was_counter[1]))
+		was_counter[0] = in_counter
+		was_counter[1] = boss.anim.time
+		if counter or (boss.state == Boss.S.ATTACK and prev_state[0] != Boss.S.ATTACK and boss._seq_name != ""):
+			if str(cur[0]) != "":
+				cycles.append(cur.duplicate())
+			cur[0] = "counter" if counter else boss._seq_name
+			cur[1] = 0
+		prev_state[0] = boss.state
+		var d := player.distance_to_opponent()
+		player.camera_yaw = Combat.yaw_of(Combat.flat(boss.global_position - player.global_position))
+		player.bot_move = Vector2(0, -1) if d > 2.6 and boss.state != Boss.S.ATTACK else Vector2.ZERO
+		if player.guard_held and now - player.guard_start > 0.1:
+			player.release_guard(now)
+		var ttc := _blade_time_to_contact()
+		for sh in world.get_children():
+			if sh is Shuriken and (sh as Shuriken)._flying and not handled.has(sh.get_instance_id()):
+				var cap := player.hurt_capsule()
+				var dist := Geometry3D.get_closest_point_to_segment(sh.global_position, cap[0], cap[1]).distance_to(sh.global_position)
+				if (dist - float(cap[2])) / Shuriken.SPEED <= 0.08:
+					handled[sh.get_instance_id()] = true
+					if player.guard_held:
+						player.release_guard(now)
+					player.press_guard(now)
+		if boss.state == Boss.S.ATTACK and boss.anim.clip != null and not boss.anim.loco_active:
+			var c := boss.anim.clip
+			if c.name != serial[1] or boss.anim.time < 0.02:
+				serial[1] = c.name
+				serial[0] += 1
+			for i in c.hits.size():
+				var h: Dictionary = c.hits[i]
+				var key := "%d:%d" % [serial[0], i]
+				if handled.has(key):
+					continue
+				if str(c.raw.get("perilous", "")) == "sweep":
+					if boss.anim.time >= float(h["from"]) - 0.3:
+						handled[key] = true
+						player.press_action("jump", now)
+						var kt := now + 0.32
+						at(kt, func(): player.press_action("jump", kt))
+					continue
+				if boss.anim.time >= float(h["from"]) - 0.35 and ttc <= 0.08:
+					handled[key] = true
+					if player.guard_held:
+						player.release_guard(now)
+					player.press_guard(now)
+		elif boss.is_deathblow_ready() and d < 3.0:
+			player.press_action("attack", now)
+		if now >= next_attack and d < 2.8 and not boss.is_deathblow_ready():
+			var open := boss.state == Boss.S.REACT or (boss.state == Boss.S.ATTACK and boss._in_vuln())
+			if open or (style == "aggressor" and ttc > 0.35 and boss.state != Boss.S.ATTACK):
+				player.press_action("attack", now)
+				next_attack = now + 0.12
+	if str(cur[0]) != "":
+		cycles.append(cur)
+	var total := 0
+	var free_runs := 0
+	var punished_repeats := 0
+	var worst := 0
+	var names := PackedStringArray()
+	for k in cycles.size():
+		var n := int(cycles[k][1])
+		total += n
+		worst = maxi(worst, n)
+		names.append("%s:%d" % [cycles[k][0], n])
+		if n >= 2:
+			free_runs += 1
+			# (his parry counter is a reaction to you hitting his guard, not a choice)
+			if k + 1 < cycles.size() and str(cycles[k][0]) != "counter" and str(cycles[k + 1][0]) == str(cycles[k][0]):
+				punished_repeats += 1
+	if verbose:
+		print("    %s seed %d: posture breaks %d: %s" % [style, sd, breaks[0], " ".join(names)])
+	return {"cycles": cycles.size(), "reeling": total, "worst": worst, "punished": free_runs, "repeats": punished_repeats}
+
+
+## Deflect his attack, then mash attack at him (the stun-lock the fight must not allow). He
+## may eat a hit or two in his recoil - that's the reward - but then he has to break out
+## (parry, guard, back off or counter) instead of flinching again and again.
+func suite_punish() -> void:
+	for clip in ["b_backhand", "b_combo_3", "b_jab", "b_whirl", "b_combo_1"]:
+		var cts := await contact_times(clip, 2.2)
+		await setup(2.2)
+		boss.passive = false
+		var got: Array = []
+		# H: a hit that left him reeling; h: one he took while attacking anyway (a trade).
+		boss.struck.connect(func(r):
+			got.append("H" if int(r) == Combat.RESULT_HIT and boss.state == Boss.S.REACT else
+				("h" if int(r) == Combat.RESULT_HIT else res_name(int(r))[0])))
+		var t0 := boss_attack(clip)
+		var last := 0.0
+		for c in cts:
+			var pt: float = t0 + float(c["rel"]) - 0.08
+			at(pt, func():
+				if player.guard_held:
+					player.release_guard(pt)
+				player.press_guard(pt))
+			at(pt + 0.06, func(): player.release_guard(pt + 0.06))
+			last = maxf(last, pt + 0.1)
+		# Then mash: an attack press every 0.1 s for 4 s.
+		for k in 40:
+			var tk := last + 0.1 * k
+			at(tk, func(): player.press_action("attack", tk))
+		await ticks(int(ceil((last + 4.2 - Game.clock) / DT)))
+		var reeling := 0
+		var worst := 0
+		for r in got:
+			reeling = reeling + 1 if str(r) == "H" else 0
+			worst = maxi(worst, reeling)
+		print("  %-12s deflected, then mashed: %s  (player hp -%.0f)" % [clip, "".join(got), player.max_hp - player.hp])
+		check(got.size() >= 2, "%s: the mash reaches him (%d)" % [clip, got.size()])
+		check(worst <= 3, "%s: he stops reeling after at most 3 hits in a row (%d)" % [clip, worst])
+		check(got.has("D") or player.hp < player.max_hp, "%s: he answers the mash (parry or a blow)" % clip)
 
 
 ## Player attacks: reach and rhythm. Mashing attack must not produce hits faster than the

@@ -2,8 +2,8 @@ extends Node
 ## Scripted capture director for visual checks with Godot's Movie Maker:
 ##   godot --write-movie out/frame.png --fixed-fps 30 res://tests/capture.tscn -- <shot>
 ## Shots: overview, deflect, deflect_offcenter, block, mikiri, thrust_backstep, sweep, sweep_flee, whirl, shuriken,
-## shuriken5, charge, slashes, parried, and art checks: model (orbit), model_head, model_face, model_face_p2,
-## model_combo.
+## shuriken5, charge, slashes, parried, attack <clip> [distance], and art checks: model (orbit), model_head,
+## model_face, model_face_p2, model_combo, model_flourish.
 ## Loads the real game scene (arena, lighting, HUD, lock-on camera), skips the intro, stages
 ## the fighters and drives the player with a bot that reacts to the boss's hit windows.
 
@@ -221,18 +221,29 @@ func shot_whirl() -> void:
 	_end_at = 3.6
 
 
+## Any single boss attack from the lock-on camera, the player deflecting each blow:
+## `-- attack <clip> [distance]` (to check how an attack reads from where you stand).
+func shot_attack() -> void:
+	var args := OS.get_cmdline_user_args()
+	var clip: String = args[1] if args.size() > 1 else "b_jab"
+	_stage(float(args[2]) if args.size() > 2 else 2.4)
+	auto_guard(0.05, 0.08)
+	at(0.3, func(): boss_string([clip]))
+	_end_at = 0.3 + AnimLibrary.get_clip(clip).length + 0.2
+
+
 func shot_shuriken() -> void:
 	_stage(2.6)
 	auto_guard(0.06, 0.05)
 	at(0.3, func(): boss_string(["b_shuriken_4"]))
-	_end_at = 2.4
+	_end_at = 2.7
 
 
 func shot_shuriken5() -> void:
 	_stage(2.6)
 	auto_guard(0.06, 0.05)
 	at(0.3, func(): boss_string(["b_shuriken_5"]))
-	_end_at = 2.4
+	_end_at = 2.6
 
 
 ## He runs at you from across the arena and flows into the running cut.
@@ -312,3 +323,13 @@ func shot_model_face_p2() -> void:
 	boss._enter_phase_two()
 	_art_camera(1.0, 1.70, 1.84, 25.0, -50.0)
 	_end_at = 4.0
+
+
+## His staff plant (the intro / flourish), 3/4 front.
+func shot_model_flourish() -> void:
+	_stage(4.0)
+	_art_camera(4.0, 1.5, 1.2, 0.0, 30.0)
+	at(0.3, func():
+		boss._seq.clear()
+		boss._play_attack("b_intro", 0.0))
+	_end_at = 2.3

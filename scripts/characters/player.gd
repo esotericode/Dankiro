@@ -66,6 +66,7 @@ var _dodge_started_at := -99.0
 var _dodge_rot := 0.0
 var _mikiri_until := 0.0
 var _invuln_until := -1.0
+var _stun_guard_after := 0.22        ## hit-stun: seconds before the guard can come back up
 var _iframes := Vector2(-1, -1)
 var _iframes_except: Array = []      ## attack kinds the current step's i-frames don't cover
 var _kick_used := false
@@ -203,6 +204,13 @@ func _update_state(delta: float) -> Vector3:
 			and state != S.DEFLECT and state != S.BLOCK:
 		_begin_guard(Game.clock)
 		return Vector3.ZERO
+	# Guard still held through a hit: it comes back up as soon as the flinch allows, as a block
+	# (the old press keeps its time, so this is no free deflect window).
+	if guard_held and state == S.HIT and _can_guard_now():
+		_start_state(S.GUARD)
+		anim.play_locomotion(LOCO, 0.08)
+		anim.set_overlay("p_guard", 1.0, 30.0)
+		return Vector3.ZERO
 	match state:
 		S.MOVE, S.GUARD:
 			return _state_move(delta)
@@ -307,7 +315,7 @@ func _can_guard_now() -> bool:
 		S.REPELLED:
 			return state_time > anim.clip.get_float("cancel", 0.26)
 		S.HIT:
-			return state_time > 0.32
+			return state_time > _stun_guard_after
 		S.KNOCKDOWN:
 			return state_time > 1.35
 	return false
@@ -871,6 +879,10 @@ func _do_hit(info: Dictionary, attacker: Combatant, pos: Vector3) -> void:
 	else:
 		_start_state(S.HIT)
 		anim.play("p_hit", 0.04)
+		# Light blows (flurry hits, jabs, shuriken) only flinch you: the guard can come back
+		# before the next one arrives, so one missed deflect doesn't cost the whole string.
+		var light := kind == "projectile" or float(info.get("dmg", 20.0)) <= Combat.LIGHT_HIT_DMG
+		_stun_guard_after = Combat.HIT_STUN_LIGHT if light else Combat.HIT_STUN
 	velocity.y = minf(velocity.y, 0.0)
 
 

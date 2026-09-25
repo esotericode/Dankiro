@@ -3,9 +3,10 @@ extends Node3D
 ## A thrown shuriken. It flies straight at where the target will be, spinning, and is resolved
 ## against the player exactly like a blade (deflect / block / hit, with the contact time found
 ## by a swept test so the deflect window is measured precisely). Deflected ones glance off,
-## blocked ones drop, and ones that miss stick into the flagstones.
+## blocked ones drop, and ones that miss stick into the flagstones. Big, glinting and glowing,
+## with a light streak behind, so you can track each one in the dark and time it as it lands.
 
-const SPEED := 22.0
+const SPEED := 16.0
 const GRAVITY := 16.0
 
 var velocity := Vector3.ZERO
@@ -18,6 +19,7 @@ var _flying := true
 var _stuck := false
 var _star: MeshInstance3D
 var _streak: MeshInstance3D
+var _glow: Sprite3D
 var _spin := 0.0
 
 static var _star_mesh: ArrayMesh
@@ -51,21 +53,25 @@ func _ready() -> void:
 	add_child(_star)
 	_streak = MeshInstance3D.new()
 	var box := BoxMesh.new()
-	box.size = Vector3(0.018, 0.018, 0.9)
+	box.size = Vector3(0.032, 0.032, 1.2)
 	_streak.mesh = box
 	_streak.material_override = _streak_mat
 	_streak.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_streak.position = Vector3(0, 0, 0.5)
+	_streak.position = Vector3(0, 0, 0.66)
 	add_child(_streak)
+	_glow = Fx.glow_sprite(Fx.radial_texture("shuriken_glow", Color(1.0, 0.95, 0.85, 1.0), Color(1.0, 0.6, 0.25, 0.0)),
+		Color(1.0, 0.86, 0.62, 0.8), 0.42)
+	_glow.no_depth_test = false
+	add_child(_glow)
 
 
 static func _build_shared() -> void:
 	# Four-pointed star, flat in the XZ plane, slightly thicker at the hub.
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var r_tip := 0.075
-	var r_in := 0.022
-	var th := 0.006
+	var r_tip := 0.105
+	var r_in := 0.03
+	var th := 0.008
 	var pts: Array[Vector3] = []
 	for i in 8:
 		var a := TAU * float(i) / 8.0
@@ -85,18 +91,18 @@ static func _build_shared() -> void:
 	st.generate_normals()
 	_star_mesh = st.commit()
 	_metal = StandardMaterial3D.new()
-	_metal.albedo_color = Color(0.62, 0.62, 0.66)
+	_metal.albedo_color = Color(0.72, 0.72, 0.76)
 	_metal.metallic = 1.0
 	_metal.roughness = 0.25
 	_metal.emission_enabled = true
-	_metal.emission = Color(1.0, 0.55, 0.25)     # a faint glint so they read at night
-	_metal.emission_energy_multiplier = 0.6
+	_metal.emission = Color(1.0, 0.7, 0.4)       # a steel glint so they read at night
+	_metal.emission_energy_multiplier = 2.2
 	_metal.cull_mode = BaseMaterial3D.CULL_DISABLED
 	_streak_mat = StandardMaterial3D.new()
 	_streak_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_streak_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	_streak_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	_streak_mat.albedo_color = Color(1.2, 0.95, 0.75, 0.35)
+	_streak_mat.albedo_color = Color(1.2, 0.95, 0.75, 0.55)
 
 
 func _orient() -> void:
@@ -163,6 +169,8 @@ func _glance(p: Vector3, speed: float) -> void:
 	velocity = (away + side + Vector3.UP * 0.9).normalized() * speed
 	if _streak:
 		_streak.visible = false
+	if _glow:
+		_glow.visible = false
 
 
 func _stick() -> void:
@@ -171,4 +179,6 @@ func _stick() -> void:
 	velocity = Vector3.ZERO
 	if _streak:
 		_streak.visible = false
+	if _glow:
+		_glow.visible = false
 	_life = maxf(_life, 1.0)

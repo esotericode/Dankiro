@@ -278,14 +278,6 @@ def build(only=None):
     out("sweep", x, peak_db=-2.0)
     for i in range(2):
         out("jab_%d" % (i + 1), swing(0.14, 600, 2800, q=3.5, seed=170 + i, whistle=0.3, peak=0.3), peak_db=-3.0)
-    dur = 1.4
-    whirl = np.zeros(int(dur * SR))
-    for k in range(6):
-        s = swing(0.28, 200, 1300, q=2.8, seed=180 + k, whistle=0.15, peak=0.5)
-        st = int((0.08 + k * 0.215) * SR)
-        whirl[st:st + len(s)] += s[: max(0, len(whirl) - st)]
-    whirl += lowpass(noise(dur, 190), 250) * env_bell(dur, 0.5, 1.0) * 0.25
-    out("whirl", whirl, peak_db=-2.5)
     out("leap", swing(0.45, 150, 1100, q=2.4, seed=195, whistle=0.1, peak=0.3), peak_db=-3.0)
 
     # --- perilous: deep drum + dissonant metal + sharp sting, long tail
@@ -357,6 +349,11 @@ def build(only=None):
         x = mix(x, highpass(noise(0.12, 335 + i), 2000) * env_exp(0.12, 0.03, 0.005) * 0.25)
         out("dodge_%d" % (i + 1), x, peak_db=-4.0)
     out("jump", swing(0.25, 300, 1500, q=2.0, seed=340, whistle=0.0, peak=0.25), peak_db=-6.0)
+    # --- stamp: the boss plants his lead foot (the tell before his jabs): heavy step + armour clink
+    clink = metal_hit(1800, 0.25, ring=0.2, brightness=0.6, click=0.5, body=0.6, thump=0.0, seed=345) * 0.25
+    out("stamp", reverb(mix(thud(0.4, 115, 48, 0.05, 1.0, 1000, 346) * 1.4,
+                            bandpass(noise(0.08, 347), 700, 4000) * env_exp(0.08, 0.012, 0.0005) * 0.7,
+                            delay(clink, 0.012)), 0.5, 0.12), peak_db=-2.0, st=False)
     out("ground_impact", reverb(mix(thud(1.0, 65, 28, 0.3, 1.0, 400, 350) * 1.3,
                                     bandpass(noise(1.0, 351), 200, 3000) * env_exp(1.0, 0.12, 0.002) * 0.7,
                                     metal_hit(700, 0.8, ring=0.4, brightness=0.5, click=1.0, body=0.8, thump=0.0, seed=352) * 0.4),

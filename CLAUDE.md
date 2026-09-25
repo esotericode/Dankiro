@@ -28,7 +28,8 @@ the script backs off and retries, so let it run. For another version, set
 - Combat lab (headless, about 6 min for everything, exits 0 when all checks pass; any engine or
   script error during the run also fails it):
   `godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--verbose]`
-  Suites: reach, deflect, spam, mikiri, dodge, sweep, shuriken, attack, cancel, soak.
+  Suites: reach, tells, deflect, flurry, punish, loop, spam, mikiri, dodge, sweep, shuriken, attack,
+  cancel, soak.
 - Rendered frames (to actually *see* a change), using Movie Maker with software Vulkan:
   ```
   printf '[display]\nwindow/size/window_width_override=960\nwindow/size/window_height_override=540\n' > override.cfg
@@ -36,7 +37,8 @@ the script backs off and retries, so let it run. For another version, set
     godot --write-movie /tmp/cap/f.png --fixed-fps 30 res://tests/capture.tscn -- deflect
   ```
   Rendering takes about 0.7 s per frame at 960x540. `override.cfg` is git-ignored. The shots are
-  the `shot_*` functions in `tests/capture.gd`. Contact-sheet the PNGs with PIL, then look at them.
+  the `shot_*` functions in `tests/capture.gd`; `-- attack <clip> [distance]` films any boss
+  attack from the lock-on camera. Contact-sheet the PNGs with PIL, then look at them.
 - Quick script-error check: `godot --headless --quit-after 600`.
 
 ## The boss model (Blender, scripted)

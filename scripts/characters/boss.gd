@@ -11,6 +11,7 @@ signal posture_broken
 signal life_lost(lives_left: int)
 signal defeated
 signal perilous_warning(kind: String)
+signal struck(result: int)          ## the player's sword reached him: Combat.RESULT_* (hit, block, parry)
 
 enum S { INTRO, NEUTRAL, ATTACK, GUARD, REACT, STAGGER, DEATHBLOWN, REVIVE, DEAD }
 
@@ -45,7 +46,7 @@ const SEQUENCES := {
 ##  charge     - run at you and flow into a running cut
 ##  reposition - run to another spot around you, then open with a special from there
 ##  hold       - stand and watch for a moment (breaks his rhythm)
-##  flourish   - twirl the staff while you keep your distance (you can punish it)
+##  flourish   - plant the staff with a stamp while you keep your distance (you can punish it)
 const MOVES := {
 	"charge": {"range": [5.0, 40.0], "weight": 2.4},
 	"reposition": {"range": [1.5, 6.5], "weight": 0.7},
@@ -74,7 +75,9 @@ var _guard_count := 0
 var _parry_threshold := 3
 var _since_blocked := 99.0
 var _guard_timer := 0.0
-var _flinches := 0
+var _flinches := 0                 ## hits taken while reeling (flinch / recoil / kicked) this opening
+var _breakout_after := 2            ## ...after this many he breaks out instead of flinching again
+var _punished_seq := ""             ## the sequence you last punished him for: he avoids reopening with it
 var _last_step_phase := 0.0
 var _mode := ""                     ## "" (stalk), "charge", "reposition", "hold"
 var _mode_time := 0.0
@@ -159,6 +162,15 @@ func _build_aura() -> void:
 	aura.position = Vector3(0, 0.12, 0)
 
 
+## False while he's hopping out of your reach (the clip's "iframes" window, e.g. his backstep).
+func can_be_hit() -> bool:
+	if state == S.ATTACK and anim.clip != null and not anim.loco_active and anim.clip.raw.has("iframes"):
+		var w: Array = anim.clip.raw["iframes"]
+		if anim.time >= float(w[0]) and anim.time <= float(w[1]):
+			return false
+	return true
+
+
 func is_dead() -> bool:
 	return state == S.DEAD
 
@@ -202,7 +214,7 @@ func _physics_process(delta: float) -> void:
 			_state_guard(delta)
 		S.REACT:
 			if anim.finished:
-				_to_neutral(0.25 / aggression)
+				_recover()
 		S.STAGGER:
 			deathblow_marker.visible = anim.time < DEATHBLOW_WINDOW_END
 			var pulse := 1.0 + 0.18 * sin(Game.clock * 9.0)
@@ -421,6 +433,8 @@ func _pick_action(d: float) -> String:
 		var w := float(sd["weight"])
 		if sname == _last_seq:
 			w *= 0.35 if _repeat >= 1 else 0.7
+		if sname == _punished_seq:
+			w *= 0.2
 		if healing and (sname == "thrust" or sname == "leap" or sname == "fang_string" or sname == "charge"):
 			w *= 3.0
 		if phase >= 2 and (sname == "fang_string" or sname == "whirl" or sname == "leap" or sname == "charge"):
@@ -611,6 +625,13 @@ func _state_guard(delta: float) -> void:
 
 ## The player's katana touched us. Returns Combat.RESULT_* for the player to react to.
 func receive_player_attack(info: Dictionary, p: Player) -> int:
+	var res := _resolve_player_attack(info, p)
+	if res != Combat.RESULT_IGNORED:
+		struck.emit(res)
+	return res
+
+
+func _resolve_player_attack(info: Dictionary, p: Player) -> int:
 	match state:
 		S.INTRO, S.STAGGER, S.DEATHBLOWN, S.REVIVE, S.DEAD:
 			return Combat.RESULT_IGNORED
@@ -620,8 +641,8 @@ func receive_player_attack(info: Dictionary, p: Player) -> int:
 		return _take_hit(info, _in_vuln())
 	if state == S.REACT:
 		_flinches += 1
-		if _flinches >= 3 and facing_ok:
-			return _parry(pos)
+		if _flinches > _breakout_after:
+			return _break_out(info, pos, facing_ok)
 		return _take_hit(info, true)
 	if facing_ok:
 		_guard_count += 1
@@ -651,6 +672,8 @@ func _parry(pos: Vector3) -> int:
 	_parry_threshold = randi_range(2, 4) if phase == 1 else randi_range(1, 3)
 	_seq.clear()
 	_play_attack("b_parry_counter", 0.0)
+	# The counter isn't the end of it: often he presses on (so deflecting it isn't a free opening).
+	_seq = [["b_combo_2|b_jab|b_backhand|b_backstep", 0.6 if phase == 1 else 0.8]]
 	Fx.sparks(get_parent(), pos, Vector3.UP, Fx.SPARK_PARRY)
 	Sfx.play("boss_parry", pos, 3.0, 1.0, 0.04)
 	Game.hitstop(0.06)
@@ -684,6 +707,61 @@ func _react(clip_name: String) -> void:
 	root_scale = 1.0
 	anim.play(clip_name, 0.05)
 	reset_hits()
+
+
+## He's taken his share of this opening (you deflected him and got a hit or two in): instead of
+## flinching again he gets out of it - deflects your swing and counters, or shrugs this one off
+## (it still hurts) and hops back into a thrust or leap, or answers with a fast strike or a
+## sweep straight through your combo. Stops the "deflect, hit, hit, hit..." stun-lock.
+func _break_out(info: Dictionary, pos: Vector3, facing_ok: bool) -> int:
+	_flinches = 0
+	_breakout_after = _roll_breakout()
+	_punished_seq = _seq_name
+	var r := randf()
+	if r < 0.4 and facing_ok:
+		return _parry(pos)
+	var res := _take_hit(info, false)
+	if state == S.STAGGER or state == S.DEAD:
+		return res
+	face_now(opponent.global_position)
+	if r < 0.7:
+		_start_sequence(_fresh(["retreat", "backhand"]))
+	else:
+		_start_sequence(_fresh(["backhand", "sweep"] if randf() < 0.55 else ["sweep", "backhand"]))
+	return res
+
+
+## The first option that isn't the sequence you just punished him for.
+func _fresh(options: Array) -> String:
+	for o in options:
+		if str(o) != _punished_seq:
+			return str(o)
+	return str(options[0])
+
+
+## How many hits he takes while reeling before he breaks out.
+func _roll_breakout() -> int:
+	return 2 if phase == 1 else randi_range(1, 2)
+
+
+## Back on his feet after a flinch, recoil or kick. If you got hits in, he doesn't just stand
+## there for more: he often hops back out of reach (into a thrust or leap, or a shuriken
+## volley from the air), or goes straight back on the attack.
+func _recover() -> void:
+	var punished := _flinches > 0
+	_to_neutral(0.25 / aggression)
+	if not punished or passive or opponent == null:
+		return
+	_punished_seq = _seq_name
+	_flinches = 0
+	_breakout_after = _roll_breakout()
+	var r := randf()
+	if r < 0.3:
+		_start_sequence(_fresh(["retreat", "shuriken_4"]))
+	elif r < 0.5:
+		_start_sequence(_fresh(["shuriken_4", "shuriken_5", "retreat"] if randf() < 0.6 else ["shuriken_5", "shuriken_4", "retreat"]))
+	elif r < 0.8:
+		cooldown = 0.0
 
 
 # ---------------------------------------------------------------------------- our hits

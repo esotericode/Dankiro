@@ -618,7 +618,7 @@ def build_boss():
     # =========================================================== ATTACKS
     # ---- Combo 1: "Rising Fang" (lower blade rises from low-right-back, through the front, to high-left)
     R0 = [0.40, 1.10, 0.06]
-    shaft_w = unit([-0.50, 0.42, -0.76])            # upper blade forward-up-left, lower blade trails back-right-low
+    shaft_w = unit([-0.62, 0.46, -0.64])            # upper blade forward-up-left, lower blade trails back-right-low
     ls = -shaft_w
     ax1, a_front = arc(ls, [0.12, 0.05, -1.0])
     total1 = a_front + 62
@@ -701,7 +701,7 @@ def build_boss():
     keys.append({"t": 1.62, "pose": "b_stance", "set": {"root": [0, 0, -0.78]}, "ease": "inout_sine"})
     clip("b_combo_3", "boss", keys, chain=1.3, close=[0.20, 0.62, 1.9, 4.2], chain_in=0.14, vuln=[0.88, 1.5],
          track=[[0.0, 0.56, 380], [0.56, 0.66, 170]],
-         hits=[{"from": 0.65, "to": 0.75, "blade": "upper", "kind": "normal", "dmg": 34, "posture_block": 30,
+         hits=[{"from": 0.62, "to": 0.75, "blade": "upper", "kind": "normal", "dmg": 34, "posture_block": 30,
                 "posture_deflect": 10, "boss_posture": 16, "dir": "high", "final": True}],
          events=[{"t": 0.60, "type": "sfx", "name": "swing_heavy"}, {"t": 0.74, "type": "ground_impact", "blade": "upper"}])
 
@@ -801,19 +801,22 @@ def build_boss():
                 "posture_deflect": 0, "boss_posture": 0, "dir": "low", "final": True}],
          events=[{"t": 0.05, "type": "perilous", "kind": "sweep"}, {"t": SP0 - 0.04, "type": "sfx", "name": "sweep"}])
 
-    # ---- Whirling Fangs: windmill at the right side (4 hits) + finishing diagonal slash
+    # ---- Whirling Fangs: windmill at his right side (4 chops) + finishing diagonal slash.
+    # Readability: he presents the staff overhead (tell), cocks it back at his right side and
+    # the wheel spins up from rest, so the first blade visibly rises behind him and falls on
+    # you; then a steady chop every 0.375 s, each a blade coming over the top and down to meet
+    # you (deflect as it reaches you) with a whoosh that peaks at contact; the finishing cut
+    # comes as its own beat after a short pause.
     wm = S.copy()
     wm.update({"hips_pos": [0, 1.00, 0.02], "hips": [0, -30, 0], "spine": [-6, 0, 0], "chest": [-6, -10, 0],
                "neck": [6, 30, 0], "head": [2, 12, 0], "grip_r": 0.0, "ik_l": 0.0,
                "upper_arm_l": [30, 0, -35], "forearm_l": [50, 0, 0], "elbow_r": [0.8, -0.6, 0.1],
                "foot_l": [-0.18, 0.08, -0.30], "foot_r": [0.22, 0.08, 0.28]})
-    base_rot = weapon_rot([0, 1, 0], [0, 0, -1])          # vertical staff, upper edge forward
     # The spin plane leans out to his right so the 3.2 m staff clears the floor at the bottom
-    # of each turn; when a blade points straight ahead (the hit frames) the lean changes nothing.
+    # of each turn, and so you see the wheel's face rather than its edge from behind your
+    # character; when a blade points straight ahead (the hit frames) the lean changes nothing.
     WR = [0.16, 1.42, -0.46]
-    # Tell: he presents the staff high overhead, level, with a whoosh, then drops it to his right
-    # side and the windmill winds up. Everything after the tell is offset by TW.
-    TW = 0.36
+    LEAN = 42.0
     hold_high = S.copy()
     hold_high.update({"hips_pos": [0, 1.04, 0.04], "hips": [0, -12, 0], "spine": [4, -4, 0], "chest": [8, -8, 0],
                       "neck": [-4, 10, 0], "head": [-4, 6, 0], "foot_l": [-0.18, 0.08, -0.30], "foot_r": [0.22, 0.08, 0.30],
@@ -821,21 +824,36 @@ def build_boss():
     place(hold_high, [0.30, 1.98, -0.12], [-1.0, 0.04, 0.02], [0, 0.3, -1], -0.30, 0.30, S["weapon_rot"])
     keys = [key(0.0, "b_stance"), key(0.22, hold_high, ease="out_quad"),
             key(0.32, dict(hold_high, hips_pos=[0, 1.01, 0.05], chest=[6, -12, 0]), ease="inout_sine")]
-    wm_prev = windmill_rot(40, None)
-    keys.append(key(0.34 + TW, dict(wm, weapon_pos=WR, weapon_rot=r3(wm_prev)), ease="inout_sine"))
-    t0, t1, total = 0.34 + TW, 1.54 + TW, -760.0
-    n = 24
+    # Windmill angle (about his side axis; 0 = upper blade up, -90 = upper blade pointing at
+    # you): from A0 (cocked back) it spins up over T_ACC, then turns at OMEGA deg/s.
+    T0, A0, OMEGA, T_ACC = 0.56, 60.0, 480.0, 0.24
+
+    def wm_angle(tau):
+        if tau < T_ACC:
+            return A0 - OMEGA * tau * tau / (2 * T_ACC)
+        return A0 - OMEGA * T_ACC / 2 - OMEGA * (tau - T_ACC)
+
+    def wm_time(ang):                      # inverse of wm_angle past the spin-up
+        return T_ACC + (A0 - OMEGA * T_ACC / 2 - ang) / OMEGA
+
+    chops = [T0 + wm_time(-90.0 - 180.0 * k) for k in range(4)]   # a blade points at you
+    WEND = wm_time(-720.0)                 # upper blade back on top: into the finisher
+    t1 = T0 + WEND
+    wm_prev = windmill_rot(A0, None, LEAN)
+    keys.append(key(T0, dict(wm, weapon_pos=WR, weapon_rot=r3(wm_prev), root=[0, 0, -0.15]), ease="inout_sine"))
+    n = 30
     for i in range(1, n + 1):
-        u = i / n
-        ang = 40 + total * u
-        bob = 0.03 * math.sin(u * math.pi * 8)
-        wm_prev = windmill_rot(ang, wm_prev)
-        keys.append(key(t0 + (t1 - t0) * u, dict(wm, weapon_pos=[WR[0], WR[1] + bob, WR[2]],
-                                                  weapon_rot=r3(wm_prev),
-                                                  root=[0, 0, -0.25 - 0.85 * u],
-                                                  hips=[0, -30 + 6 * math.sin(u * math.pi * 4), 0],
-                                                  foot_l=[-0.18, 0.08, -0.30 - 0.1 * math.sin(u * math.pi * 4) ** 2])))
-    keys[3]["set"]["root"] = [0, 0, -0.15]
+        tau = WEND * i / n
+        ang = wm_angle(tau)
+        u = tau / WEND
+        pump = math.cos(math.radians(2.0 * (ang + 90.0))) * min(1.0, tau / T_ACC)   # 1 at each chop
+        wm_prev = windmill_rot(ang, wm_prev, LEAN)
+        keys.append(key(T0 + tau, dict(wm, weapon_pos=[WR[0], WR[1] + 0.03 * pump, WR[2]],
+                                       weapon_rot=r3(wm_prev),
+                                       root=[0, 0, round(-0.15 - 0.95 * u, 3)],
+                                       hips=[0, round(-30 + 6 * pump, 2), 0],
+                                       chest=[round(-6 - 3 * pump, 2), -10, 0],
+                                       foot_l=[-0.18, 0.08, round(-0.30 - 0.05 * (1 + pump), 3)])))
     # finisher: two-handed diagonal cut, upper blade from high right, through the front, to low left
     fb0 = unit([0.45, 0.60, 0.66])
     axf, af = arc(fb0, [0.05, -0.12, -1.0])
@@ -847,10 +865,10 @@ def build_boss():
     ef = edge_for(axf, fb0)
     place(fin_w, RF, fb0, ef, 0.0, -0.45, keys[-1]["set"]["weapon_rot"])
     pivf = np.array(RF) + np.array([-0.15, -0.2, -0.2])
-    swf, _ = hswing(1.84 + TW, 1.98 + TW, 7, pivf, axf, af + 70, RF, fb0, ef, 0.0, fin_w["weapon_rot"], ease=in_quad,
+    swf, _ = hswing(t1 + 0.30, t1 + 0.44, 7, pivf, axf, af + 70, RF, fb0, ef, 0.0, fin_w["weapon_rot"], ease=in_quad,
                     pivot_move=[-0.2, -0.15, -0.45])
-    keys.append(key(1.74 + TW, fin_w, ease="inout_sine"))
-    keys.append(key(1.84 + TW, dict(fin_w, chest=[6, -44, 0]), ease="linear"))
+    keys.append(key(t1 + 0.20, fin_w, ease="inout_sine"))
+    keys.append(key(t1 + 0.30, dict(fin_w, chest=[6, -44, 0]), ease="linear"))
     keys += bkeys_from_swing(swf, lambda u: {
         "hips": [0, -35 + 55 * u, 0], "chest": [6 - 20 * u, -44 + 90 * u, 0], "neck": [0, 40 - 55 * u, 0],
         "root": [0, 0, -1.15 - 0.45 * u], "hips_pos": [0, 1.02 - 0.08 * u, 0.08 - 0.2 * u],
@@ -860,23 +878,23 @@ def build_boss():
     fin_end.update({"chest": [-16, 40, 0], "hips": [0, 15, 0], "root": [0, 0, -1.65], "hips_pos": [0, 0.96, -0.1],
                     "foot_l": [-0.18, 0.08, -0.52], "elbow_l": [-0.7, -0.7, 0.3]})
     place(fin_end, [-0.02, 0.92, -0.35], unit([-0.55, -0.55, -0.62]), [0.0, -0.3, 1.0], 0.0, -0.45, swf[-1][2])
-    keys.append(key(2.14 + TW, fin_end, ease="out_quad"))
-    keys.append({"t": 2.65 + TW, "pose": "b_stance", "set": {"root": [0, 0, -1.7]}, "ease": "inout_sine"})
+    keys.append(key(t1 + 0.60, fin_end, ease="out_quad"))
+    keys.append({"t": round(t1 + 1.11, 4), "pose": "b_stance", "set": {"root": [0, 0, -1.7]}, "ease": "inout_sine"})
 
     def whirl_hit(tc, blade):
-        return {"from": round(tc - 0.06, 3), "to": round(tc + 0.05, 3), "blade": blade, "kind": "normal", "dmg": 18,
+        return {"from": round(tc - 0.16, 3), "to": round(tc + 0.05, 3), "blade": blade, "kind": "normal", "dmg": 18,
                 "posture_block": 16, "posture_deflect": 5, "boss_posture": 7, "dir": "high"}
-    # blade passes forward-horizontal when (40 + total*u) == -90 - 180k  ->  u = (130 + 180k)/760
-    hits = []
-    for k_, blade in ((0, "upper"), (1, "lower"), (2, "upper"), (3, "lower")):
-        u = (130 + 180 * k_) / 760.0
-        hits.append(whirl_hit(t0 + (t1 - t0) * u, blade))
-    hits.append({"from": 1.86 + TW, "to": 1.99 + TW, "blade": "upper", "kind": "normal", "dmg": 30, "posture_block": 26,
-                 "posture_deflect": 9, "boss_posture": 15, "dir": "left", "final": True})
-    clip("b_whirl", "boss", keys, chain=2.3 + TW, close=[0.20, 1.60 + TW, 1.6, 3.0], vuln=[2.2 + TW, 2.62 + TW],
-         track=[[0.0, 0.3 + TW, 400], [0.3 + TW, 1.6 + TW, 160], [1.6 + TW, 1.8 + TW, 260]],
-         hits=hits, events=[{"t": 0.08, "type": "sfx", "name": "whirl"}, {"t": 0.30 + TW, "type": "sfx", "name": "whirl"},
-                            {"t": 1.80 + TW, "type": "sfx", "name": "swing_heavy"}])
+    hits = [whirl_hit(tc, blade) for tc, blade in zip(chops, ("upper", "lower", "upper", "lower"))]
+    hits.append({"from": round(t1 + 0.32, 3), "to": round(t1 + 0.45, 3), "blade": "upper", "kind": "normal", "dmg": 30,
+                 "posture_block": 26, "posture_deflect": 9, "boss_posture": 15, "dir": "left", "final": True})
+    # swing_heavy peaks 0.21 s in: each chop's whoosh is loudest as the blade reaches you
+    events = [{"t": 0.04, "type": "sfx", "name": "swing_light"}]
+    events += [{"t": round(tc - 0.21, 3), "type": "sfx", "name": "swing_heavy"} for tc in chops]
+    events.append({"t": round(t1 + 0.26, 3), "type": "sfx", "name": "swing_heavy"})
+    clip("b_whirl", "boss", keys, chain=round(t1 + 0.76, 3), close=[0.20, round(t1 + 0.06, 3), 1.6, 3.0],
+         vuln=[round(t1 + 0.66, 3), round(t1 + 1.08, 3)],
+         track=[[0.0, T0 - 0.04, 400], [T0 - 0.04, round(t1 + 0.06, 3), 160], [round(t1 + 0.06, 3), round(t1 + 0.26, 3), 260]],
+         hits=hits, events=events)
 
     # ---- Leaping cleave: gap closer (root motion is scaled by the AI to land on target)
     crouch = S.copy()
@@ -915,31 +933,47 @@ def build_boss():
          events=[{"t": 0.34, "type": "sfx", "name": "leap"}, {"t": 0.86, "type": "sfx", "name": "swing_heavy"},
                  {"t": 0.97, "type": "ground_impact", "blade": "upper"}])
 
-    # ---- Fang jabs: quick double thrust (NOT perilous: deflect it, mikiri won't work)
-    jb = S.copy()
-    jb.update({"hips_pos": [0, 0.98, 0.10], "hips": [0, -45, 0], "chest": [-6, -18, 0], "spine": [-4, -6, 0],
-               "neck": [4, 45, 0], "head": [0, 18, 0], "elbow_l": [-0.4, -1.0, 0.3], "elbow_r": [0.6, -0.7, 0.6]})
-    place(jb, [0.30, 1.20, 0.18], [-0.03, 0.05, -1.0], [0, -1, 0], -0.70, -0.25, S["weapon_rot"])
-    jo = jb.copy()
-    jo.update({"hips_pos": [0, 0.97, -0.05], "chest": [-12, -24, 0]})
-    place(jo, [0.24, 1.24, -0.42], [-0.03, 0.02, -1.0], [0, -1, 0], -0.70, -0.25)
-    jd = jb.copy()                                 # the tell: staff drawn well back at the hip
-    jd.update({"hips_pos": [0, 0.96, 0.16], "chest": [-2, -22, 0], "hips": [0, -52, 0]})
-    place(jd, [0.34, 1.18, 0.36], [-0.03, 0.05, -1.0], [0, -1, 0], -0.70, -0.20)
-    J = 0.10
-    keys = [key(0.0, "b_stance"), key(0.20, jb, ease="inout_sine"), key(0.24 + J, jd, ease="inout_sine"),
-            key(0.33 + J, dict(jo, root=[0, 0, -0.35]), ease="out_cubic"),
-            key(0.46 + J, dict(jb, root=[0, 0, -0.45]), ease="inout_sine"),
-            key(0.56 + J, dict(jo, root=[0, 0, -0.8]), ease="out_cubic"),
-            key(0.70 + J, dict(jo, root=[0, 0, -0.85])),
-            {"t": 1.0 + J, "pose": "b_stance", "set": {"root": [0, 0, -0.9]}, "ease": "inout_sine"}]
-    clip("b_jab", "boss", keys, chain=0.66 + J, close=[0.04, 0.50 + J, 2.0, 4.4], vuln=[0.75 + J, 1.0 + J],
-         track=[[0.0, 0.22 + J, 460], [0.22 + J, 0.46 + J, 260]],
-         hits=[{"from": 0.25 + J, "to": 0.36 + J, "blade": "upper", "kind": "normal", "dmg": 20, "posture_block": 16,
+    # ---- Fang jabs: quick double thrust (NOT perilous: deflect it, mikiri won't work).
+    # The two stabs stay fast; the tell is what makes them readable. He lifts the staff to head
+    # height, drawn well back with the blade over your head, with a stamp, and holds that for a
+    # beat; then two stabs, each dropping the blade from over your head into your chest (so
+    # each lands as you see it come down: the staff is long enough that a blade aimed straight
+    # at you would already be touching you before it moved). (A draw at hip height, as before, happens right behind
+    # your own character from the lock-on camera, so the jabs seemed to come from nowhere.)
+    jl = S.copy()                                  # lifting into the aim
+    jl.update({"hips_pos": [0, 0.99, 0.08], "hips": [0, -38, 0], "chest": [-2, -16, 0], "spine": [-2, -5, 0],
+               "neck": [2, 40, 0], "head": [0, 14, 0], "elbow_l": [-0.4, -1.0, 0.3], "elbow_r": [0.6, -0.6, 0.6]})
+    place(jl, [0.26, 1.50, 0.12], [-0.08, -0.04, -1.0], [0, -1, 0], -0.70, -0.25, S["weapon_rot"])
+    ja = jl.copy()                                 # the aim: drawn back at head height, blade over you
+    ja.update({"hips_pos": [0, 0.95, 0.16], "hips": [0, -50, 0], "chest": [4, -24, 0], "spine": [0, -6, 0],
+               "neck": [0, 54, 0], "head": [-4, 22, 0], "elbow_r": [0.7, -0.3, 0.6], "elbow_l": [-0.5, -0.8, 0.2],
+               "foot_l": [-0.16, 0.08, -0.38]})
+    place(ja, [0.32, 1.70, 0.40], [-0.10, 0.07, -1.0], [0, -1, 0], -0.70, -0.25, jl["weapon_rot"])
+    ja2 = ja.copy()                                # ...held, coiling a little further
+    ja2.update({"hips_pos": [0, 0.93, 0.19], "chest": [5, -27, 0], "neck": [0, 56, 0]})
+    place(ja2, [0.33, 1.72, 0.46], [-0.10, 0.08, -1.0], [0, -1, 0], -0.70, -0.25, ja["weapon_rot"])
+    jo = ja.copy()                                 # stab
+    jo.update({"hips_pos": [0, 0.97, -0.05], "hips": [0, -45, 0], "chest": [-12, -24, 0], "spine": [-4, -6, 0],
+               "neck": [4, 50, 0], "head": [0, 18, 0], "elbow_r": [0.6, -0.7, 0.6], "elbow_l": [-0.4, -1.0, 0.3]})
+    place(jo, [0.24, 1.34, -0.42], [-0.04, -0.05, -1.0], [0, -1, 0], -0.70, -0.25, ja2["weapon_rot"])
+    jr = jo.copy()                                 # snap back between the stabs
+    jr.update({"hips_pos": [0, 0.97, 0.06], "chest": [-4, -22, 0]})
+    place(jr, [0.30, 1.68, 0.30], [-0.07, 0.14, -1.0], [0, -1, 0], -0.70, -0.25, jo["weapon_rot"])
+    keys = [key(0.0, "b_stance"), key(0.22, jl, ease="inout_sine"), key(0.40, ja, ease="out_quad"),
+            key(0.54, ja2, ease="inout_sine"),
+            key(0.63, dict(jo, root=[0, 0, -0.35]), ease="out_cubic"),
+            key(0.76, dict(jr, root=[0, 0, -0.45]), ease="inout_sine"),
+            key(0.86, dict(jo, root=[0, 0, -0.8]), ease="out_cubic"),
+            key(1.00, dict(jo, root=[0, 0, -0.85])),
+            {"t": 1.32, "pose": "b_stance", "set": {"root": [0, 0, -0.9]}, "ease": "inout_sine"}]
+    clip("b_jab", "boss", keys, chain=0.96, close=[0.04, 0.80, 2.0, 4.4], vuln=[0.95, 1.20],
+         track=[[0.0, 0.50, 460], [0.50, 0.78, 260]],
+         hits=[{"from": 0.53, "to": 0.66, "blade": "upper", "kind": "normal", "dmg": 20, "posture_block": 16,
                 "posture_deflect": 5, "boss_posture": 8, "dir": "mid"},
-               {"from": 0.48 + J, "to": 0.59 + J, "blade": "upper", "kind": "normal", "dmg": 20, "posture_block": 16,
+               {"from": 0.75, "to": 0.89, "blade": "upper", "kind": "normal", "dmg": 20, "posture_block": 16,
                 "posture_deflect": 5, "boss_posture": 9, "dir": "mid"}],
-         events=[{"t": 0.24 + J, "type": "sfx", "name": "jab"}, {"t": 0.47 + J, "type": "sfx", "name": "jab"}])
+         events=[{"t": 0.40, "type": "sfx", "name": "stamp"}, {"t": 0.54, "type": "sfx", "name": "jab"},
+                 {"t": 0.77, "type": "sfx", "name": "jab"}])
 
     # ---- Parry + counter: boss deflects the player's attack then punishes (upper blade, right -> left)
     par = guard.copy()
@@ -964,7 +998,7 @@ def build_boss():
     keys.append({"t": 1.12, "pose": "b_stance", "set": {"root": [0, 0, -0.86]}, "ease": "inout_sine"})
     clip("b_parry_counter", "boss", keys, chain=0.8, close=[0.16, 0.44, 1.9, 4.4], vuln=[0.8, 1.1], track=[[0.0, 0.38, 460], [0.38, 0.47, 220]],
          hits=[{"from": 0.46, "to": 0.58, "blade": "upper", "kind": "normal", "dmg": 26, "posture_block": 22,
-                "posture_deflect": 7, "boss_posture": 12, "dir": "left", "final": True}],
+                "posture_deflect": 7, "boss_posture": 12, "dir": "left"}],
          events=[{"t": 0.0, "type": "boss_parry"}, {"t": 0.42, "type": "sfx", "name": "swing_heavy"}])
 
     # ---- Backstep hop
@@ -976,7 +1010,8 @@ def build_boss():
     clip("b_backstep", "boss", [key(0.0, "b_stance"), key(0.08, dict(S, hips_pos=[0, 0.94, 0.04]), ease="out_quad"),
                                 key(0.26, hop, ease="out_quad"), key(0.44, landp, ease="in_quad"),
                                 {"t": 0.72, "pose": "b_stance", "set": {"root": [0, 0, 2.6]}, "ease": "inout_sine"}],
-         chain=0.5, events=[{"t": 0.05, "type": "sfx", "name": "dodge"}, {"t": 0.44, "type": "sfx", "name": "land"}])
+         chain=0.5, iframes=[0.02, 0.40],   # hopping out of your combo: your swings whiff until he lands
+         events=[{"t": 0.05, "type": "sfx", "name": "dodge"}, {"t": 0.44, "type": "sfx", "name": "land"}])
 
     # ---- Backhand: flat cut from the boss's left to his right (arrives from the player's RIGHT)
     bs_ = unit([-0.85, 0.08, 0.52])
@@ -1009,38 +1044,58 @@ def build_boss():
 
     # ---- Dash cut: he runs at you and flows straight into a wide running cut (upper blade,
     # right -> left, like Turning Fang). Tell: the staff swings up behind his right shoulder
-    # for a beat while he's still closing.
+    # for a beat while he's still closing (a gathering step, then the dash).
     dash_w = wind2.copy()
     dash_w.update({"hips_pos": [0, 0.92, -0.02], "hips": [0, -30, 0], "spine": [-14, -12, 0], "chest": [-12, -30, 0],
                    "foot_l": [-0.16, 0.10, -0.40], "foot_r": [0.22, 0.20, 0.34]})
     place(dash_w, [0.40, 1.44, 0.14], us, e2, 0.15, -0.30, S["weapon_rot"])
-    sw_d, _ = hswing(0.30, 0.44, 7, np.array(R2) - us * 0.22, ax2, a2 + 85, R2, us, e2, 0.15, dash_w["weapon_rot"],
+    sw_d, _ = hswing(0.38, 0.52, 7, np.array(R2) - us * 0.22, ax2, a2 + 85, R2, us, e2, 0.15, dash_w["weapon_rot"],
                      ease=in_quad, pivot_move=[-0.05, 0.0, -0.45])
     keys = [key(0.0, dict(dash_w, hips_pos=[0, 0.94, -0.06], root=[0, 0, 0.0], chest=[-14, -18, 0])),
-            key(0.16, dict(dash_w, root=[0, 0, -0.85]), ease="out_quad"),
-            key(0.30, dict(wind2, chest=[-6, -36, 0], root=[0, 0, -1.35], hips_pos=[0, 0.95, 0.0]), ease="linear")]
+            key(0.08, dict(dash_w, hips_pos=[0, 0.93, -0.04], root=[0, 0, -0.20], chest=[-13, -24, 0]), ease="inout_sine"),
+            key(0.24, dict(dash_w, root=[0, 0, -0.85]), ease="out_quad"),
+            key(0.38, dict(wind2, chest=[-6, -36, 0], root=[0, 0, -1.35], hips_pos=[0, 0.95, 0.0]), ease="linear")]
     keys += bkeys_from_swing(sw_d, lambda u: {
         "hips": [0, -40 + 70 * u, 0], "chest": [-6 - 8 * u, -36 + 95 * u, 0], "spine": [-6, -14 + 32 * u, 0],
         "neck": [4, 40 - 60 * u, 0], "head": [0, 18 - 28 * u, 0],
         "hips_pos": [0, 0.95 - 0.04 * u, 0.0 - 0.14 * u], "root": [0, 0, -1.35 - 0.75 * u],
         "foot_r": lerp3([0.24, 0.08, 0.28], [0.26, 0.08, 0.0], smooth(u)),
         "elbow_l": [-0.7, -0.7, 0.3], "elbow_r": [0.5, -0.9, 0.4]})
-    keys.append(key(0.62, {"chest": [-12, 62, 0], "hips": [0, 34, 0], "root": [0, 0, -2.35]}, ease="out_quad"))
-    keys.append({"t": 1.05, "pose": "b_stance", "set": {"root": [0, 0, -2.45]}, "ease": "inout_sine"})
-    clip("b_dash_cut", "boss", keys, chain=0.7, vuln=[0.72, 1.05], close=[0.0, 0.28, 2.0, 3.0],
-         track=[[0.0, 0.30, 520], [0.30, 0.38, 220]],
-         hits=[{"from": 0.30, "to": 0.45, "blade": "upper", "kind": "normal", "dmg": 28, "posture_block": 24,
+    keys.append(key(0.70, {"chest": [-12, 62, 0], "hips": [0, 34, 0], "root": [0, 0, -2.35]}, ease="out_quad"))
+    keys.append({"t": 1.13, "pose": "b_stance", "set": {"root": [0, 0, -2.45]}, "ease": "inout_sine"})
+    clip("b_dash_cut", "boss", keys, chain=0.78, vuln=[0.80, 1.13], close=[0.0, 0.36, 2.0, 3.0],
+         track=[[0.0, 0.38, 520], [0.38, 0.46, 220]],
+         hits=[{"from": 0.38, "to": 0.53, "blade": "upper", "kind": "normal", "dmg": 28, "posture_block": 24,
                 "posture_deflect": 8, "boss_posture": 12, "dir": "left"}],
-         events=[{"t": 0.26, "type": "sfx", "name": "swing_heavy"}])
+         events=[{"t": 0.34, "type": "sfx", "name": "swing_heavy"}])
 
     # ---- Shuriken volley: a quick tell (crouch, left hand to the belt with a glint of steel),
-    # a leap backwards, and throws from the left hand. Two patterns: 3 fast + 1 delayed (the
-    # last one after landing, from a visible wind-up), or 5 fast while airborne.
-    def shuriken_clip(name, throws, land_t, end_t, apex_h=1.95, back=4.2):
+    # a leap backwards, a beat hanging at the top of the jump with the throwing arm cocked, then
+    # throws from the left hand. Two patterns: 3 in the air + 1 delayed (the last one after
+    # landing, from a visible wind-up), or 5 in the air.
+    def shuriken_clip(name, throws, land_t, end_t, apex_h=1.95, back=4.2, apex_t=0.50, float_t=0.66):
         staff = S.copy()                            # carried level in the right hand, pointing ahead
         place(staff, [0.34, 1.10, 0.02], unit([0.08, 0.22, -1.0]), [0, -1, 0], 0.0, 0.3, S["weapon_rot"])
+        air_throws = [tt for tt, _ in throws if tt < land_t]
+        drop_t = max(air_throws) + 0.03 if air_throws else float_t
+
+        def height(t):
+            # 0..1 of the jump: rise (easing out) -> hang at the top -> a slow sink while he
+            # throws -> the drop (easing in) to the landing.
+            off_t = 0.26
+            if t <= off_t:
+                return 0.0
+            if t <= apex_t:
+                return math.sin(0.5 * math.pi * (t - off_t) / (apex_t - off_t))
+            if t <= float_t:
+                return 1.0
+            if t <= drop_t:
+                return 1.0 - 0.10 * ((t - float_t) / max(0.01, drop_t - float_t)) ** 2
+            u = min(1.0, (t - drop_t) / max(0.01, land_t - drop_t))
+            return 0.90 * math.cos(0.5 * math.pi * u)
+
         def body_at(t):
-            # piecewise: stance -> tell crouch -> take-off -> airborne arc -> landing crouch -> stance
+            # piecewise: stance -> tell crouch -> take-off -> airborne -> landing crouch -> stance
             tell_t, off_t = 0.16, 0.26
             pose = {}
             if t <= tell_t:
@@ -1050,12 +1105,15 @@ def build_boss():
             elif t <= land_t:
                 u = (t - off_t) / (land_t - off_t)
                 u = min(max(u, 0.0), 1.0)
-                h = 4 * u * (1 - u)                                     # jump arc 0..1..0
+                h = height(t)
                 crouch = max(0.0, 1.0 - (t - tell_t) / (off_t - tell_t)) if t < off_t else 0.0
                 hy = 0.86 * crouch + (1 - crouch) * (1.0 + (apex_h - 1.0) * h)
                 tuck = min(1.0, h * 1.6)
+                # most of the backward travel happens on the way up
+                ub = min(1.0, (t - off_t) / max(0.01, apex_t - off_t)) if t < apex_t else 1.0
+                travel = 0.8 * smooth(ub) + 0.2 * smooth(u)
                 pose = {"hips_pos": [0, hy, 0.04], "chest": lerp3([-12, -8, 0], [6, -10, 0], min(1.0, u * 2)),
-                        "spine": [-2, -4, 0], "root": [0, 0, back * smooth(u)],
+                        "spine": [-2, -4, 0], "root": [0, 0, back * travel],
                         "foot_l": [-0.16, 0.08 + (hy - 1.0) * 0.9 + 0.35 * tuck, -0.20 + 0.1 * tuck],
                         "foot_r": [0.20, 0.08 + (hy - 1.0) * 0.9 + 0.28 * tuck, 0.22 + 0.08 * tuck]}
                 if hy < 1.0:
@@ -1085,7 +1143,9 @@ def build_boss():
                         best = (lerp3(cock[0], snap[0], u ** 2), lerp3(cock[1], snap[1], u ** 2))
                     else:
                         prev_t = max([x for x, _ in throws if x < tt], default=0.16)
-                        u = smooth(min(1.0, (t - prev_t) / max(0.01, a0 - prev_t)))
+                        # the first throw's arm is cocked by the top of the jump and held there
+                        ready = min(a0, apex_t) if prev_t <= 0.16 else a0
+                        u = smooth(min(1.0, (t - prev_t) / max(0.01, ready - prev_t)))
                         src = snap if prev_t > 0.16 else belt
                         best = (lerp3(src[0], cock[0], u), lerp3(src[1], cock[1], u))
                     break
@@ -1111,14 +1171,15 @@ def build_boss():
             else:
                 keys.append(key(t, d))
         events = [{"t": 0.10, "type": "glint"}, {"t": 0.10, "type": "sfx", "name": "draw"},
-                  {"t": 0.24, "type": "sfx", "name": "leap"}, {"t": land_t, "type": "sfx", "name": "land"}]
+                  {"t": 0.24, "type": "sfx", "name": "leap"}, {"t": apex_t + 0.02, "type": "glint"},
+                  {"t": land_t, "type": "sfx", "name": "land"}]
         events += [{"t": tt, "type": "throw", "index": i} for i, (tt, _) in enumerate(throws)]
         clip(name, "boss", keys, chain=end_t - 0.25, vuln=[end_t - 0.4, end_t], tags=["ranged"],
              track=[[0.0, end_t, 560]], events=events)
 
-    shuriken_clip("b_shuriken_4", [(0.48, 0.07), (0.575, 0.07), (0.67, 0.07), (1.24, 0.26)], land_t=0.94, end_t=1.62)
-    shuriken_clip("b_shuriken_5", [(0.48, 0.07), (0.585, 0.07), (0.69, 0.07), (0.795, 0.07), (0.90, 0.07)],
-                  land_t=1.08, end_t=1.62, apex_h=2.15)
+    shuriken_clip("b_shuriken_4", [(0.70, 0.09), (0.83, 0.08), (0.96, 0.08), (1.52, 0.28)], land_t=1.20, end_t=1.92)
+    shuriken_clip("b_shuriken_5", [(0.70, 0.09), (0.825, 0.08), (0.95, 0.08), (1.075, 0.08), (1.20, 0.08)],
+                  land_t=1.42, end_t=1.98, apex_h=2.15)
 
     # =========================================================== REACTIONS
     rec = S.copy()
@@ -1197,16 +1258,38 @@ def build_boss():
                               {"t": 0.95, "pose": "b_stance", "set": {"root": [0, 0, 0.8]}, "ease": "inout_sine"}],
          vuln=[0.05, 0.85])
 
-    # Intro flourish: spins the staff and settles into stance.
-    ir = windmill_rot(0, None)
-    keys = [key(0.0, dict(S, weapon_pos=[0.46, 1.42, -0.30], weapon_rot=r3(ir), grip_r=0.0, ik_l=0.0,
-                          upper_arm_l=[20, 0, -30], forearm_l=[40, 0, 0]))]
-    for i in range(1, 17):
-        u = i / 16
-        ir = windmill_rot(-540 * u, ir)
-        keys.append(key(0.2 + 1.0 * u, {"weapon_rot": r3(ir)}))
-    keys.append(key(1.8, "b_stance", ease="inout_sine"))
-    clip("b_intro", "boss", keys, vuln=[0.0, 1.6], events=[{"t": 0.2, "type": "sfx", "name": "whirl"}])
+    # Intro / flourish: he swings the staff upright at his right side, drives the lower blade
+    # into the flagstones, straightens and looks down at you with both hands on the planted
+    # shaft, then pulls it free and takes his stance. A readable breather you can punish.
+    STAFF_UP = [0.0, 1.0, 0.0]
+    EDGE_OUT = [1.0, 0.0, -0.5]
+    GR = -0.19                                   # right hand at shoulder height, lower tip in the stone
+    plant_hand = [0.42, 1.41, -0.08]
+    relaxed_l = {"ik_l": 0.0, "upper_arm_l": [8, 0, -14], "forearm_l": [28, 0, 0], "hand_l": [0, 0, 0]}
+    lift = S.copy()
+    lift.update({"hips_pos": [0, 1.05, 0.02], "hips": [0, -14, 0], "spine": [-2, -4, 0], "chest": [0, -10, 0],
+                 "neck": [2, 8, 0], "head": [2, 5, 0], "elbow_l": [-0.6, -0.6, 0.5], "elbow_r": [0.8, -0.6, 0.2]})
+    place(lift, [0.40, 1.58, -0.14], STAFF_UP, EDGE_OUT, GR, -0.02, S["weapon_rot"])
+    drive = lift.copy()
+    drive.update({"hips_pos": [0, 0.97, 0.0], "spine": [-6, -3, 0], "chest": [-8, -8, 0], "neck": [8, 6, 0],
+                  "foot_l": [-0.20, 0.08, -0.20], "foot_r": [0.24, 0.08, 0.20]})
+    drive.update(relaxed_l)
+    place(drive, plant_hand, STAFF_UP, EDGE_OUT, GR, -0.02, lift["weapon_rot"])
+    stand = drive.copy()
+    stand.update({"hips_pos": [0, 1.06, 0.02], "hips": [0, -8, 0], "spine": [2, -2, 0], "chest": [6, -3, 0],
+                  "neck": [9, 2, 0], "head": [7, 2, 0], "elbow_r": [0.9, -0.4, 0.3]})
+    place(stand, plant_hand, STAFF_UP, EDGE_OUT, GR, -0.02, drive["weapon_rot"])
+    breathe = stand.copy()
+    breathe.update({"hips_pos": [0, 1.07, 0.02], "chest": [8, -2, 0], "neck": [7, -4, 0], "head": [6, -5, 0],
+                    "upper_arm_l": [10, 0, -16]})
+    pull = stand.copy()
+    pull.update({"hips_pos": [0, 1.03, 0.02], "chest": [0, -8, 0], "neck": [4, 6, 0], "head": [3, 4, 0], "ik_l": 1.0})
+    place(pull, [0.40, 1.56, -0.14], STAFF_UP, EDGE_OUT, GR, -0.02, stand["weapon_rot"])
+    keys = [key(0.0, "b_stance"), key(0.28, lift, ease="inout_sine"), key(0.44, drive, ease="in_cubic"),
+            key(0.62, stand, ease="out_quad"), key(0.98, breathe, ease="inout_sine"), key(1.30, stand, ease="inout_sine"),
+            key(1.50, pull, ease="inout_sine"), key(1.92, "b_stance", ease="inout_sine")]
+    clip("b_intro", "boss", keys, vuln=[0.40, 1.55],
+         events=[{"t": 0.44, "type": "ground_impact", "blade": "lower"}])
 
 
 # Clips where the staff is meant to rest on / dig into the ground.

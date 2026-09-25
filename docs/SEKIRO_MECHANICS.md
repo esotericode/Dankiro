@@ -17,6 +17,7 @@ The automated checks in `tests/` (see the README) verify the rules marked **[tes
 | Holding guard and releasing it just before pressing again also builds the penalty. | Same, because the penalty keys off the release. |
 | **Holding guard** when a blade lands outside the window **blocks**: no vitality damage, a large hit to *your* posture, and a dull, quiet clank with a small spark. | Block when the guard pose is up (held, or still settling after a tap). **[tested]** |
 | A full posture bar from blocking causes a **guard break**: you stagger and can be hit. | `_guard_break()` |
+| Getting hit by a **light** blow staggers Wolf only briefly, so you can raise your guard and block (or deflect) the rest of a string. Heavy blows (perilous attacks, big finishers) knock you down. | A light blow (up to 20 damage, or a shuriken) keeps your guard down for 0.12 s (`HIT_STUN_LIGHT`), a heavier one for 0.22 s (`HIT_STUN`). A held guard comes back up by itself after that, and a press during the stagger is kept, so after missing one deflect of the whirl, the jabs or a shuriken volley, holding guard blocks the rest. **[tested]** |
 | A **deflect** negates the damage, adds a *small* amount of your posture, and **can never break your posture**. | `add_posture(x, false)` clamps below max. **[tested]** |
 | A deflect deals **large posture damage to the attacker**. Deflecting a combo's last hit staggers them briefly, giving you an opening. | `boss_posture` per hit, a ×1.35 bonus on a combo's final hit, and a `b_recoil` opening. |
 | Deflecting several hits in quick succession deals more posture damage. | Chain bonus: +12% per consecutive deflect within 1.2 s, up to +36%. |
@@ -80,7 +81,8 @@ same way: every throw can be deflected (sparks, clang) or blocked, and hits if i
 | --- | --- |
 | Wolf's slashes are quick but committed. **You can't guard in the middle of a swing**; the guard comes up once the swing is done. | Each attack has *guard-cancel windows*: the very start of the wind-up (before the swing commits) and the recovery after the blade has passed. A guard press during the committed part is queued and comes up (with its deflect window) as soon as the recovery opens. **[tested]** |
 | Attack rhythm: roughly two slashes a second in a string, and every slash costs a moment of commitment. | The first hit lands ~0.26 s after the press, and the next slash can start ~0.46 s after the previous one. The string is 3 slashes, and the last one is a heavier overhead. |
-| Enemies block most of your attacks from neutral, and **keep attacking into their guard and they deflect you**, which knocks your sword away and leaves you open to a counter. | The boss guards and, after 2 to 4 blocked hits (1 to 3 in phase 2), parries and counters. Being parried costs you posture and a longer recovery than his. |
+| Enemies block most of your attacks from neutral, and **keep attacking into their guard and they deflect you**, which knocks your sword away and leaves you open to a counter. | The boss guards and, after 2 to 4 blocked hits (1 to 3 in phase 2), parries and counters, and often keeps pressing after the counter. Being parried costs you posture and a longer recovery than his. |
+| Deflecting a boss's combo opens him up for a hit or two, not for a stun-lock: bosses deflect your next swing, jump away, or counter through your string. | He reels from your first two hits after a stagger (one or two in phase two); the next one he parries, hops back from (his backstep has i-frames) into a thrust or leap, or takes and answers with a fast cut or a sweep. After reeling he often backs off or throws shuriken, and he avoids reopening with the attack you just punished. **[tested]** (`punish`, `loop`) |
 | Hitting a guard doesn't damage it much. Posture damage mainly comes from deflects. | Blocked hits deal a small amount of posture. Most of his posture damage comes from deflects, mikiris and kicks. |
 
 ## 4. Posture
@@ -93,7 +95,11 @@ same way: every throw can be deflected (sparks, clang) or blocked, and hits if i
 
 ## 5. Readability (why the fight is fair)
 
-- Every attack has a clear wind-up pose and a sound cue *before* the active frames.
+- Every attack has a clear wind-up pose and a sound cue *before* the active frames, and every
+  opener gives at least 0.45 s of warning. Tells happen where you can see them: above or beside
+  your character from the lock-on camera, which sits a little high and to the right. **[tested]**
+- A blow lands when the blade actually reaches you, never the instant a hit window opens with
+  the blade already touching you, so the deflect timing matches what you see. **[tested]**
 - Hit windows are tested against the **whole weapon**. For the twin-blade staff that includes
   the shaft, so a strike never passes through you when you stand close.
 - The deflect sound and sparks are big and bright, and blocks are dull by comparison, so you
