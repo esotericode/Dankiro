@@ -28,7 +28,16 @@ var player: Node = null
 var boss: Node = null
 var camera: Node = null
 var hud: Node = null
+
+## Options (saved to SETTINGS_PATH). `debug` is the diagnostics overlay: hitboxes, hit windows
+## and live combat readouts (Options menu or F3). `start_phase` is the phase the fight starts
+## in (for testing the later phases).
+const SETTINGS_PATH := "user://settings.cfg"
 var debug := false
+var start_phase := 1
+## Set before reloading the scene to go straight back into the fight (retry, restart)
+## instead of the title menu.
+var skip_title := false
 
 
 func _ready() -> void:
@@ -37,6 +46,33 @@ func _ready() -> void:
 	_last_tick_usec = Time.get_ticks_usec()
 	if Engine.get_write_movie_path() != "":
 		deterministic = true
+	load_settings()
+
+
+func load_settings() -> void:
+	var cfg := ConfigFile.new()
+	if cfg.load(SETTINGS_PATH) != OK:
+		return
+	start_phase = clampi(int(cfg.get_value("fight", "start_phase", 1)), 1, Combat.BOSS_LIVES)
+	debug = bool(cfg.get_value("fight", "diagnostics", false))
+
+
+func save_settings() -> void:
+	var cfg := ConfigFile.new()
+	cfg.set_value("fight", "start_phase", start_phase)
+	cfg.set_value("fight", "diagnostics", debug)
+	cfg.save(SETTINGS_PATH)
+
+
+func set_diagnostics(on: bool) -> void:
+	debug = on
+	debug_toggled.emit(debug)
+	save_settings()
+
+
+func set_start_phase(n: int) -> void:
+	start_phase = clampi(n, 1, Combat.BOSS_LIVES)
+	save_settings()
 
 
 func _physics_process(delta: float) -> void:
@@ -120,5 +156,4 @@ func _unhandled_input(event: InputEvent) -> void:
 		else:
 			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 	elif event.is_action_pressed("debug"):
-		debug = not debug
-		debug_toggled.emit(debug)
+		set_diagnostics(not debug)

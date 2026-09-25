@@ -61,7 +61,7 @@ const BOSS_POSTURE := 300.0                 ## deflects, mikiris and kicks fill 
 ## than before while a steady deflect rhythm still breaks him in about a minute.
 const BOSS_POSTURE_REGEN := 12.0
 const BOSS_POSTURE_DELAY := 1.5
-const BOSS_LIVES := 2
+const BOSS_LIVES := 3                       ## one per phase
 const MIKIRI_POSTURE := 32.0
 ## A Mikiri step may start this long before the thrust's release ("the spear starts going
 ## forward") and still count; any earlier is a plain dodge into the thrust.

@@ -2,8 +2,9 @@ extends Node
 ## Scripted capture director for visual checks with Godot's Movie Maker:
 ##   godot --write-movie out/frame.png --fixed-fps 30 res://tests/capture.tscn -- <shot>
 ## Shots: overview, deflect, deflect_offcenter, block, mikiri, thrust_backstep, sweep, sweep_flee, whirl, shuriken,
-## shuriken5, charge, slashes, parried, attack <clip> [distance], recovery <clip>, and art checks: model (orbit),
-## model_head, model_face, model_face_p2, model_combo, model_flourish.
+## shuriken5, charge, slashes, parried, attack <clip> [distance], recovery <clip>, diagnostics, the menus
+## (menu_title, menu_options, menu_start, menu_pause), and art checks: model (orbit), model_head, model_face, model_face_p2, model_combo,
+## model_flourish.
 ## Loads the real game scene (arena, lighting, HUD, lock-on camera), skips the intro, stages
 ## the fighters and drives the player with a bot that reacts to the boss's hit windows.
 
@@ -27,9 +28,18 @@ func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
 	if args.size() > 0:
 		shot = args[0]
+	# Straight into the fight (the menu shots boot to the title menu, like the game), whatever
+	# options are saved on this machine.
+	process_mode = Node.PROCESS_MODE_ALWAYS       # keep directing while the game is paused
+	Game.skip_title = not shot.begins_with("menu") or shot == "menu_pause"
+	Game.start_phase = 1
+	Game.debug = shot == "diagnostics"
 	main = (load("res://scenes/main.tscn") as PackedScene).instantiate()
 	add_child(main)
 	await get_tree().physics_frame
+	if shot.begins_with("menu"):
+		call("shot_" + shot)
+		return
 	player = Game.player as Player
 	boss = Game.boss as Boss
 	main.set("flow", 1)                          # Flow.FIGHT
@@ -320,9 +330,44 @@ func shot_model_face() -> void:
 ## Same as model_face, in phase two (brighter aura and glow).
 func shot_model_face_p2() -> void:
 	_stage(7.0)
-	boss._enter_phase_two()
+	boss._enter_phase(2)
 	_art_camera(1.0, 1.70, 1.84, 25.0, -50.0)
 	_end_at = 4.0
+
+
+## The title menu as the game boots (his idle behind it, the camera orbiting slowly).
+func shot_menu_title() -> void:
+	_end_at = 2.0
+
+
+## Boot to the title, press Start fight: the menu goes, his intro plays, the fight begins.
+func shot_menu_start() -> void:
+	at(1.0, func(): (main.get("menu") as GameMenu).start_pressed.emit())
+	_end_at = 4.0
+
+
+## In the fight, Esc: the pause menu over the frozen fight.
+func shot_menu_pause() -> void:
+	at(1.2, func(): main.call("_toggle_pause"))
+	_end_at = 2.2
+
+
+## The title menu's Options page.
+func shot_menu_options() -> void:
+	at(0.3, func():
+		for b in (main.get("menu") as GameMenu).find_children("*", "Button", true, false):
+			if (b as Button).text == "Options":
+				(b as Button).pressed.emit())
+	_end_at = 1.6
+
+
+## The diagnostics overlay during an exchange: hurtboxes, lit weapons, the guard ring and
+## hit markers, plus the live readout.
+func shot_diagnostics() -> void:
+	_stage(2.4)
+	auto_guard(0.05, 0.12)
+	at(0.3, func(): boss_string(["b_combo_1", "b_combo_2", "b_combo_3"]))
+	_end_at = 3.4
 
 
 ## One boss attack from a fixed 3/4 front view, played to the very end (no chaining), to look

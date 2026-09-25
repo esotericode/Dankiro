@@ -5,7 +5,7 @@ extends Node3D
 ##
 ## Run (from the project folder):
 ##   godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--verbose]
-## Suites: reach, tells, deflect, flurry, punish, loop, spam, mikiri, dodge, sweep, shuriken, attack, cancel, soak (default: all).
+## Suites: reach, tells, deflect, flurry, punish, loop, phases, spam, mikiri, dodge, sweep, shuriken, attack, cancel, soak (default: all).
 ## Exit code 0 when every check passes, including "no engine or script errors during the run".
 
 const DT := 1.0 / 120.0
@@ -55,7 +55,7 @@ func _ready() -> void:
 		if not a.begins_with("--"):
 			suites.append(a)
 	if suites.is_empty():
-		suites = ["reach", "tells", "deflect", "flurry", "punish", "loop", "spam", "mikiri", "dodge", "sweep", "shuriken", "attack", "cancel", "soak"]
+		suites = ["reach", "tells", "deflect", "flurry", "punish", "loop", "phases", "spam", "mikiri", "dodge", "sweep", "shuriken", "attack", "cancel", "soak"]
 	await get_tree().physics_frame
 	for s in suites:
 		print("\n=== suite: %s ===" % s)
@@ -622,6 +622,35 @@ func suite_shuriken() -> void:
 		player.release_guard(Game.clock)
 
 
+## Three lives, one per phase. The starting-phase option starts a fight in a later phase with
+## the earlier lives taken; each deathblow raises him into the next phase, and the third one
+## ends the fight. Phase 3 is a copy of phase 2 for now.
+func suite_phases() -> void:
+	for n in [1, 2, 3]:
+		await setup(3.0)
+		boss.set_start_phase(n)
+		var want: Dictionary = Boss.PHASES.get(n, {"attack_speed": 1.0, "aggression": 1.0})
+		check(boss.phase == n and boss.lives_left == Combat.BOSS_LIVES - (n - 1) and boss.hp == boss.max_hp,
+			"start in phase %d: phase %d, lives %d, full vitality" % [n, boss.phase, boss.lives_left])
+		check(is_equal_approx(boss.attack_speed, float(want["attack_speed"])) and is_equal_approx(boss.aggression,
+			float(want["aggression"])), "phase %d tuning (speed %.2f, aggression %.2f)" % [n, boss.attack_speed, boss.aggression])
+	await setup(3.0)
+	var row := PackedStringArray()
+	for k in Combat.BOSS_LIVES:
+		boss._posture_break()
+		boss.begin_deathblow(player)
+		var t_end := Game.clock + 12.0
+		while Game.clock < t_end and boss.state != Boss.S.NEUTRAL and boss.state != Boss.S.DEAD:
+			await ticks(1)
+		row.append("deathblow %d -> %s, phase %d, lives %d" % [k + 1, Boss.S.keys()[boss.state], boss.phase, boss.lives_left])
+		if k + 1 < Combat.BOSS_LIVES:
+			check(boss.state == Boss.S.NEUTRAL and boss.phase == k + 2 and boss.lives_left == Combat.BOSS_LIVES - k - 1,
+				"deathblow %d raises him into phase %d (%s)" % [k + 1, k + 2, row[k]])
+		else:
+			check(boss.state == Boss.S.DEAD and boss.lives_left == 0, "the last deathblow ends the fight (%s)" % row[k])
+	print("  " + "; ".join(row))
+
+
 ## The punish loop over whole fights (three seeds each) against bots that deflect everything:
 ## one hits him only when he's open, the other whenever he's in reach. Deflecting should earn
 ## hits, but he must not be locked into "attack, get deflected, eat a combo, same attack again"
@@ -659,7 +688,7 @@ func _loop_fight(style: String, sd: int) -> Dictionary:
 	var cur := ["", 0]
 	var prev_state := [boss.state]
 	var was_counter := [false, 0.0]
-	boss.struck.connect(func(r):
+	boss.struck.connect(func(r, _point):
 		if int(r) == Combat.RESULT_HIT and boss.state == Boss.S.REACT:
 			cur[1] = int(cur[1]) + 1)
 	var handled := {}
@@ -761,7 +790,7 @@ func suite_punish() -> void:
 		boss.passive = false
 		var got: Array = []
 		# H: a hit that left him reeling; h: one he took while attacking anyway (a trade).
-		boss.struck.connect(func(r):
+		boss.struck.connect(func(r, _point):
 			got.append("H" if int(r) == Combat.RESULT_HIT and boss.state == Boss.S.REACT else
 				("h" if int(r) == Combat.RESULT_HIT else res_name(int(r))[0])))
 		var t0 := boss_attack(clip)

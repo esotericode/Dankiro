@@ -18,7 +18,8 @@ The boss up close: [docs/boss_model.png](docs/boss_model.png), and
 
 1. Install Godot **4.7** (standard build, no C# needed; 4.7.2 is what it's tested on).
 2. Open `project.godot` in the editor. The first open imports the audio, textures and font.
-3. Press **F5**.
+3. Press **F5**. The game opens on the title menu: **Start fight**, **Options**, **Controls**
+   and **Quit** (mouse, keyboard or gamepad).
 
 Everything is generated from code: the arena, effects, HUD and the player are built at
 runtime, and the boss is a skinned model that a script builds with Blender (see
@@ -37,13 +38,34 @@ runtime, and the boss is a skinned model that a script builds with Blender (see
 | Jump | Space | A |
 | Lock on | Q / middle mouse | R3 |
 | Heal (gourd, 3 uses) | R | X |
-| Pause (shows controls) | Esc | Start |
+| Pause menu | Esc | Start |
 | Controls panel | F1 | Back |
-| Timing debug readout | F3 | |
+| Diagnostics overlay | F3 | |
 | Fullscreen | F11 | |
 
 The input map is registered in code (`scripts/autoload/game_input.gd`); actions you add in
 *Project Settings > Input Map* are kept.
+
+## Menus and options
+
+- **Title menu** (on launch): Start fight, Options, Controls, Quit. He waits in the arena
+  behind it.
+- **Pause menu** (Esc / Start): Resume, Restart fight, Options, Controls, Quit to title.
+  After a death or a victory, Enter / (A) goes straight back into the fight and Esc / (Start)
+  goes to the title.
+- **Options** (saved to `user://settings.cfg`):
+  - **Starting phase** (1, 2 or 3): start the fight in a later phase, for testing. The
+    earlier lives count as taken. It applies when a fight starts.
+  - **Diagnostics** (also F3 in a fight): draws both fighters' hurtboxes at the radius the
+    hit tests use (green hittable, cyan i-frames, yellow open to a punish, grey ignoring
+    hits), the weapons (lit red while a hit window is open, orange for a perilous attack,
+    yellow for your katana), your guard as a ring at your feet (gold while the deflect window
+    is open, shrinking as it runs out, then blue for a block), shuriken in flight, and a
+    marker where each blow lands (gold deflect, blue block, red hit, magenta mikiri, cyan
+    dodged). A panel shows both fighters live: state, vitality, posture and its recovery
+    rate, your deflect window and spam level, his phase, lives, sequence, break-out and
+    parry counters, his current clip and hit window, and how you timed your last guard. It
+    keeps drawing while the game is paused.
 
 ## Combat
 
@@ -72,7 +94,8 @@ The input map is registered in code (`scripts/autoload/game_input.gd`); actions 
   gets blocked, and the spam penalty shrinks your deflect window, as in Sekiro.
 - Timing is measured precisely. Physics runs at 120 Hz with agile input flushing. Presses are
   stamped with sub-tick game time, and blade contact time is found by a swept blade-versus-capsule
-  test (`Combat.blade_vs_capsule`), so the window isn't rounded to frames. Press **F3** to see how
+  test (`Combat.blade_vs_capsule`), so the window isn't rounded to frames. Press **F3** (the
+  diagnostics overlay) to see how
   many milliseconds before contact you pressed, your current window, and your spam level.
 
 ### Your sword
@@ -127,8 +150,9 @@ The kanji flashes red above him with a deep warning sound and his blades glow ho
   Hitting him makes the posture war easier.
 - When his posture breaks (or his vitality empties), he drops to one knee under a red mark.
   Press **Attack** close to him to perform a **deathblow**.
-- He has **two lives**. After the first deathblow he rises into phase two: faster, more
-  aggressive, and with more parries.
+- He has **three lives**, one per phase. After each deathblow he rises into the next phase.
+  Phase two is faster, more aggressive, and parries more. Phase three is the same as phase
+  two for now; its own moves come later.
 
 ### His behaviour
 
@@ -183,7 +207,7 @@ godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--v
 | `shuriken` | Volley rhythms (3 in the air + 1 delayed, 5 in the air), a readable tell before the first, every throw deflectable (no posture to him) or blockable |
 | `attack` | Slash reach, and that mashing is rate-limited (no two hits within 0.38 s) |
 | `cancel` | Guard cancels a slash only in the early wind-up and in the recovery |
-| `soak` | A full fight against the real AI (charges, repositioning, volleys) with a bot player that reacts to the blade and to incoming shuriken: deflects, blocks, posture breaks, deathblows, phase two |
+| `soak` | A full fight against the real AI (charges, repositioning, volleys) with a bot player that reacts to the blade and to incoming shuriken: deflects, blocks, posture breaks, deathblows, the next phase |
 
 The run exits with code 0 when every check passes (620 checks, including the soak). It also
 fails if the engine or a script reports any error during the run (it listens through a
@@ -193,7 +217,8 @@ fails if the engine or a script reports any error during the run (it listens thr
 `block`, `mikiri`, `thrust_backstep`, `sweep`, `sweep_flee`, `whirl`, `shuriken`, `shuriken5`,
 `charge`, `slashes`, `parried`, `attack <clip> [distance]` for any single boss attack from
 the lock-on camera, `recovery <clip>` for one attack played to the end from a fixed 3/4 view,
-and the model close-ups `model`, `model_head`, `model_face`,
+`diagnostics` for the overlay, the menus `menu_title`, `menu_options` and `menu_start` (boot,
+then press Start), and the model close-ups `model`, `model_head`, `model_face`,
 `model_face_p2`, `model_combo`, `model_flourish`) in the real scene, with a bot reacting to his
 hit windows. It records them with Godot's Movie Maker:
 
@@ -290,7 +315,13 @@ This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (6
 a full-fight soak), the game boots and runs with no script errors, and every change to the
 visuals was checked on frames rendered with Movie Maker.
 
-**Latest: a combat readability pass** (from playtesting):
+**Latest: menus, options, diagnostics and a third phase.** The game now opens on a title
+menu, with a pause menu in the fight. Options can start the fight in phase 2 or 3 for
+testing, and turn on a diagnostics overlay that shows hitboxes, hit windows and your
+guard window, with a live readout of both fighters. He has a third life and phase, which is a
+copy of phase two for now.
+
+**Before that: a combat readability pass** (from playtesting):
 
 - **No more staff whip after the sweep.** As he stood up from the perilous sweep, the staff
   whipped a full circle around him: its angle, wound up by the spin, unwound the long way back

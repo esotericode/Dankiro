@@ -38,7 +38,11 @@ the script backs off and retries, so let it run. For another version, set
   ```
   Rendering takes about 0.7 s per frame at 960x540. `override.cfg` is git-ignored. The shots are
   the `shot_*` functions in `tests/capture.gd`; `-- attack <clip> [distance]` films any boss
-  attack from the lock-on camera. Contact-sheet the PNGs with PIL, then look at them.
+  attack from the lock-on camera, and `diagnostics` shows the hitbox overlay. Contact-sheet the
+  PNGs with PIL, then look at them.
+- The game boots to a title menu. The capture harness sets `Game.skip_title` (and ignores the
+  saved options: `Game.start_phase`, `Game.debug`) so shots go straight into the fight; the
+  `menu_*` shots boot to the menu like the game. Options live in `user://settings.cfg`.
 - Quick script-error check: `godot --headless --quit-after 600`.
 
 ## The boss model (Blender, scripted)

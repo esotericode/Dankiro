@@ -14,7 +14,7 @@ Lock on ......... Q / Middle mouse            R3
 Heal (gourd) .... R                           X
 Pause ........... Esc                         Start
 Controls ........ F1                          Back
-Timing debug .... F3     Fullscreen .... F11
+Diagnostics ..... F3     Fullscreen .... F11
 
 [b]HOW TO FIGHT[/b]
 - Tap guard just before a blade lands to [color=#ffd27a]DEFLECT[/color] (0.2 s window). Re-pressing within
@@ -44,6 +44,7 @@ var _prompt: Label
 var _reticle: Control
 var _vignette: TextureRect
 var _debug: Label
+var _debug_panel: PanelContainer
 var _namecard: Control
 var _overlay: Control
 var _overlay_kanji: TextureRect
@@ -75,7 +76,7 @@ func _ready() -> void:
 	_build_center()
 	_build_overlay()
 	_build_panel()
-	Game.debug_toggled.connect(func(_on: bool): _debug.visible = Game.debug)
+	Game.debug_toggled.connect(func(_on: bool): _debug_panel.visible = Game.debug)
 
 
 func bind(p: Player, b: Boss) -> void:
@@ -138,10 +139,10 @@ func _build_vignette() -> void:
 
 func _build_boss_ui() -> void:
 	_marks = MarksDisplay.new()
-	_place(_marks, Vector2(0, 0), Vector2(56, 44), Vector2(80, 24))
+	_place(_marks, Vector2(0, 0), Vector2(56, 44), Vector2(22 * Combat.BOSS_LIVES + 16, 24))
 	_root.add_child(_marks)
 	_boss_name = _label("", 30, Color(0.92, 0.88, 0.8))
-	_place(_boss_name, Vector2(0, 0), Vector2(110, 36), Vector2(700, 40))
+	_place(_boss_name, Vector2(0, 0), Vector2(56 + 22 * Combat.BOSS_LIVES + 20, 36), Vector2(700, 40))
 	_root.add_child(_boss_name)
 	_boss_hp = VitalityBar.new()
 	_boss_hp.fill_color = Color(0.66, 0.08, 0.06)
@@ -176,10 +177,28 @@ func _build_center() -> void:
 	_reticle = ReticleDisplay.new()
 	_reticle.size = Vector2(24, 24)
 	_root.add_child(_reticle)
-	_debug = _label("", 18, Color(0.8, 1.0, 0.8))
-	_place(_debug, Vector2(1, 0), Vector2(-620, 120), Vector2(600, 220))
-	_debug.visible = false
-	_root.add_child(_debug)
+	_debug_panel = PanelContainer.new()
+	_debug_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var dsb := StyleBoxFlat.new()
+	dsb.bg_color = Color(0.0, 0.02, 0.0, 0.62)
+	dsb.set_content_margin_all(12)
+	dsb.set_corner_radius_all(3)
+	_debug_panel.add_theme_stylebox_override("panel", dsb)
+	_debug_panel.anchor_left = 1.0
+	_debug_panel.anchor_right = 1.0
+	_debug_panel.offset_left = -812
+	_debug_panel.offset_right = -24
+	_debug_panel.offset_top = 64
+	_debug = Label.new()
+	_debug.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var dmono := SystemFont.new()
+	dmono.font_names = PackedStringArray(["DejaVu Sans Mono", "Consolas", "Menlo", "Courier New", "monospace"])
+	_debug.add_theme_font_override("font", dmono)
+	_debug.add_theme_font_size_override("font_size", 16)
+	_debug.add_theme_color_override("font_color", Color(0.82, 1.0, 0.82))
+	_debug_panel.add_child(_debug)
+	_debug_panel.visible = Game.debug
+	_root.add_child(_debug_panel)
 	_namecard = VBoxContainer.new()
 	_namecard.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_place(_namecard, Vector2(0.5, 1), Vector2(-600, -330), Vector2(1200, 150))
@@ -262,7 +281,7 @@ func _process(delta: float) -> void:
 		_vignette.modulate.a = maxf(0.0, _vignette.modulate.a - real_dt * 1.8)
 	if player != null and player.hp / player.max_hp < 0.25 and player.hp > 0.0:
 		_vignette.modulate.a = maxf(_vignette.modulate.a, 0.28 + 0.1 * sin(Time.get_ticks_msec() / 180.0))
-	if _debug.visible:
+	if _debug_panel.visible:
 		_update_debug()
 
 
@@ -306,11 +325,12 @@ func show_namecard() -> void:
 
 
 func show_death() -> void:
-	_show_overlay("kanji_death", "DEATH", "Press  Enter / (A)  to try again", Color(0.85, 0.08, 0.06))
+	_show_overlay("kanji_death", "DEATH", "Enter / (A)  try again        Esc / (Start)  title menu", Color(0.85, 0.08, 0.06))
 
 
 func show_victory() -> void:
-	_show_overlay("kanji_execution", "SHINOBI EXECUTION", "Press  Enter / (A)  to fight again", Color(0.9, 0.12, 0.08))
+	_show_overlay("kanji_execution", "SHINOBI EXECUTION", "Enter / (A)  fight again        Esc / (Start)  title menu",
+		Color(0.9, 0.12, 0.08))
 
 
 func hide_overlay() -> void:
@@ -349,24 +369,61 @@ func _on_deflect_timed(ms: float, window_ms: float, result: String) -> void:
 			_last_timing = "NOT GUARDING  (last press %.0f ms before contact)" % ms
 
 
+## The diagnostics readout (Options > Diagnostics, or F3); the 3D part is `Diagnostics`.
 func _update_debug() -> void:
 	var lines := PackedStringArray()
-	lines.append("[F3] timing debug")
-	lines.append(_last_timing)
+	lines.append("DIAGNOSTICS (F3)")
+	lines.append("hurtbox  green hittable, cyan i-frames, yellow open, grey ignores hits")
+	lines.append("weapon   red hit window, orange perilous, yellow your katana")
+	lines.append("guard    gold deflect window (shrinks), blue block")
+	lines.append("last guard: " + _last_timing)
+	lines.append("")
 	if player:
-		lines.append("player: %s  posture %.0f  window %.0f ms (spam lvl %d)  deflect chain %d" % [Player.S.keys()[player.state],
-			player.posture, player.guard_window * 1000.0, player.spam_level, player.deflect_chain])
+		var p_regen := Combat.PLAYER_POSTURE_REGEN * (Combat.PLAYER_POSTURE_REGEN_GUARD if player.state == Player.S.GUARD else 1.0) \
+			* (0.45 + 0.55 * player.hp / player.max_hp)
+		var inv := "  I-FRAMES" if player.is_dodge_invulnerable() else ""
+		lines.append("YOU    %s%s   hp %.0f/%.0f   posture %.0f/%.0f (-%.1f/s)" % [Player.S.keys()[player.state], inv,
+			player.hp, player.max_hp, player.posture, player.max_posture, p_regen])
+		lines.append("       deflect window %.0f ms (spam %d)   chain %d   gourd x%d" % [player.guard_window * 1000.0,
+			player.spam_level, player.deflect_chain, player.heal_charges])
 	if boss:
-		var clip := boss.anim.clip.name if boss.anim.clip != null and not boss.anim.loco_active else "locomotion"
-		lines.append("boss: %s  %s @ %.2fs  posture %.0f" % [Boss.S.keys()[boss.state], clip, boss.anim.time, boss.posture])
-	lines.append("fps %d   time scale %.2f" % [Engine.get_frames_per_second(), Engine.time_scale])
+		var b_regen := boss.posture_regen * (0.3 + 0.7 * boss.hp / boss.max_hp)
+		lines.append("SOJIN  phase %d   lives %d/%d   %s %s   seq %s" % [boss.phase, boss.lives_left, Combat.BOSS_LIVES,
+			Boss.S.keys()[boss.state], boss._mode, boss._seq_name if boss._seq_name != "" else "-"])
+		lines.append("       hp %.0f/%.0f   posture %.0f/%.0f (-%.1f/s after %.1f s)" % [boss.hp, boss.max_hp,
+			boss.posture, boss.max_posture, b_regen, boss.posture_delay])
+		lines.append("       cooldown %.2f   reeling %d/%d   guard %d/%d" % [maxf(0.0, boss.cooldown),
+			boss._flinches, boss._breakout_after, boss._guard_count, boss._parry_threshold])
+		lines.append("       " + _boss_clip_line())
+	if player and boss:
+		lines.append("distance %.2f m   fps %d   time scale %.2f" % [player.distance_to_opponent(),
+			Engine.get_frames_per_second(), Engine.time_scale])
 	_debug.text = "\n".join(lines)
+
+
+## His current clip, and where it is relative to its hit windows.
+func _boss_clip_line() -> String:
+	var a := boss.anim
+	if a.clip == null or a.loco_active:
+		return "moving (locomotion)"
+	var s := "%s %.2f/%.2f s" % [a.clip.name, a.time, a.clip.length]
+	var next := INF
+	for i in a.clip.hits.size():
+		var h: Dictionary = a.clip.hits[i]
+		if a.time >= float(h["from"]) and a.time <= float(h["to"]):
+			return s + "   HIT WINDOW %d open (%.2f-%.2f %s)" % [i, float(h["from"]), float(h["to"]),
+				str(h.get("kind", "normal"))]
+		if float(h["from"]) > a.time:
+			next = minf(next, float(h["from"]))
+	if next < INF:
+		return s + "   next hit in %.2f s" % ((next - a.time) / maxf(a.speed, 0.01))
+	return s
 
 
 # ------------------------------------------------------------------------------ small widgets
 class MarksDisplay extends Control:
-	var total := 2
-	var left := 2
+	var total := Combat.BOSS_LIVES
+	var left := Combat.BOSS_LIVES
 
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE

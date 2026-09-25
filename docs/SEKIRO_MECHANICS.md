@@ -92,6 +92,7 @@ same way: every throw can be deflected (sparks, clang) or blocked, and hits if i
 - **Lower vitality means slower posture regeneration** for both fighters, so damaging him with
   hits makes the posture war winnable.
 - A full posture bar means a posture break: they drop, and you can **deathblow**.
+- Bosses have several lives (Sekiro's deathblow marks). Sojin has three, one per phase.
 
 ## 5. Readability (why the fight is fair)
 

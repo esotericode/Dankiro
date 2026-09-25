@@ -5,13 +5,15 @@ extends Combatant
 ##  * Guards most attacks from neutral; blocked hits build HIS posture; mashing gets parried
 ##    and punished with a counter.
 ##  * Posture regenerates unless pressured; regen slows as his vitality drops.
-##  * Posture break (or 0 vitality) -> kneels, deathblow window. Two lives; phase 2 is faster.
+##  * Posture break (or 0 vitality) -> kneels, deathblow window. Three lives: after each
+##    deathblow he rises into the next phase (2 is faster and more aggressive; 3 is a copy
+##    of 2 for now).
 
 signal posture_broken
 signal life_lost(lives_left: int)
 signal defeated
 signal perilous_warning(kind: String)
-signal struck(result: int)          ## the player's sword reached him: Combat.RESULT_* (hit, block, parry)
+signal struck(result: int, point: Vector3)   ## the player's sword reached him: Combat.RESULT_* (hit, block, parry)
 
 enum S { INTRO, NEUTRAL, ATTACK, GUARD, REACT, STAGGER, DEATHBLOWN, REVIVE, DEAD }
 
@@ -55,6 +57,11 @@ const MOVES := {
 }
 ## Specials he opens with after repositioning, by distance.
 const SPECIALS := ["leap", "thrust", "shuriken_4", "shuriken_5", "charge"]
+
+## What changes when he rises into a phase (phase 1 is his base setup). Everything that
+## checks `phase >= 2` applies to phase 3 as well. Phase 3 is a copy of phase 2 for now.
+const PHASE_TWO := {"attack_speed": 1.08, "aggression": 1.5, "glow": 0.9, "aura": 48, "eye_light": 0.4}
+const PHASES := {2: PHASE_TWO, 3: PHASE_TWO}
 
 var state: int = S.INTRO
 var state_time := 0.0
@@ -627,7 +634,7 @@ func _state_guard(delta: float) -> void:
 func receive_player_attack(info: Dictionary, p: Player) -> int:
 	var res := _resolve_player_attack(info, p)
 	if res != Combat.RESULT_IGNORED:
-		struck.emit(res)
+		struck.emit(res, info.get("point", global_position + Vector3.UP * 1.3))
 	return res
 
 
@@ -883,21 +890,35 @@ func _after_deathblow() -> void:
 			tree.create_timer(2.2, false).timeout.connect(func(): defeated.emit())
 
 
-func _enter_phase_two() -> void:
-	phase = 2
+## Rises into phase `n` (2 or 3): full vitality, empty posture, that phase's tuning. With
+## `fanfare` he roars (on rising after a deathblow); without it (starting the fight in a later
+## phase from the options) it's silent.
+func _enter_phase(n: int, fanfare := true) -> void:
+	phase = clampi(n, 1, Combat.BOSS_LIVES)
 	hp = max_hp
 	posture = 0.0
-	attack_speed = 1.08
-	aggression = 1.5
-	_base_glow = 0.9
-	_glow_target = _base_glow
-	aura.amount = 48
-	if eye_light:
-		eye_light.light_energy = 0.4
+	var cfg: Dictionary = PHASES.get(phase, {})
+	if not cfg.is_empty():
+		attack_speed = float(cfg["attack_speed"])
+		aggression = float(cfg["aggression"])
+		_base_glow = float(cfg["glow"])
+		_glow_target = _base_glow
+		aura.amount = int(cfg["aura"])
+		if eye_light:
+			eye_light.light_energy = float(cfg["eye_light"])
 	vitals_changed.emit()
-	Sfx.play_ui("roar", 0.0)
-	Game.shake(0.35, 0.8)
-	Fx.light_pulse(get_parent(), global_position + Vector3(0, 1.6, 0), Color(1.0, 0.35, 0.1), 6.0, 7.0, 0.8)
+	if fanfare:
+		Sfx.play_ui("roar", 0.0)
+		Game.shake(0.35, 0.8)
+		Fx.light_pulse(get_parent(), global_position + Vector3(0, 1.6, 0), Color(1.0, 0.35, 0.1), 6.0, 7.0, 0.8)
+
+
+## Starts the fight in phase `n` (a testing option): the earlier lives count as taken.
+func set_start_phase(n: int) -> void:
+	n = clampi(n, 1, Combat.BOSS_LIVES)
+	lives_left = Combat.BOSS_LIVES - (n - 1)
+	if n > 1:
+		_enter_phase(n, false)
 
 
 # ---------------------------------------------------------------------------- events + visuals
@@ -923,7 +944,7 @@ func _on_anim_event(_clip: String, ev: Dictionary) -> void:
 		"glint":
 			Fx.flash(get_parent(), rig.joint_world("hand_l"), 0.28, Color(1.0, 0.85, 0.6), true)
 		"roar":
-			_enter_phase_two()
+			_enter_phase(phase + 1)
 
 
 ## Shuriken from the left hand at where the player will be (a little lead on their movement).

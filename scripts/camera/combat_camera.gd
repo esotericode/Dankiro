@@ -87,7 +87,8 @@ func add_shake(strength: float, duration := 0.25) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and (event as InputEventMouseButton).pressed \
-			and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED and not get_tree().paused:
+			and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED and not get_tree().paused \
+			and player != null and player.controls_enabled:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		if player != null and player.locked:
