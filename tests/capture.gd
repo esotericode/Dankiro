@@ -2,8 +2,8 @@ extends Node
 ## Scripted capture director for visual checks with Godot's Movie Maker:
 ##   godot --write-movie out/frame.png --fixed-fps 30 res://tests/capture.tscn -- <shot>
 ## Shots: overview, deflect, deflect_offcenter, block, mikiri, thrust_backstep, sweep, sweep_flee, whirl, shuriken,
-## shuriken5, charge, slashes, parried, attack <clip> [distance], and art checks: model (orbit), model_head,
-## model_face, model_face_p2, model_combo, model_flourish.
+## shuriken5, charge, slashes, parried, attack <clip> [distance], recovery <clip>, and art checks: model (orbit),
+## model_head, model_face, model_face_p2, model_combo, model_flourish.
 ## Loads the real game scene (arena, lighting, HUD, lock-on camera), skips the intro, stages
 ## the fighters and drives the player with a bot that reacts to the boss's hit windows.
 
@@ -323,6 +323,17 @@ func shot_model_face_p2() -> void:
 	boss._enter_phase_two()
 	_art_camera(1.0, 1.70, 1.84, 25.0, -50.0)
 	_end_at = 4.0
+
+
+## One boss attack from a fixed 3/4 front view, played to the very end (no chaining), to look
+## at how he recovers into his stance: `-- recovery <clip>`.
+func shot_recovery() -> void:
+	var args := OS.get_cmdline_user_args()
+	var clip: String = args[1] if args.size() > 1 else "b_whirl"
+	_stage(3.0)
+	_art_camera(4.2, 1.6, 1.25, 0.0, 35.0)
+	at(0.3, func(): boss_string([clip]))
+	_end_at = 0.3 + AnimLibrary.get_clip(clip).length + 0.5
 
 
 ## His staff plant (the intro / flourish), 3/4 front.

@@ -174,7 +174,7 @@ godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--v
 | `tells` | When each attack's blows land from 1.4 to 2.6 m: every blow lands as the blade reaches you (not the instant its hit window opens, which would mean the blade was already touching you), and every opener gives at least 0.45 s of warning |
 | `deflect` | Presses 0–200 ms before contact deflect; earlier ones block (held, or a tap still up); late ones get hit; perilous thrusts can't be blocked; a deflect never guard-breaks you; a deflect that breaks his posture partway through a multi-hit attack staggers him cleanly |
 | `flurry` | After a blow of the whirl, the jabs or a shuriken volley lands, holding guard blocks the rest; mashing guard through them never lets a blow through |
-| `punish` | Deflect an attack, then mash attack: he reels from at most a few hits, then answers (a parry or a blow) |
+| `punish` | Deflect an attack, then mash attack: he reels from at most a few hits, then stops it (guards, parries or hits back) |
 | `loop` | Two 90 s fights against bots that deflect everything, one hitting him only when he's open and one hitting whenever he's in reach: no more than 3 hits leave him reeling between his attacks, and he rarely reopens with the attack he was just punished for |
 | `spam` | The window shrinks 200/133/100/67/0 ms when mashing, clears after 0.5 s and on a deflect |
 | `mikiri` | Only a neutral step from the release on counters the thrust; during the pull-back is too early; forward-held and side steps never counter. Backstepping (once or twice), an early side step, or a backstep into a sprint all still get stabbed, from 2.4 to 4.4 m |
@@ -192,7 +192,8 @@ fails if the engine or a script reports any error during the run (it listens thr
 **Captures**: `tests/capture.tscn` stages shots (`overview`, `deflect`, `deflect_offcenter`,
 `block`, `mikiri`, `thrust_backstep`, `sweep`, `sweep_flee`, `whirl`, `shuriken`, `shuriken5`,
 `charge`, `slashes`, `parried`, `attack <clip> [distance]` for any single boss attack from
-the lock-on camera, and the model close-ups `model`, `model_head`, `model_face`,
+the lock-on camera, `recovery <clip>` for one attack played to the end from a fixed 3/4 view,
+and the model close-ups `model`, `model_head`, `model_face`,
 `model_face_p2`, `model_combo`, `model_flourish`) in the real scene, with a bot reacting to his
 hit windows. It records them with Godot's Movie Maker:
 
@@ -291,9 +292,12 @@ visuals was checked on frames rendered with Movie Maker.
 
 **Latest: a combat readability pass** (from playtesting):
 
-- **No more awkward staff twirl.** The flourish he did after some attacks (and in his intro)
-  is now a staff plant: he drives the butt of the staff into the flagstones with a stamp and
-  takes a slow breath, daring you in.
+- **No more staff whip after the sweep.** As he stood up from the perilous sweep, the staff
+  whipped a full circle around him: its angle, wound up by the spin, unwound the long way back
+  to his stance. Now it just settles.
+- **A new flourish.** When you keep your distance (and in his intro), instead of twirling the
+  staff he drives its butt into the flagstones with a stamp and takes a slow breath, daring
+  you in.
 - **Fang Jabs** keep their two quick stabs, but first he stamps, lifts the staff to head
   height and holds the aim for a beat: the first stab lands at ~0.55 s instead of ~0.38 s.
 - **Whirling Fangs** is slower (a chop every 0.375 s instead of 0.28 s). The wheel spins up

@@ -752,8 +752,11 @@ func _loop_fight(style: String, sd: int) -> Dictionary:
 ## may eat a hit or two in his recoil - that's the reward - but then he has to break out
 ## (parry, guard, back off or counter) instead of flinching again and again.
 func suite_punish() -> void:
-	for clip in ["b_backhand", "b_combo_3", "b_jab", "b_whirl", "b_combo_1"]:
+	var clips := ["b_backhand", "b_combo_3", "b_jab", "b_whirl", "b_combo_1"]
+	for ci in clips.size():
+		var clip: String = clips[ci]
 		var cts := await contact_times(clip, 2.2)
+		seed(900 + ci)          # his break-out is a random pick: keep each scenario reproducible
 		await setup(2.2)
 		boss.passive = false
 		var got: Array = []
@@ -784,7 +787,8 @@ func suite_punish() -> void:
 		print("  %-12s deflected, then mashed: %s  (player hp -%.0f)" % [clip, "".join(got), player.max_hp - player.hp])
 		check(got.size() >= 2, "%s: the mash reaches him (%d)" % [clip, got.size()])
 		check(worst <= 3, "%s: he stops reeling after at most 3 hits in a row (%d)" % [clip, worst])
-		check(got.has("D") or player.hp < player.max_hp, "%s: he answers the mash (parry or a blow)" % clip)
+		check(got.has("B") or got.has("D") or player.hp < player.max_hp,
+			"%s: he stops the mash (guards, parries or hits back)" % clip)
 
 
 ## Player attacks: reach and rhythm. Mashing attack must not produce hits faster than the

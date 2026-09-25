@@ -15,7 +15,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import rigmath as rm  # noqa: E402
-from animkit import (Pose, axis_angle, key, r3, unit, v, weapon_rot, gait)  # noqa: E402
+from animkit import (Pose, axis_angle, closest_euler, key, r3, unit, v, weapon_rot, gait)  # noqa: E402
 
 POSES = {}
 CLIPS = {}
@@ -794,7 +794,10 @@ def build_boss():
     keys.append(key(1.66, dict(place(S.copy(), [0.12, 1.00, -0.10], [-0.35, 0.50, -0.80], [0, -0.9, -0.45], -0.30, 0.24,
                                      spin_pose["weapon_rot"]), yaw=-360.0, root=[0, 0, -1.62], hips_pos=[0, 0.90, 0.02],
                                chest=[-8, 5, 0]), ease="inout_sine"))
-    keys.append({"t": 1.95, "pose": "b_stance", "set": {"root": [0, 0, -1.63], "yaw": -360.0}, "ease": "inout_sine"})
+    # Back to his stance with the staff's angle unwound to the spin's (the same orientation):
+    # otherwise the staff whipped a full circle around him as he stood up.
+    keys.append({"t": 1.95, "pose": "b_stance", "set": {"root": [0, 0, -1.63], "yaw": -360.0,
+                 "weapon_rot": r3(closest_euler(keys[-1]["set"]["weapon_rot"], S["weapon_rot"]))}, "ease": "inout_sine"})
     clip("b_sweep", "boss", keys, chain=1.75, close=[0.12, 1.02, 2.0, 7.0], vuln=[1.24, 1.9], perilous="sweep",
          track=[[0.0, 0.62, 480], [0.62, SP0, 140]],
          hits=[{"from": SP0 - 0.02, "to": SP1 + 0.02, "blade": "lower", "kind": "sweep", "dmg": 40, "posture_block": 0,
