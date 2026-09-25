@@ -49,7 +49,7 @@ void vertex() {
 // Returns grout mask (1 in the joint) and writes a per-stone id.
 float stones(vec2 p, out vec2 cell) {
 	float r = length(p);
-	float a = atan(p.y, p.x);
+	float a = atan(p.y, p.x + 1e-5);
 	if (r < ring_width * 1.2) {
 		cell = vec2(0.0);
 		return 1.0 - smoothstep(0.018, 0.04, abs(r - ring_width * 1.2));
@@ -92,7 +92,7 @@ void fragment() {
 
 	// Curb ring at the edge
 	float curb = smoothstep(plaza_radius - 0.75, plaza_radius - 0.7, r) * (1.0 - smoothstep(plaza_radius - 0.02, plaza_radius, r));
-	float curb_seg = fract(atan(p.y, p.x) / 6.2831853 * 72.0);
+	float curb_seg = fract(atan(p.y, p.x + 1e-5) / 6.2831853 * 72.0);
 	float curb_joint = 1.0 - smoothstep(0.02, 0.05, min(abs(r - (plaza_radius - 0.72)), (0.5 - abs(curb_seg - 0.5)) * 1.33));
 	vec3 curb_col = mix(vec3(0.27, 0.26, 0.25), grout_color, curb_joint) * (0.85 + 0.3 * n);
 	col = mix(col, curb_col, curb);
