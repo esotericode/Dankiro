@@ -619,14 +619,20 @@ func suite_cancel() -> void:
 ## with imperfect timing (sometimes early -> block, sometimes late -> hit), mikiris thrusts,
 ## jumps and kicks sweeps, attacks into openings, heals, and deathblows. Exercises the whole
 ## flow: posture breaks, deathblows, phase two, victory/death.
+const SOAK_TIME := 480.0
+
+
 func suite_soak() -> void:
 	seed(12345)
 	await setup(4.0)
-	player.max_hp = Combat.PLAYER_HP * 1.5
+	# The bot mistimes on purpose, and his posture takes a lot of work: give it the health to
+	# play the whole fight through (this suite checks the flow, not the balance).
+	player.max_hp = Combat.PLAYER_HP * 6.0
 	player.hp = player.max_hp
 	boss.passive = false
 	boss.start_fight()
 	var counts := {}
+	var t_start := Game.clock
 	var bump := func(k: String): counts[k] = int(counts.get(k, 0)) + 1
 	player.hit_resolved.connect(func(i, r):
 		bump.call(res_name(r))
@@ -634,7 +640,10 @@ func suite_soak() -> void:
 			print("    %6.2f %-16s hit %d -> %-7s player %-10s dt %+.0f ms (window %.0f, guard_up %s)" % [Game.clock,
 				str(i.get("clip", "")), int(i.get("index", 0)), res_name(r), Player.S.keys()[player.state],
 				(float(i.get("time", 0.0)) - player.guard_start) * 1000.0, player.guard_window * 1000.0, player.is_guard_up()]))
-	boss.posture_broken.connect(func(): bump.call("posture_break"))
+	boss.posture_broken.connect(func():
+		bump.call("posture_break")
+		if not counts.has("first_break_s"):
+			counts["first_break_s"] = snappedf(Game.clock - t_start, 0.1))
 	boss.life_lost.connect(func(_l): bump.call("life_lost"))
 	var over := [""]
 	boss.defeated.connect(func(): over[0] = "boss defeated")
@@ -643,7 +652,7 @@ func suite_soak() -> void:
 	var leads := {}
 	var serial := [0, ""]
 	var next_attack := 0.0
-	var t_end := Game.clock + 240.0
+	var t_end := Game.clock + SOAK_TIME
 	var last_desc := ""
 	while Game.clock < t_end and over[0] == "":
 		await ticks(1)
@@ -652,7 +661,7 @@ func suite_soak() -> void:
 			var desc := "%s %s %s" % [Boss.S.keys()[boss.state], boss._mode,
 				boss.anim.clip.name if boss.anim.clip != null and not boss.anim.loco_active else "loco"]
 			if desc != last_desc:
-				print("    %6.2f boss %-40s d=%.1f cd=%.2f" % [now - (t_end - 240.0), desc, player.distance_to_opponent(), boss.cooldown])
+				print("    %6.2f boss %-40s d=%.1f cd=%.2f" % [now - (t_end - SOAK_TIME), desc, player.distance_to_opponent(), boss.cooldown])
 				last_desc = desc
 		var d := player.distance_to_opponent()
 		# The lock-on camera keeps looking at him, so "forward" always means toward him.
@@ -715,7 +724,7 @@ func suite_soak() -> void:
 		if player.hp < player.max_hp * 0.35 and player.heal_charges > 0 and d > 3.0:
 			player.press_action("heal", now)
 	print("  soak: %s after %.0f s  %s  boss lives %d, player hp %.0f" % [over[0] if over[0] != "" else "time up",
-		Game.clock - (t_end - 240.0), str(counts), boss.lives_left, player.hp])
+		Game.clock - (t_end - SOAK_TIME), str(counts), boss.lives_left, player.hp])
 	check(int(counts.get("DEFLECT", 0)) >= 10, "soak: deflects happen (%d)" % int(counts.get("DEFLECT", 0)))
 	check(int(counts.get("BLOCK", 0)) >= 1, "soak: early presses block")
 	check(int(counts.get("posture_break", 0)) >= 1, "soak: his posture breaks")

@@ -85,6 +85,16 @@ static func _free_later(node: Node, seconds: float) -> void:
 	tree.create_timer(seconds, false).timeout.connect(node.queue_free)
 
 
+## Starts a one-shot particle burst at `pos`. A CPUParticles3D starts out emitting and runs its
+## first update the moment it enters the tree, so it has to be placed first and switched on
+## after, or the burst fires from the parent's origin (the middle of the arena).
+static func _emit_at(parent: Node, p: CPUParticles3D, pos: Vector3) -> void:
+	p.emitting = false
+	parent.add_child(p)
+	p.global_position = pos
+	p.emitting = true
+
+
 ## Spark burst at `pos`. `normal` points away from the struck surface (toward the viewer
 ## side of the clash); sparks spray around it.
 static func sparks(parent: Node, pos: Vector3, normal: Vector3, kind: int) -> void:
@@ -133,9 +143,7 @@ static func sparks(parent: Node, pos: Vector3, normal: Vector3, kind: int) -> vo
 	var col: Color = c["col"]
 	var col2: Color = c["col2"]
 	p.color_ramp = _ramp([col, col2, Color(col2.r, col2.g * 0.4, 0.0, 0.0)], [0.0, 0.45, 1.0])
-	parent.add_child(p)
-	p.global_position = pos
-	p.emitting = true
+	_emit_at(parent, p, pos)
 	_free_later(p, float(c["life"]) + 0.3)
 	# Slower embers that fall and flicker out
 	var e := CPUParticles3D.new()
@@ -161,9 +169,7 @@ static func sparks(parent: Node, pos: Vector3, normal: Vector3, kind: int) -> vo
 	e.mesh = dot
 	e.material_override = _spark_material()
 	e.color_ramp = _ramp([col2, Color(col2.r, col2.g * 0.5, 0.0, 0.0)], [0.0, 1.0])
-	parent.add_child(e)
-	e.global_position = pos
-	e.emitting = true
+	_emit_at(parent, e, pos)
 	_free_later(e, e.lifetime + 0.3)
 	# Flash billboard (+ star streaks for deflects)
 	flash(parent, pos, float(c["flash"]), col, bool(c["star"]))
@@ -267,9 +273,7 @@ static func blood(parent: Node, pos: Vector3, dir: Vector3, amount := 40, big :=
 	p.mesh = s
 	p.material_override = _blood_mat
 	p.color_ramp = _ramp([Color(0.55, 0.02, 0.02), Color(0.3, 0.0, 0.0)], [0.0, 1.0])
-	parent.add_child(p)
-	p.global_position = pos
-	p.emitting = true
+	_emit_at(parent, p, pos)
 	_free_later(p, 1.3)
 	# mist
 	var m := CPUParticles3D.new()
@@ -299,9 +303,7 @@ static func blood(parent: Node, pos: Vector3, dir: Vector3, amount := 40, big :=
 	mm.albedo_texture = radial_texture("mist", Color(1, 1, 1, 1), Color(1, 1, 1, 0), 64)
 	m.material_override = mm
 	m.color_ramp = _ramp([Color(0.5, 0.02, 0.02, 0.55), Color(0.25, 0.0, 0.0, 0.0)], [0.0, 1.0])
-	parent.add_child(m)
-	m.global_position = pos
-	m.emitting = true
+	_emit_at(parent, m, pos)
 	_free_later(m, 0.9)
 
 
@@ -336,9 +338,7 @@ static func dust(parent: Node, pos: Vector3, amount := 18, spread_radius := 0.6)
 	p.mesh = q
 	p.material_override = _dust_mat
 	p.color_ramp = _ramp([Color(0.55, 0.52, 0.48, 0.45), Color(0.4, 0.38, 0.36, 0.0)], [0.0, 1.0])
-	parent.add_child(p)
-	p.global_position = pos + Vector3(0, 0.08, 0)
-	p.emitting = true
+	_emit_at(parent, p, pos + Vector3(0, 0.08, 0))
 	_free_later(p, 1.5)
 
 

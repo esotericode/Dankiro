@@ -556,7 +556,7 @@ def build_head():
     add("orb_ring", ring, "gold")
     orb = G.revolve([(0.0, -0.021), (0.015, -0.015), (0.021, 0.0), (0.015, 0.015), (0.0, 0.021)], segs=14)
     orb.translate((0.0, 1.978, -0.168)).bone("head")
-    add_extra("orb", orb, "ember")
+    add_extra("orb", orb, "jewel")          # crest jewel: its own material so it doesn't glow like the eyes
     build_mask()
     build_hair_tuft()
 
@@ -788,6 +788,7 @@ def build_body(args):
     hair_img = B.numpy_to_image("boss_hair", np.dstack([T.hair()["color"], T.hair()["alpha"]]))
     extra_mats = {
         "ember": BM.flat_material("ember", (1.0, 0.36, 0.08), 1.0, 0.0, emission=(1.0, 0.36, 0.08)),
+        "jewel": BM.flat_material("jewel", (0.40, 0.03, 0.02), 0.12, 0.0, emission=(0.35, 0.05, 0.02)),
         "hair": BM.textured_material("hair", hair_img, alpha=True),
     }
     extra_objs = []

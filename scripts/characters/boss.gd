@@ -815,7 +815,7 @@ func _enter_phase_two() -> void:
 	_glow_target = _base_glow
 	aura.amount = 48
 	if eye_light:
-		eye_light.light_energy = 1.3
+		eye_light.light_energy = 0.4
 	vitals_changed.emit()
 	Sfx.play_ui("roar", 0.0)
 	Game.shake(0.35, 0.8)
@@ -891,7 +891,7 @@ func _update_glow(delta: float) -> void:
 	if blade_mat:
 		blade_mat.emission_energy_multiplier = _glow
 	if eye_mat:
-		eye_mat.emission_energy_multiplier = 7.0 + _glow * 2.0
+		eye_mat.emission_energy_multiplier = 3.0 + _glow * 1.2
 
 
 func _footsteps() -> void:

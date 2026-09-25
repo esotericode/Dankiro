@@ -1,8 +1,8 @@
 extends Node
 ## Scripted capture director for visual checks with Godot's Movie Maker:
 ##   godot --write-movie out/frame.png --fixed-fps 30 res://tests/capture.tscn -- <shot>
-## Shots: overview, deflect, block, mikiri, thrust_backstep, sweep, sweep_flee, whirl, shuriken,
-## shuriken5, charge, slashes, parried, and art checks: model (orbit), model_head, model_face,
+## Shots: overview, deflect, deflect_offcenter, block, mikiri, thrust_backstep, sweep, sweep_flee, whirl, shuriken,
+## shuriken5, charge, slashes, parried, and art checks: model (orbit), model_head, model_face, model_face_p2,
 ## model_combo.
 ## Loads the real game scene (arena, lighting, HUD, lock-on camera), skips the intro, stages
 ## the fighters and drives the player with a bot that reacts to the boss's hit windows.
@@ -161,6 +161,15 @@ func shot_deflect() -> void:
 	_end_at = 3.6
 
 
+## The deflect string staged away from the arena centre (effects must appear at the clash, not
+## at the world origin).
+func shot_deflect_offcenter() -> void:
+	_stage(2.4, Vector3(5.0, 0, 3.0))
+	auto_guard(0.05, 0.12)
+	at(0.4, func(): boss_string(["b_combo_1", "b_combo_2", "b_combo_3"]))
+	_end_at = 3.6
+
+
 ## Same string with guard held: dull blocks, player posture climbs.
 func shot_block() -> void:
 	at(0.1, func(): player.press_guard(Game.clock))
@@ -293,5 +302,13 @@ func shot_model_combo() -> void:
 ## His face from about the player's eye height, sweeping from his left to his right.
 func shot_model_face() -> void:
 	_stage(7.0)
+	_art_camera(1.0, 1.70, 1.84, 25.0, -50.0)
+	_end_at = 4.0
+
+
+## Same as model_face, in phase two (brighter aura and glow).
+func shot_model_face_p2() -> void:
+	_stage(7.0)
+	boss._enter_phase_two()
 	_art_camera(1.0, 1.70, 1.84, 25.0, -50.0)
 	_end_at = 4.0

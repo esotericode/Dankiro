@@ -172,9 +172,10 @@ The run exits with code 0 when every check passes (520 checks, including the soa
 fails if the engine or a script reports any error during the run (it listens through a
 `Logger`), so runtime errors can't hide behind passing gameplay checks.
 
-**Captures**: `tests/capture.tscn` stages shots (`overview`, `deflect`, `block`, `mikiri`,
-`thrust_backstep`, `sweep`, `sweep_flee`, `whirl`, `shuriken`, `shuriken5`, `charge`, `slashes`,
-`parried`) in the real scene, with a bot reacting to his hit windows. It
+**Captures**: `tests/capture.tscn` stages shots (`overview`, `deflect`, `deflect_offcenter`,
+`block`, `mikiri`, `thrust_backstep`, `sweep`, `sweep_flee`, `whirl`, `shuriken`, `shuriken5`,
+`charge`, `slashes`, `parried`, and the model close-ups `model`, `model_head`, `model_face`,
+`model_face_p2`, `model_combo`) in the real scene, with a bot reacting to his hit windows. It
 records them with Godot's Movie Maker:
 
 ```

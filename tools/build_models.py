@@ -226,7 +226,8 @@ def boss():
     m.mat("boss_body", (1.0, 1.0, 1.0), 1.0, 1.0, metallic_specular=0.5, rim=0.25, rim_tint=0.35)
     m.mat("boss_mask", (1.0, 1.0, 1.0), 1.0, 1.0, metallic_specular=0.5, rim=0.2, rim_tint=0.3)
     m.scene("skin", "res://" + BODY_GLB, helpers=HELPERS)
-    m.light("head", (0, 0.10, -0.34), (1.0, 0.36, 0.08), 0.35, 0.8)
+    m.mat("jewel", (0.45, 0.04, 0.02), 0.12, 0.0, clearcoat=1.0, emission=[1.0, 0.25, 0.08], emission_energy=0.3)
+    m.light("head", (0, 0.07, -0.34), (1.0, 0.36, 0.08), 0.2, 0.7)       # ember light at eye level
 
     # ---- twin-bladed staff (tools/build_boss_model.py): origin at the shaft centre, upper blade
     # toward +Y, 3.2 m tip to tip. The "blade" material glows along the edge (emission mask).

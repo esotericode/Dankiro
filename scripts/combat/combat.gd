@@ -48,8 +48,11 @@ const HEAL_AMOUNT := 0.55                   ## fraction of max HP
 
 # --- Boss --------------------------------------------------------------------------------
 const BOSS_HP := 1100.0
-const BOSS_POSTURE := 100.0
-const BOSS_POSTURE_REGEN := 9.0
+const BOSS_POSTURE := 300.0                 ## deflects, mikiris and kicks fill a third as much as they did at 100
+## Per second after the delay (was 9). On the 3x bar, keeping the old on-screen refill speed
+## (27/s) or faster left a decent player unable to break him; 12/s punishes backing off harder
+## than before while a steady deflect rhythm still breaks him in about a minute.
+const BOSS_POSTURE_REGEN := 12.0
 const BOSS_POSTURE_DELAY := 1.5
 const BOSS_LIVES := 2
 const MIKIRI_POSTURE := 32.0
