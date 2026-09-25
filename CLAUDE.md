@@ -1,0 +1,53 @@
+# Notes for Claude sessions on Dankiro
+
+Dankiro is a Sekiro-style boss fight for Godot 4.7. The combat is tuned against
+`docs/SEKIRO_MECHANICS.md`, where real Sekiro behaviour wins every tie. The README covers the
+controls, the mechanics, the content pipeline and the tests.
+
+## You can run Godot here. Install it first.
+
+Earlier sessions assumed Godot couldn't be installed in the cloud container. It can. Direct
+downloads (godotengine.org, GitHub release assets, tuxfamily) are blocked by the egress policy,
+and conda-forge has no Godot. Docker Hub is reachable, though, and the public image
+`barichello/godot-ci:<version>` contains the official binary.
+
+```
+bash tools/setup_godot.sh                 # ~1 min: Godot 4.7.2 -> /usr/local/bin/godot
+godot --headless --editor --quit          # once per fresh checkout: imports audio/textures/fonts
+```
+
+The script uses no Docker daemon. It reads the image manifest from the registry API, finds
+the layer created by the step that wgets Godot, streams it (about 1.4 GB), and extracts only
+`usr/local/bin/godot`. It also installs Xvfb, Mesa lavapipe (software Vulkan) and ffmpeg for
+rendering, plus the Python packages for `tools/`. Docker Hub often answers HTTP 429 at first;
+the script backs off and retries, so let it run. For another version, set
+`GODOT_VERSION=4.x.y` (list tags with the registry API: `/v2/barichello/godot-ci/tags/list`).
+
+## Testing in the engine
+
+- Combat lab (headless, about 6 min for everything, exits 0 when all checks pass):
+  `godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--verbose]`
+  Suites: reach, deflect, spam, mikiri, sweep, attack, cancel, shuriken, soak.
+- Rendered frames (to actually *see* a change), using Movie Maker with software Vulkan:
+  ```
+  printf '[display]\nwindow/size/window_width_override=960\nwindow/size/window_height_override=540\n' > override.cfg
+  VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json xvfb-run -a -s "-screen 0 1280x720x24" \
+    godot --write-movie /tmp/cap/f.png --fixed-fps 30 res://tests/capture.tscn -- deflect
+  ```
+  Rendering takes about 0.7 s per frame at 960x540. `override.cfg` is git-ignored. The shots are
+  the `shot_*` functions in `tests/capture.gd`. Contact-sheet the PNGs with PIL, then look at them.
+- Quick script-error check: `godot --headless --quit-after 600`.
+
+## Conventions and pitfalls
+
+- `data/*.json` is generated. Edit `tools/build_animations.py` or `tools/build_models.py`
+  (or `tools/gen_audio.py` for sounds) and re-run them. `python3 tools/anim_preview.py <clip>`
+  renders contact sheets, and `--all --check` reports IK and reach errors.
+- Set a CharacterBody3D's `position` *before* `add_child`. Spawning two bodies at the origin
+  makes one depenetrate onto the other's head, and platform logic then carries it around.
+- Hit-stop and slow-mo count unscaled frame time (`Game`), and `Game.deterministic` stamps
+  inputs with the tick clock, so the lab and Movie Maker captures are reproducible.
+- Drive the player in tests through `press_guard` / `release_guard` / `press_action` (the same
+  entry points real input uses), with `bot_enabled = true`. Set `camera_yaw` so "forward"
+  means toward the boss.
+- Godot writes `.uid` and `.import` files next to assets. They're committed on purpose.
