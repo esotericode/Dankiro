@@ -1,0 +1,11 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+
+# Offline tool output
+tools/preview_out/
+__pycache__/
+*.pyc
+
+# Font downloads used by tools/gen_textures.py
+tools/.cache/

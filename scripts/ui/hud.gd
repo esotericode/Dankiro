@@ -1,0 +1,396 @@
+class_name Hud
+extends CanvasLayer
+## Fight HUD + overlays. Built in code; designed for a 1920x1080 canvas (stretch mode
+## canvas_items), anchored so it adapts to other aspect ratios.
+
+const CONTROLS_TEXT := """[b]KEYBOARD / MOUSE[/b]                         [b]GAMEPAD[/b]
+Move ............ WASD                        Left stick
+Camera .......... Mouse                       Right stick
+Attack .......... Left mouse / J              RB
+Guard / Deflect . Right mouse / K             LB
+Dodge (hold: run) Shift                       B
+Jump ............ Space                       A
+Lock on ......... Q / Middle mouse            R3
+Heal (gourd) .... R                           X
+Pause ........... Esc                         Start
+Controls ........ F1                          Back
+Timing debug .... F3     Fullscreen .... F11
+
+[b]HOW TO FIGHT[/b]
+- Tap guard just before a blade lands to [color=#ffd27a]DEFLECT[/color] (0.2 s window). Mashing shrinks
+  the window; a clean deflect restores it. Holding guard only blocks (costs your posture).
+- Fill his posture bar with deflects, then press Attack on the red mark: [color=#ff5040]DEATHBLOW[/color].
+- [img=26x26]res://textures/kanji_danger_icon.png[/img] Perilous THRUST: dodge [i]toward[/i] him for a MIKIRI COUNTER (or deflect it).
+- [img=26x26]res://textures/kanji_danger_icon.png[/img] Perilous SWEEP: JUMP over it. Jump again near him to kick off his head.
+- His posture recovers when you back off, and faster while his vitality is high."""
+
+var player: Player
+var boss: Boss
+
+var _font: Font
+var _root: Control
+var _boss_name: Label
+var _boss_hp: VitalityBar
+var _boss_posture: PostureBar
+var _marks: Control
+var _player_hp: VitalityBar
+var _player_posture: PostureBar
+var _heal_label: Label
+var _callout: Label
+var _prompt: Label
+var _reticle: Control
+var _vignette: TextureRect
+var _debug: Label
+var _namecard: Control
+var _overlay: Control
+var _overlay_kanji: TextureRect
+var _overlay_title: Label
+var _overlay_sub: Label
+var _panel: PanelContainer
+var _help_visible := false
+var _last_timing := "—"
+var _tex: Dictionary = {}
+
+
+func _ready() -> void:
+	layer = 10
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	Game.hud = self
+	if ResourceLoader.exists("res://fonts/ui_serif.ttf"):
+		_font = load("res://fonts/ui_serif.ttf")
+	for k in ["kanji_death", "kanji_execution", "kanji_danger"]:
+		var path := "res://textures/%s.png" % k
+		if ResourceLoader.exists(path):
+			_tex[k] = load(path)
+	_root = Control.new()
+	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_root)
+	_build_vignette()
+	_build_boss_ui()
+	_build_player_ui()
+	_build_center()
+	_build_overlay()
+	_build_panel()
+	Game.debug_toggled.connect(func(_on: bool): _debug.visible = Game.debug)
+
+
+func bind(p: Player, b: Boss) -> void:
+	player = p
+	boss = b
+	_boss_name.text = b.display_name
+	p.heal_charges_changed.connect(func(n: int): _heal_label.text = "Gourd  x%d" % n)
+	_heal_label.text = "Gourd  x%d" % p.heal_charges
+	p.deflect_timed.connect(_on_deflect_timed)
+	b.posture_broken.connect(func(): _boss_posture.flash())
+
+
+# ------------------------------------------------------------------------------ building
+func _place(c: Control, anchor: Vector2, pos: Vector2, sz: Vector2) -> void:
+	c.anchor_left = anchor.x
+	c.anchor_right = anchor.x
+	c.anchor_top = anchor.y
+	c.anchor_bottom = anchor.y
+	c.offset_left = pos.x
+	c.offset_top = pos.y
+	c.offset_right = pos.x + sz.x
+	c.offset_bottom = pos.y + sz.y
+
+
+func _label(text: String, font_size: int, color: Color, align := HORIZONTAL_ALIGNMENT_LEFT) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	l.horizontal_alignment = align
+	if _font:
+		l.add_theme_font_override("font", _font)
+	l.add_theme_font_size_override("font_size", font_size)
+	l.add_theme_color_override("font_color", color)
+	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	l.add_theme_constant_override("outline_size", maxi(4, font_size / 6))
+	return l
+
+
+func _build_vignette() -> void:
+	var g := Gradient.new()
+	g.set_color(0, Color(0.6, 0.0, 0.0, 0.0))
+	g.set_color(1, Color(0.55, 0.0, 0.0, 0.85))
+	g.add_point(0.55, Color(0.6, 0.0, 0.0, 0.0))
+	var t := GradientTexture2D.new()
+	t.gradient = g
+	t.fill = GradientTexture2D.FILL_RADIAL
+	t.fill_from = Vector2(0.5, 0.5)
+	t.fill_to = Vector2(1.05, 0.5)
+	t.width = 256
+	t.height = 256
+	_vignette = TextureRect.new()
+	_vignette.texture = t
+	_vignette.stretch_mode = TextureRect.STRETCH_SCALE
+	_vignette.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_vignette.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_vignette.modulate.a = 0.0
+	_root.add_child(_vignette)
+
+
+func _build_boss_ui() -> void:
+	_marks = MarksDisplay.new()
+	_place(_marks, Vector2(0, 0), Vector2(56, 44), Vector2(80, 24))
+	_root.add_child(_marks)
+	_boss_name = _label("", 30, Color(0.92, 0.88, 0.8))
+	_place(_boss_name, Vector2(0, 0), Vector2(110, 36), Vector2(700, 40))
+	_root.add_child(_boss_name)
+	_boss_hp = VitalityBar.new()
+	_boss_hp.fill_color = Color(0.66, 0.08, 0.06)
+	_place(_boss_hp, Vector2(0, 0), Vector2(60, 84), Vector2(560, 12))
+	_root.add_child(_boss_hp)
+	_boss_posture = PostureBar.new()
+	_place(_boss_posture, Vector2(0.5, 0), Vector2(-300, 28), Vector2(600, 14))
+	_root.add_child(_boss_posture)
+
+
+func _build_player_ui() -> void:
+	_player_hp = VitalityBar.new()
+	_player_hp.fill_color = Color(0.72, 0.1, 0.08)
+	_place(_player_hp, Vector2(0, 1), Vector2(60, -64), Vector2(440, 14))
+	_root.add_child(_player_hp)
+	_heal_label = _label("Gourd  x3", 22, Color(0.9, 0.78, 0.55))
+	_place(_heal_label, Vector2(0, 1), Vector2(60, -108), Vector2(300, 32))
+	_root.add_child(_heal_label)
+	_player_posture = PostureBar.new()
+	_place(_player_posture, Vector2(0.5, 1), Vector2(-210, -126), Vector2(420, 12))
+	_root.add_child(_player_posture)
+
+
+func _build_center() -> void:
+	_callout = _label("", 44, Color(1.0, 0.86, 0.55), HORIZONTAL_ALIGNMENT_CENTER)
+	_place(_callout, Vector2(0.5, 0.5), Vector2(-500, -260), Vector2(1000, 60))
+	_callout.modulate.a = 0.0
+	_root.add_child(_callout)
+	_prompt = _label("", 26, Color(1.0, 0.45, 0.35), HORIZONTAL_ALIGNMENT_CENTER)
+	_place(_prompt, Vector2(0.5, 1), Vector2(-400, -200), Vector2(800, 40))
+	_root.add_child(_prompt)
+	_reticle = ReticleDisplay.new()
+	_reticle.size = Vector2(24, 24)
+	_root.add_child(_reticle)
+	_debug = _label("", 18, Color(0.8, 1.0, 0.8))
+	_place(_debug, Vector2(1, 0), Vector2(-620, 120), Vector2(600, 220))
+	_debug.visible = false
+	_root.add_child(_debug)
+	_namecard = VBoxContainer.new()
+	_namecard.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_place(_namecard, Vector2(0.5, 1), Vector2(-600, -330), Vector2(1200, 150))
+	var n1 := _label("Sojin, the Twin Fang", 58, Color(0.95, 0.9, 0.82), HORIZONTAL_ALIGNMENT_CENTER)
+	var n2 := _label("Warden of the Moon Gate", 26, Color(0.8, 0.65, 0.45), HORIZONTAL_ALIGNMENT_CENTER)
+	_namecard.add_child(n1)
+	_namecard.add_child(n2)
+	_namecard.modulate.a = 0.0
+	_root.add_child(_namecard)
+
+
+func _build_overlay() -> void:
+	_overlay = Control.new()
+	_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_overlay.visible = false
+	_root.add_child(_overlay)
+	var shade := ColorRect.new()
+	shade.color = Color(0, 0, 0, 0.55)
+	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
+	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_overlay.add_child(shade)
+	_overlay_kanji = TextureRect.new()
+	_overlay_kanji.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_overlay_kanji.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_overlay_kanji.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_place(_overlay_kanji, Vector2(0.5, 0.5), Vector2(-360, -380), Vector2(720, 520))
+	_overlay.add_child(_overlay_kanji)
+	_overlay_title = _label("", 54, Color(0.95, 0.9, 0.85), HORIZONTAL_ALIGNMENT_CENTER)
+	_place(_overlay_title, Vector2(0.5, 0.5), Vector2(-700, 150), Vector2(1400, 70))
+	_overlay.add_child(_overlay_title)
+	_overlay_sub = _label("", 26, Color(0.85, 0.8, 0.72), HORIZONTAL_ALIGNMENT_CENTER)
+	_place(_overlay_sub, Vector2(0.5, 0.5), Vector2(-700, 235), Vector2(1400, 40))
+	_overlay.add_child(_overlay_sub)
+
+
+func _build_panel() -> void:
+	_panel = PanelContainer.new()
+	_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.03, 0.03, 0.04, 0.88)
+	sb.border_color = Color(0.7, 0.58, 0.36, 0.8)
+	sb.set_border_width_all(2)
+	sb.set_content_margin_all(28)
+	sb.set_corner_radius_all(4)
+	_panel.add_theme_stylebox_override("panel", sb)
+	_place(_panel, Vector2(0.5, 0.5), Vector2(-560, -330), Vector2(1120, 660))
+	var rt := RichTextLabel.new()
+	rt.bbcode_enabled = true
+	rt.fit_content = true
+	rt.scroll_active = false
+	rt.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	rt.add_theme_font_size_override("normal_font_size", 21)
+	rt.add_theme_font_size_override("bold_font_size", 22)
+	rt.add_theme_color_override("default_color", Color(0.9, 0.87, 0.8))
+	var mono := SystemFont.new()
+	mono.font_names = PackedStringArray(["DejaVu Sans Mono", "Consolas", "Menlo", "Courier New", "monospace"])
+	rt.add_theme_font_override("normal_font", mono)
+	rt.text = CONTROLS_TEXT
+	_panel.add_child(rt)
+	_panel.visible = false
+	_root.add_child(_panel)
+
+
+# ------------------------------------------------------------------------------ runtime
+func _process(delta: float) -> void:
+	var real_dt := minf(delta / maxf(Engine.time_scale, 0.001), 0.1)
+	if player != null:
+		_player_hp.set_ratio(player.hp / player.max_hp)
+		_player_posture.set_ratio(player.posture / player.max_posture)
+	if boss != null:
+		_boss_hp.set_ratio(boss.hp / boss.max_hp)
+		_boss_posture.set_ratio(boss.posture / boss.max_posture)
+		(_marks as MarksDisplay).total = Combat.BOSS_LIVES
+		(_marks as MarksDisplay).left = boss.lives_left
+		_update_reticle()
+		var db_ready := boss.is_deathblow_ready() and player != null and player.distance_to_opponent() < 3.0
+		_prompt.text = "[ Attack ]  Deathblow" if db_ready else ""
+	if _vignette.modulate.a > 0.0:
+		_vignette.modulate.a = maxf(0.0, _vignette.modulate.a - real_dt * 1.8)
+	if player != null and player.hp / player.max_hp < 0.25 and player.hp > 0.0:
+		_vignette.modulate.a = maxf(_vignette.modulate.a, 0.28 + 0.1 * sin(Time.get_ticks_msec() / 180.0))
+	if _debug.visible:
+		_update_debug()
+
+
+func _update_reticle() -> void:
+	var cam := get_viewport().get_camera_3d()
+	if cam == null or player == null or not player.locked or boss.is_dead():
+		_reticle.visible = false
+		return
+	var p := boss.rig.joint_world("chest") + Vector3(0, 0.1, 0)
+	if cam.is_position_behind(p):
+		_reticle.visible = false
+		return
+	_reticle.visible = true
+	# unproject_position returns coordinates in the (stretched) canvas space the HUD uses.
+	var sp := cam.unproject_position(p)
+	_reticle.position = sp - _reticle.size * 0.5
+
+
+func flash_damage() -> void:
+	_vignette.modulate.a = 0.85
+
+
+func show_callout(text: String) -> void:
+	_callout.text = text
+	var tw := _callout.create_tween()
+	_callout.modulate.a = 0.0
+	_callout.scale = Vector2(1.15, 1.15)
+	_callout.pivot_offset = _callout.size * 0.5
+	tw.set_parallel(true)
+	tw.tween_property(_callout, "modulate:a", 1.0, 0.08)
+	tw.tween_property(_callout, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.chain().tween_interval(0.9)
+	tw.chain().tween_property(_callout, "modulate:a", 0.0, 0.4)
+
+
+func show_namecard() -> void:
+	var tw := _namecard.create_tween()
+	tw.tween_property(_namecard, "modulate:a", 1.0, 0.8)
+	tw.tween_interval(2.0)
+	tw.tween_property(_namecard, "modulate:a", 0.0, 1.0)
+
+
+func show_death() -> void:
+	_show_overlay("kanji_death", "DEATH", "Press  Enter / (A)  to try again", Color(0.85, 0.08, 0.06))
+
+
+func show_victory() -> void:
+	_show_overlay("kanji_execution", "SHINOBI EXECUTION", "Press  Enter / (A)  to fight again", Color(0.9, 0.12, 0.08))
+
+
+func hide_overlay() -> void:
+	_overlay.visible = false
+
+
+func _show_overlay(tex_key: String, title: String, sub: String, tint: Color) -> void:
+	_overlay.visible = true
+	_overlay_kanji.texture = _tex.get(tex_key)
+	_overlay_kanji.modulate = tint
+	_overlay_title.text = title
+	_overlay_sub.text = sub
+	_overlay.modulate.a = 0.0
+	var tw := _overlay.create_tween()
+	tw.tween_property(_overlay, "modulate:a", 1.0, 1.2)
+
+
+func set_panel_visible(v: bool) -> void:
+	_panel.visible = v
+
+
+func toggle_help() -> void:
+	_help_visible = not _help_visible
+	_panel.visible = _help_visible
+
+
+func _on_deflect_timed(ms: float, window_ms: float, result: String) -> void:
+	match result:
+		"deflect":
+			_last_timing = "DEFLECT  pressed %.0f ms before contact  (window %.0f ms)" % [ms, window_ms]
+		"early":
+			_last_timing = "TOO EARLY  pressed %.0f ms before contact  (window %.0f ms)" % [ms, window_ms]
+		"late":
+			_last_timing = "TOO LATE  pressed %.0f ms after contact" % [-ms]
+		"miss":
+			_last_timing = "NOT GUARDING  (last press %.0f ms before contact)" % ms
+
+
+func _update_debug() -> void:
+	var lines := PackedStringArray()
+	lines.append("[F3] timing debug")
+	lines.append(_last_timing)
+	if player:
+		lines.append("player: %s  posture %.0f  window %.0f ms" % [Player.S.keys()[player.state], player.posture,
+			player.guard_window * 1000.0])
+	if boss:
+		var clip := boss.anim.clip.name if boss.anim.clip != null and not boss.anim.loco_active else "locomotion"
+		lines.append("boss: %s  %s @ %.2fs  posture %.0f" % [Boss.S.keys()[boss.state], clip, boss.anim.time, boss.posture])
+	lines.append("fps %d   time scale %.2f" % [Engine.get_frames_per_second(), Engine.time_scale])
+	_debug.text = "\n".join(lines)
+
+
+# ------------------------------------------------------------------------------ small widgets
+class MarksDisplay extends Control:
+	var total := 2
+	var left := 2
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _process(_d: float) -> void:
+		queue_redraw()
+
+	func _draw() -> void:
+		for i in total:
+			var c := Vector2(10 + i * 22, 12)
+			draw_circle(c, 8.0, Color(0, 0, 0, 0.6))
+			if i < left:
+				draw_circle(c, 6.5, Color(0.85, 0.08, 0.05))
+				draw_circle(c + Vector2(-2, -2), 2.0, Color(1, 0.6, 0.5, 0.7))
+			else:
+				draw_arc(c, 6.0, 0.0, TAU, 20, Color(0.5, 0.45, 0.4, 0.7), 1.5)
+
+
+class ReticleDisplay extends Control:
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _process(_d: float) -> void:
+		queue_redraw()
+
+	func _draw() -> void:
+		var c := size * 0.5
+		draw_circle(c, 5.0, Color(0, 0, 0, 0.5))
+		draw_circle(c, 3.2, Color(1, 1, 1, 0.9))

@@ -1,0 +1,76 @@
+{
+  "_doc": "Skeleton + weapon definitions shared by the game (scripts/anim) and tools/anim_preview.py. Units are meters. Characters face -Z, +X is their right. Joint offsets are in the parent joint's local space. Limbs hang along -Y in the rest pose.",
+  "rigs": {
+    "player": {
+      "height": 1.78,
+      "hips_height": 0.97,
+      "weapon": "katana",
+      "joints": [
+        {"name": "hips",        "parent": "",            "offset": [0.0, 0.0, 0.0]},
+        {"name": "spine",       "parent": "hips",        "offset": [0.0, 0.10, 0.0]},
+        {"name": "chest",       "parent": "spine",       "offset": [0.0, 0.20, 0.0]},
+        {"name": "neck",        "parent": "chest",       "offset": [0.0, 0.21, 0.0]},
+        {"name": "head",        "parent": "neck",        "offset": [0.0, 0.08, 0.0]},
+        {"name": "upper_arm_l", "parent": "chest",       "offset": [-0.19, 0.16, 0.0]},
+        {"name": "forearm_l",   "parent": "upper_arm_l", "offset": [0.0, -0.28, 0.0]},
+        {"name": "hand_l",      "parent": "forearm_l",   "offset": [0.0, -0.25, 0.0]},
+        {"name": "upper_arm_r", "parent": "chest",       "offset": [0.19, 0.16, 0.0]},
+        {"name": "forearm_r",   "parent": "upper_arm_r", "offset": [0.0, -0.28, 0.0]},
+        {"name": "hand_r",      "parent": "forearm_r",   "offset": [0.0, -0.25, 0.0]},
+        {"name": "thigh_l",     "parent": "hips",        "offset": [-0.10, -0.06, 0.0]},
+        {"name": "shin_l",      "parent": "thigh_l",     "offset": [0.0, -0.42, 0.0]},
+        {"name": "foot_l",      "parent": "shin_l",      "offset": [0.0, -0.41, 0.0]},
+        {"name": "thigh_r",     "parent": "hips",        "offset": [0.10, -0.06, 0.0]},
+        {"name": "shin_r",      "parent": "thigh_r",     "offset": [0.0, -0.42, 0.0]},
+        {"name": "foot_r",      "parent": "shin_r",      "offset": [0.0, -0.41, 0.0]}
+      ],
+      "hurtbox": {"bottom": 0.32, "top": 1.52, "radius": 0.30}
+    },
+    "boss": {
+      "height": 2.05,
+      "hips_height": 1.10,
+      "weapon": "twin_staff",
+      "joints": [
+        {"name": "hips",        "parent": "",            "offset": [0.0, 0.0, 0.0]},
+        {"name": "spine",       "parent": "hips",        "offset": [0.0, 0.11, 0.0]},
+        {"name": "chest",       "parent": "spine",       "offset": [0.0, 0.24, 0.0]},
+        {"name": "neck",        "parent": "chest",       "offset": [0.0, 0.25, 0.0]},
+        {"name": "head",        "parent": "neck",        "offset": [0.0, 0.10, 0.0]},
+        {"name": "upper_arm_l", "parent": "chest",       "offset": [-0.25, 0.18, 0.0]},
+        {"name": "forearm_l",   "parent": "upper_arm_l", "offset": [0.0, -0.33, 0.0]},
+        {"name": "hand_l",      "parent": "forearm_l",   "offset": [0.0, -0.30, 0.0]},
+        {"name": "upper_arm_r", "parent": "chest",       "offset": [0.25, 0.18, 0.0]},
+        {"name": "forearm_r",   "parent": "upper_arm_r", "offset": [0.0, -0.33, 0.0]},
+        {"name": "hand_r",      "parent": "forearm_r",   "offset": [0.0, -0.30, 0.0]},
+        {"name": "thigh_l",     "parent": "hips",        "offset": [-0.12, -0.07, 0.0]},
+        {"name": "shin_l",      "parent": "thigh_l",     "offset": [0.0, -0.48, 0.0]},
+        {"name": "foot_l",      "parent": "shin_l",      "offset": [0.0, -0.47, 0.0]},
+        {"name": "thigh_r",     "parent": "hips",        "offset": [0.12, -0.07, 0.0]},
+        {"name": "shin_r",      "parent": "thigh_r",     "offset": [0.0, -0.48, 0.0]},
+        {"name": "foot_r",      "parent": "shin_r",      "offset": [0.0, -0.47, 0.0]}
+      ],
+      "hurtbox": {"bottom": 0.35, "top": 1.80, "radius": 0.40}
+    }
+  },
+  "weapons": {
+    "katana": {
+      "_doc": "Origin at the tsuba (guard). Blade along +Y, handle along -Y. Edge faces local -Z, the blade curves toward +Z.",
+      "grip_axis": [0.0, 1.0, 0.0],
+      "grip_r": -0.055,
+      "grip_l": -0.19,
+      "blades": {
+        "blade": [[0.0, 0.06, 0.0], [0.0, 0.40, 0.006], [0.0, 0.76, 0.022]]
+      }
+    },
+    "twin_staff": {
+      "_doc": "Origin at the shaft center. Upper blade toward +Y (edge faces -Z, tip curves to +Z); lower blade toward -Y (edge faces +Z, tip curves to -Z).",
+      "grip_axis": [0.0, 1.0, 0.0],
+      "grip_r": -0.30,
+      "grip_l": 0.24,
+      "blades": {
+        "upper": [[0.0, 0.90, -0.01], [0.0, 1.18, 0.01], [0.0, 1.46, 0.085]],
+        "lower": [[0.0, -0.90, 0.01], [0.0, -1.18, -0.01], [0.0, -1.46, -0.085]]
+      }
+    }
+  }
+}
