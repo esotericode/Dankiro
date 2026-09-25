@@ -59,17 +59,19 @@
       "grip_r": -0.055,
       "grip_l": -0.19,
       "blades": {
-        "blade": [[0.0, 0.06, 0.0], [0.0, 0.40, 0.006], [0.0, 0.76, 0.022]]
+        "blade": [[0.0, 0.06, 0.0], [0.0, 0.43, 0.006], [0.0, 0.81, 0.024]]
       }
     },
     "twin_staff": {
-      "_doc": "Origin at the shaft center. Upper blade toward +Y (edge faces -Z, tip curves to +Z); lower blade toward -Y (edge faces +Z, tip curves to -Z).",
+      "_doc": "Origin at the shaft center. Upper blade toward +Y (edge faces -Z, tip curves to +Z); lower blade toward -Y (edge faces +Z, tip curves to -Z). hit_whole_weapon: hit windows test both blades and the shaft.",
       "grip_axis": [0.0, 1.0, 0.0],
       "grip_r": -0.30,
       "grip_l": 0.24,
+      "hit_whole_weapon": true,
       "blades": {
-        "upper": [[0.0, 0.90, -0.01], [0.0, 1.18, 0.01], [0.0, 1.46, 0.085]],
-        "lower": [[0.0, -0.90, 0.01], [0.0, -1.18, -0.01], [0.0, -1.46, -0.085]]
+        "upper": [[0.0, 0.90, 0.0], [0.0, 1.255, 0.025], [0.0, 1.60, 0.10]],
+        "lower": [[0.0, -0.90, 0.0], [0.0, -1.255, -0.025], [0.0, -1.60, -0.10]],
+        "shaft": [[0.0, -0.90, 0.0], [0.0, 0.0, 0.0], [0.0, 0.90, 0.0]]
       }
     }
   }

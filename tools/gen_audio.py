@@ -241,20 +241,24 @@ def build(only=None):
             return
         made.append(save(name, x, **kw))
 
-    # --- deflect: bright, ringing "shing" with a hard transient
+    # Impact sounds are mono: Godot's 3D players fold stereo to mono, and decorrelated stereo
+    # shimmer would partly cancel. The deflect must be the loudest, brightest sound in the fight
+    # (Sekiro's "CLANG"), the block a quiet dull clank - tell them apart without looking.
+    # --- deflect: a hard 2-5 kHz clash transient into a bright, long "ting" ring
     for i, f0 in enumerate([1420, 1540, 1660, 1780]):
-        x = metal_hit(f0, 1.1, ring=1.0, brightness=1.15, click=1.2, body=1.0, thump=0.35, seed=10 + i)
-        shimmer = bandpass(noise(0.5, 40 + i), 6000, 12000) * env_exp(0.5, 0.06, 0.001) * 0.25
-        x = mix(x, shimmer)
-        out("deflect_%d" % (i + 1), reverb(x, 0.9, 0.18, bright=9000), peak_db=-0.5)
+        x = metal_hit(f0, 1.1, ring=1.1, brightness=1.2, click=1.6, body=1.8, thump=0.45, seed=10 + i)
+        clash = bandpass(noise(0.09, 30 + i), 2000, 5200) * env_exp(0.09, 0.018, 0.0004) * 1.6
+        shimmer = bandpass(noise(0.5, 40 + i), 5500, 11000) * env_exp(0.5, 0.07, 0.001) * 0.3
+        x = mix(x, clash, shimmer)
+        out("deflect_%d" % (i + 1), reverb(x, 0.9, 0.16, bright=9000), peak_db=-0.3, st=False)
     # --- boss parrying the player: heavier, lower
     x = metal_hit(1080, 1.3, ring=1.1, brightness=0.9, click=1.1, body=1.2, thump=0.7, seed=60)
-    out("boss_parry", reverb(x, 1.0, 0.2), peak_db=-0.8)
-    # --- block: dull clank, short ring, more body
+    out("boss_parry", reverb(x, 1.0, 0.2), peak_db=-0.8, st=False)
+    # --- block: dull clank, short ring, more body, rolled-off top
     for i, f0 in enumerate([640, 720, 800]):
-        x = metal_hit(f0, 0.5, ring=0.3, brightness=0.55, click=0.8, body=1.6, thump=0.9, seed=80 + i)
-        x = lowpass(x, 5200)
-        out("block_%d" % (i + 1), reverb(x, 0.6, 0.12, bright=5000), peak_db=-1.5)
+        x = metal_hit(f0, 0.45, ring=0.25, brightness=0.45, click=0.6, body=1.4, thump=0.9, seed=80 + i)
+        x = lowpass(x, 3800)
+        out("block_%d" % (i + 1), reverb(x, 0.5, 0.1, bright=4000), peak_db=-4.0, st=False)
     # --- hits
     for i in range(3):
         out("hit_%d" % (i + 1), reverb(flesh(0.4, 100 + i * 3), 0.5, 0.1), peak_db=-1.0)

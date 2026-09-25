@@ -89,9 +89,11 @@ func _ready() -> void:
 		eye_light = lights[0]
 	for bname in ["upper", "lower"]:
 		var tr := WeaponTrail.new()
-		tr.setup(rig, bname, Color(1.0, 0.55, 0.3, 0.5))
-		tr.min_speed = 5.5
-		tr.life = 0.2
+		tr.setup(rig, bname, Color(1.0, 0.5, 0.26, 0.42))
+		tr.brightness = 1.15
+		tr.min_speed = 7.0
+		tr.life = 0.16
+		tr.inner = 0.4
 		rig.add_child(tr)
 		trails.append(tr)
 	_build_aura()
@@ -170,7 +172,7 @@ func _physics_process(delta: float) -> void:
 		S.NEUTRAL:
 			planar = _state_neutral(delta)
 		S.ATTACK:
-			_state_attack(delta)
+			planar = _state_attack(delta)
 		S.GUARD:
 			_state_guard(delta)
 		S.REACT:
@@ -197,6 +199,8 @@ func _physics_process(delta: float) -> void:
 			pass
 	anim.update(delta)
 	process_weapon_hits()
+	if state == S.ATTACK:
+		_check_mikiri()
 	planar += root_motion_velocity(delta)
 	apply_motion(delta, planar)
 	_update_glow(delta)
@@ -324,11 +328,11 @@ func _play_attack(clip_name: String, start: float) -> void:
 		root_scale = clampf((distance_to_opponent() - 2.1) / reach, 0.35, 1.7)
 
 
-func _state_attack(delta: float) -> void:
+func _state_attack(delta: float) -> Vector3:
 	var c := anim.clip
 	if c == null:
 		_to_neutral(0.5)
-		return
+		return Vector3.ZERO
 	var t := anim.time
 	# Tracking windows: [from, to, deg/s]
 	for tr in c.raw.get("track", []):
@@ -351,10 +355,60 @@ func _state_attack(delta: float) -> void:
 			if AnimLibrary.has_clip(next_clip):
 				start_t = AnimLibrary.get_clip(next_clip).get_float("chain_in", 0.0)
 			_play_attack(next_clip, start_t)
-			return
+			return Vector3.ZERO
 		_seq.clear()
 	if anim.finished:
 		_to_neutral(randf_range(0.45, 1.25) / aggression)
+		return Vector3.ZERO
+	return _close_distance(c, t)
+
+
+## Gap-closing during a wind-up (clip "close": [from, to, ideal distance, max speed]): he
+## shuffles in so a strike started at the edge of his range still arrives, like Souls bosses.
+func _close_distance(c: ClipData, t: float) -> Vector3:
+	var close: Array = c.raw.get("close", [])
+	if close.size() < 4 or opponent == null or t < float(close[0]) or t > float(close[1]):
+		return Vector3.ZERO
+	var to := Combat.flat(opponent.global_position - global_position)
+	var d := to.length()
+	var ideal := float(close[2])
+	if d <= ideal or d < 0.01:
+		return Vector3.ZERO
+	var t_left := maxf(0.05, float(close[1]) - t)
+	return to / d * minf((d - ideal) / (t_left + 0.1), float(close[3]) * attack_speed)
+
+
+## A perilous thrust meets a player who is in the mikiri frames of a forward step: count it
+## as contact as soon as the blade tip reaches them (the stomp lands on the blade even if the
+## thin polyline would have slipped past the capsule).
+func _check_mikiri() -> void:
+	if anim.clip == null or anim.loco_active or not (opponent is Player):
+		return
+	var p: Player = opponent
+	var t := anim.time
+	for i in anim.clip.hits.size():
+		var h: Dictionary = anim.clip.hits[i]
+		if str(h.get("kind", "")) != "thrust" or _hits_done.has(i):
+			continue
+		if t < float(h["from"]) - 0.06 or t > float(h["to"]):
+			continue
+		if not p.can_mikiri(self):
+			return
+		var pts := rig.blade_world(str(h.get("blade", "upper")))
+		if pts.is_empty():
+			return
+		var tip := pts[pts.size() - 1]
+		var reach := Combat.flat(tip - global_position).dot(forward())
+		var pd := distance_to_opponent()
+		if reach + 0.55 >= pd - p.hurt_radius and Combat.angle_to(global_position, forward(), p.global_position) < 40.0:
+			_hits_done[i] = true
+			var info := h.duplicate()
+			info["index"] = i
+			info["clip"] = anim.clip.name
+			info["point"] = tip
+			info["time"] = Game.clock
+			_on_weapon_contact(info)
+			return
 
 
 func _in_vuln() -> bool:
@@ -473,6 +527,8 @@ func _on_weapon_contact(info: Dictionary) -> void:
 		Combat.RESULT_DEFLECT:
 			var final_hit := bool(info.get("final", false))
 			var gain := float(info.get("boss_posture", 10.0)) * (Combat.FINAL_DEFLECT_BONUS if final_hit else 1.0)
+			# Deflecting several strikes in quick succession hits his posture harder.
+			gain *= 1.0 + Combat.DEFLECT_CHAIN_BONUS * float(clampi(p.deflect_chain - 1, 0, Combat.DEFLECT_CHAIN_MAX_STEPS))
 			if add_posture(gain):
 				_posture_break()
 			elif final_hit:

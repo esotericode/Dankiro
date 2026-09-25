@@ -16,6 +16,8 @@ var weapon_node: Node3D
 var weapon_model_xf := Transform3D.IDENTITY
 var grip_axis := Vector3.UP
 var blades: Dictionary = {}          ## blade name -> PackedVector3Array (weapon space)
+## Hit windows test every polyline of the weapon, not only the named blade (staffs).
+var hit_whole_weapon := false
 
 var l_upper := 0.28
 var l_fore := 0.25
@@ -53,6 +55,7 @@ func setup(p_rig_name: String) -> void:
 	add_child(weapon_node)
 	var ga: Array = weapon_def.get("grip_axis", [0.0, 1.0, 0.0])
 	grip_axis = Vector3(float(ga[0]), float(ga[1]), float(ga[2])).normalized()
+	hit_whole_weapon = bool(weapon_def.get("hit_whole_weapon", false))
 	var bd: Dictionary = weapon_def.get("blades", {})
 	for bname in bd:
 		var pts := PackedVector3Array()

@@ -1,0 +1,572 @@
+extends Node3D
+## Headless combat lab: spawns the fighters, drives the player with scripted inputs at exact
+## game times (through the same press_guard / press_action entry points the controller uses),
+## forces boss attacks and checks the outcomes against docs/SEKIRO_MECHANICS.md.
+##
+## Run (from the project folder):
+##   godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--verbose]
+## Suites: reach, deflect, spam, mikiri, sweep, attack, cancel, soak (default: all).
+## Exit code 0 when every check passes.
+
+const DT := 1.0 / 120.0
+
+var world: Node3D
+var player: Player
+var boss: Boss
+var verbose := false
+var failures: Array[String] = []
+var checks := 0
+
+var _sched: Array = []          ## [game time, Callable]
+var _results: Array = []        ## hit_resolved records for the current scenario
+
+
+func _ready() -> void:
+	process_physics_priority = -500   # after Game's clock tick, before the fighters
+	Game.deterministic = true
+	Game.time_effects_enabled = false
+	var args := OS.get_cmdline_user_args()
+	verbose = args.has("--verbose")
+	var suites: Array = []
+	for a in args:
+		if not a.begins_with("--"):
+			suites.append(a)
+	if suites.is_empty():
+		suites = ["reach", "deflect", "spam", "mikiri", "sweep", "attack", "cancel", "soak"]
+	await get_tree().physics_frame
+	for s in suites:
+		print("\n=== suite: %s ===" % s)
+		await call("suite_" + s)
+	print("\n%d checks, %d failures" % [checks, failures.size()])
+	for f in failures:
+		print("  FAIL: " + f)
+	get_tree().quit(1 if failures.size() > 0 else 0)
+
+
+# ---------------------------------------------------------------------------- plumbing
+func _physics_process(_delta: float) -> void:
+	var due: Array = []
+	for item in _sched:
+		if Game.clock >= float(item[0]) - 1e-6:
+			due.append(item)
+	for item in due:
+		_sched.erase(item)
+		(item[1] as Callable).call()
+
+
+func at(t: float, fn: Callable) -> void:
+	_sched.append([t, fn])
+
+
+func ticks(n: int) -> void:
+	for i in n:
+		await get_tree().physics_frame
+
+
+func check(ok: bool, what: String) -> void:
+	checks += 1
+	if not ok:
+		failures.append(what)
+		print("  FAIL " + what)
+	elif verbose:
+		print("  ok   " + what)
+
+
+## Fresh fighters. The player stands `dist` m from the boss at `angle_deg` off his facing.
+func setup(dist: float, angle_deg := 0.0) -> void:
+	_sched.clear()
+	_results.clear()
+	Game.clear_time_effects()
+	if world != null:
+		world.queue_free()
+		await get_tree().process_frame
+	world = Node3D.new()
+	add_child(world)
+	var floor_body := StaticBody3D.new()
+	var cs := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(80, 2, 80)
+	cs.shape = box
+	cs.position = Vector3(0, -1, 0)
+	floor_body.add_child(cs)
+	world.add_child(floor_body)
+	# Positions are set before entering the tree so the bodies never spawn overlapping.
+	boss = Boss.new()
+	boss.position = Vector3.ZERO
+	world.add_child(boss)
+	boss.set_facing(0.0)                      # facing -Z
+	boss.passive = true
+	boss.state = Boss.S.NEUTRAL
+	player = Player.new()
+	player.position = Combat.dir_of(deg_to_rad(angle_deg)) * dist
+	world.add_child(player)
+	player.face_now(boss.global_position)
+	player.camera_yaw = player.facing       # as the lock-on camera would: looking at the boss
+	player.opponent = boss
+	player.lock_target = boss
+	player.bot_enabled = true
+	player.max_hp = 1.0e6
+	player.hp = player.max_hp
+	boss.opponent = player
+	Game.player = player
+	Game.boss = boss
+	player.hit_resolved.connect(func(info: Dictionary, res: int): _results.append({"info": info, "res": res,
+		"t": float(info.get("time", Game.clock))}))
+	await ticks(6)
+
+
+## Starts a boss attack now; returns its start clock.
+func boss_attack(clip: String) -> float:
+	boss.face_now(player.global_position)
+	boss._seq.clear()
+	boss._play_attack(clip, 0.0)
+	return Game.clock
+
+
+func run_until_boss_done(max_time := 4.0) -> void:
+	var t_end := Game.clock + max_time
+	await ticks(1)
+	while boss.state == Boss.S.ATTACK and Game.clock < t_end:
+		await ticks(1)
+	await ticks(12)
+
+
+static func res_name(r: int) -> String:
+	return ["none", "DEFLECT", "BLOCK", "HIT", "MIKIRI", "ignored"][r]
+
+
+func first_result() -> int:
+	return int(_results[0]["res"]) if _results.size() > 0 else Combat.RESULT_NONE
+
+
+## Contact times (relative to attack start) of every hit window of `clip` against a
+## player standing still at `dist`.
+func contact_times(clip: String, dist: float) -> Array:
+	await setup(dist)
+	var t0 := boss_attack(clip)
+	await run_until_boss_done()
+	var out: Array = []
+	for r in _results:
+		out.append({"rel": float(r["t"]) - t0, "index": int((r["info"] as Dictionary).get("index", 0)),
+			"kind": str((r["info"] as Dictionary).get("kind", "normal"))})
+	return out
+
+
+# ---------------------------------------------------------------------------- suites
+const BOSS_ATTACKS := {
+	# clip: [min, max] player distance at which every hit window must connect. The max is the
+	# far end of the range the AI uses the attack from (Boss.SEQUENCES) plus a little.
+	"b_combo_1": [1.0, 3.4], "b_combo_2": [1.0, 3.4], "b_combo_3": [1.0, 3.4], "b_backhand": [1.0, 3.4],
+	"b_jab": [1.0, 3.5], "b_whirl": [1.0, 3.0], "b_parry_counter": [1.0, 3.0], "b_thrust": [1.0, 5.6],
+	"b_sweep": [1.0, 3.0], "b_leap": [4.8, 8.0],
+}
+
+
+## Every hit window of every boss attack must connect with a player standing anywhere from
+## point-blank to the attack's intended range, straight ahead or a little to the side.
+func suite_reach() -> void:
+	for clip in BOSS_ATTACKS:
+		var rng: Array = BOSS_ATTACKS[clip]
+		var n_hits: int = AnimLibrary.get_clip(clip).hits.size()
+		var row := PackedStringArray()
+		var dists: Array = [1.0, 1.3, 1.6, 2.0, 2.4, 2.8, 3.2, 3.8, 4.5, 5.4] if clip != "b_leap" else [4.8, 5.5, 6.5, 8.0]
+		for d in dists:
+			if d < float(rng[0]) - 0.01 or d > float(rng[1]) + 0.01:
+				continue
+			for ang in [-25.0, 0.0, 25.0]:
+				await setup(d, ang)
+				boss_attack(clip)
+				await run_until_boss_done()
+				var got := {}
+				for r in _results:
+					got[int((r["info"] as Dictionary).get("index", -1))] = true
+				row.append("%.1fm/%+.0f°:%d/%d" % [d, ang, got.size(), n_hits])
+				check(got.size() == n_hits, "%s at %.1f m, %+.0f°: %d of %d hit windows connected" % [clip, d, ang, got.size(), n_hits])
+		print("  %-16s %s" % [clip, " ".join(row)])
+
+
+## Pressing guard `o` seconds before contact: deflect for 0 <= o <= 0.200, block after that
+## while the guard is up (held, or within GUARD_MIN_TIME of a tap), hit when late.
+## Perilous thrusts can be deflected but not blocked.
+func suite_deflect() -> void:
+	var offsets := [-0.03, -0.005, 0.0, 0.01, 0.05, 0.1, 0.15, 0.19, 0.199, 0.205, 0.22, 0.3, 0.34, 0.4, 0.6]
+	for clip in ["b_combo_1", "b_combo_3", "b_jab", "b_thrust", "b_backhand"]:
+		var cts := await contact_times(clip, 2.2)
+		if cts.is_empty():
+			check(false, "%s: no contact to deflect" % clip)
+			continue
+		var c0: Dictionary = cts[0]
+		var rel := float(c0["rel"])
+		var thrust: bool = str(c0["kind"]) == "thrust"
+		for hold in [true, false]:
+			var row := PackedStringArray()
+			for o in offsets:
+				await setup(2.2)
+				var t0 := boss_attack(clip)
+				var press_t: float = t0 + rel - float(o)
+				at(press_t, func(): player.press_guard(press_t))
+				if not hold:
+					at(press_t + 0.1, func(): player.release_guard(press_t + 0.1))
+				await run_until_boss_done()
+				var got := first_result()
+				var want := Combat.RESULT_HIT
+				if float(o) >= 0.0 and float(o) <= Combat.DEFLECT_WINDOW:
+					want = Combat.RESULT_DEFLECT
+				elif float(o) > Combat.DEFLECT_WINDOW and not thrust and (hold or float(o) < Combat.GUARD_MIN_TIME):
+					want = Combat.RESULT_BLOCK
+				elif float(o) < 0.0 and float(o) >= -Combat.DEFLECT_GRACE:
+					want = Combat.RESULT_DEFLECT
+				row.append("%+4.0fms:%s" % [float(o) * 1000.0, res_name(got)[0]])
+				# A press stamped just after contact still counts if it arrives in the same physics
+				# tick (evaluated first, like frame-based games); in a later tick it's a hit.
+				if float(o) < 0.0 and float(o) >= -Combat.DEFLECT_GRACE and got == Combat.RESULT_HIT:
+					want = Combat.RESULT_HIT
+				check(got == want, "%s %s guard %.0f ms before contact -> %s (want %s)" % [clip,
+					"held" if hold else "tapped", float(o) * 1000.0, res_name(got), res_name(want)])
+		print("  %-12s contact @%.3fs  %s" % [clip, rel, "ok" if failures.is_empty() else ""])
+	# Deflects never break the player's posture.
+	await setup(2.2)
+	player.posture = player.max_posture - 1.0
+	var cts2 := await contact_times("b_combo_3", 2.2)
+	await setup(2.2)
+	player.posture = player.max_posture - 1.0
+	var t1 := boss_attack("b_combo_3")
+	var pt: float = t1 + float(cts2[0]["rel"]) - 0.08
+	at(pt, func(): player.press_guard(pt))
+	await run_until_boss_done()
+	check(first_result() == Combat.RESULT_DEFLECT and player.state != Player.S.GUARD_BREAK,
+		"deflect at full posture does not guard-break (state %s)" % Player.S.keys()[player.state])
+
+
+## Spam penalty: window per press depends on the time since the last *release*.
+func suite_spam() -> void:
+	await setup(3.0)
+	var t := Game.clock
+	var windows: Array = []
+	# Mash: press/release every 0.12 s.
+	for i in 6:
+		player.press_guard(t)
+		windows.append(player.guard_window)
+		player.release_guard(t + 0.04)
+		t += 0.12
+	print("  mash windows (ms): %s" % str(windows.map(func(w): return int(round(w * 1000.0)))))
+	check(is_equal_approx(windows[0], 0.2), "first press = 200 ms")
+	check(windows[1] < 0.2 and windows[2] < windows[1] and windows[3] < windows[2], "mashing shrinks the window")
+	check(windows[4] == 0.0, "5th mash press gets no deflect window")
+	# Waiting 0.5 s after a release clears it.
+	player.press_guard(t + 0.55)
+	check(is_equal_approx(player.guard_window, 0.2), "penalty clears 0.5 s after release (%.0f ms)" % (player.guard_window * 1000.0))
+	player.release_guard(t + 0.6)
+	# Hold then release-and-repress quickly is penalised.
+	await setup(3.0)
+	t = Game.clock
+	player.press_guard(t)
+	player.release_guard(t + 1.5)
+	player.press_guard(t + 1.6)
+	check(player.guard_window < 0.2, "release then quick re-press is penalised (%.0f ms)" % (player.guard_window * 1000.0))
+	player.release_guard(t + 1.62)
+	# A successful deflect clears the penalty immediately.
+	var cts := await contact_times("b_jab", 2.2)
+	await setup(2.2)
+	var t0 := boss_attack("b_jab")
+	var c0: float = t0 + float(cts[0]["rel"])
+	var c1: float = t0 + float(cts[1]["rel"])
+	# Mash three times before the first hit (the last press, inside its shrunken 100 ms window,
+	# lands the deflect), then re-press quickly for the second jab.
+	for k in 3:
+		var pk: float = c0 - 0.06 - 0.12 * (2 - k)
+		at(pk, func(): player.press_guard(pk))
+		at(pk + 0.03, func(): player.release_guard(pk + 0.03))
+	var w_second := [0.0]
+	at(c1 - 0.08, func():
+		player.press_guard(c1 - 0.08)
+		w_second[0] = player.guard_window)
+	await run_until_boss_done()
+	var r0 := res_name(int(_results[0]["res"])) if _results.size() > 0 else "none"
+	var r1 := res_name(int(_results[1]["res"])) if _results.size() > 1 else "none"
+	print("  jab: mashed deflect -> %s, next press window %.0f ms -> %s" % [r0, w_second[0] * 1000.0, r1])
+	check(r0 == "DEFLECT" or r0 == "HIT", "mashed first jab resolves")
+	if r0 == "DEFLECT":
+		check(is_equal_approx(w_second[0], 0.2), "deflect resets the penalty (window %.0f ms)" % (w_second[0] * 1000.0))
+		check(r1 == "DEFLECT", "rhythmic second deflect works after a deflect")
+
+
+## Mikiri: a neutral (or forward) step whose first 0.33 s overlaps the perilous thrust's
+## arrival counters it; a step taken too early doesn't; side steps never do.
+func suite_mikiri() -> void:
+	for d in [2.4, 3.4, 4.4]:
+		var cts := await contact_times("b_thrust", d)
+		if cts.is_empty():
+			check(false, "thrust never reaches a player at %.1f m" % d)
+			continue
+		var rel := float(cts[0]["rel"])
+		var row := PackedStringArray()
+		var early_fail := false
+		var any_ok := false
+		for o in [0.9, 0.7, 0.5, 0.4, 0.3, 0.2, 0.12, 0.05, 0.0]:
+			for dir_name in ["neutral", "fwd", "side"]:
+				if dir_name != "neutral" and not (o == 0.2):
+					continue
+				await setup(d)
+				var t0 := boss_attack("b_thrust")
+				var pt: float = t0 + rel - float(o)
+				var mv := Vector2.ZERO
+				if dir_name == "fwd":
+					mv = Vector2(0, -1)
+				elif dir_name == "side":
+					mv = Vector2(1, 0)
+				at(pt, func():
+					player.bot_move = mv
+					player.press_action("dodge", pt))
+				at(pt + 0.05, func(): player.bot_move = Vector2.ZERO)
+				await run_until_boss_done()
+				var got := res_name(first_result())
+				row.append("%s%.2f:%s" % [dir_name[0], o, got[0]])
+				if dir_name == "neutral":
+					if got == "MIKIRI":
+						any_ok = true
+						if float(o) >= 0.7:
+							early_fail = true
+				elif dir_name == "fwd":
+					check(got == "MIKIRI", "forward step 0.2 s before the thrust at %.1f m mikiris (%s)" % [d, got])
+				else:
+					check(got != "MIKIRI", "side step never mikiris (%.1f m)" % d)
+		check(any_ok, "a neutral step can mikiri the thrust at %.1f m" % d)
+		check(not early_fail, "a neutral step taken 0.7 s+ early does not mikiri (%.1f m)" % d)
+		print("  thrust @%.1fm contact %.3fs  %s" % [d, rel, " ".join(row)])
+	# Neutral step 0.2 s before contact must work at mid range (the reliable input).
+	var cts2 := await contact_times("b_thrust", 3.0)
+	await setup(3.0)
+	var t1 := boss_attack("b_thrust")
+	var p2: float = t1 + float(cts2[0]["rel"]) - 0.2
+	at(p2, func(): player.press_action("dodge", p2))
+	await run_until_boss_done()
+	check(first_result() == Combat.RESULT_MIKIRI, "neutral step 0.2 s before contact at 3.0 m -> MIKIRI (%s)" % res_name(first_result()))
+	var pb := boss.posture
+	check(pb >= Combat.MIKIRI_POSTURE - 0.5, "mikiri deals heavy posture damage (%.0f)" % pb)
+
+
+## Sweep: can't be blocked or deflected, dodging doesn't help, jumping clears it and a
+## second jump kicks off him for posture damage.
+func suite_sweep() -> void:
+	var cts := await contact_times("b_sweep", 2.2)
+	check(not cts.is_empty(), "sweep reaches a standing player")
+	if cts.is_empty():
+		return
+	var rel := float(cts[0]["rel"])
+	# Deflect attempt -> hit.
+	await setup(2.2)
+	var t0 := boss_attack("b_sweep")
+	var pg: float = t0 + rel - 0.08
+	at(pg, func(): player.press_guard(pg))
+	await run_until_boss_done()
+	check(first_result() == Combat.RESULT_HIT, "guarding a sweep fails (%s)" % res_name(first_result()))
+	# Dodge i-frames don't help against a sweep (step into it -> hit). Stepping back out of
+	# its range is legitimate, as in Sekiro.
+	await setup(2.2)
+	t0 = boss_attack("b_sweep")
+	var pd: float = t0 + rel - 0.1
+	at(pd, func(): player.press_action("dodge", pd))
+	await run_until_boss_done()
+	check(first_result() == Combat.RESULT_HIT, "dodging into a sweep fails: i-frames don't apply (%s)" % res_name(first_result()))
+	# Jump windows.
+	var row := PackedStringArray()
+	var cleared := 0
+	for o in [0.6, 0.45, 0.35, 0.25, 0.15, 0.08, 0.0]:
+		await setup(2.2)
+		t0 = boss_attack("b_sweep")
+		var pj: float = t0 + rel - float(o)
+		at(pj, func(): player.press_action("jump", pj))
+		await run_until_boss_done()
+		var got := res_name(first_result())
+		if got == "none":
+			cleared += 1
+		row.append("%.2f:%s" % [o, got[0]])
+	print("  sweep contact %.3fs, jump offsets %s" % [rel, " ".join(row)])
+	check(cleared >= 3, "jumping 0.1-0.4 s before the sweep clears it (%d offsets clear)" % cleared)
+	# Jump + kick.
+	await setup(2.0)
+	t0 = boss_attack("b_sweep")
+	var pj2: float = t0 + rel - 0.3
+	at(pj2, func(): player.press_action("jump", pj2))
+	at(pj2 + 0.3, func(): player.press_action("jump", pj2 + 0.3))
+	await run_until_boss_done()
+	print("  jump+kick: boss posture %.0f, boss state %s" % [boss.posture, Boss.S.keys()[boss.state]])
+	check(boss.posture >= Combat.KICK_POSTURE, "kicking off him during the sweep deals posture (%.0f)" % boss.posture)
+
+
+## Player attacks: reach and rhythm. Mashing attack must not produce hits faster than the
+## intended cadence, and each slash must reach a boss standing a sword's length away.
+func suite_attack() -> void:
+	for d in [1.6, 2.0, 2.4, 2.9]:
+		await setup(d)
+		boss.set_facing(PI)      # facing away: hits land instead of being blocked
+		var hits_at: Array = []
+		var t0 := Game.clock
+		var t := t0
+		while t < t0 + 3.0:
+			var tt := t
+			at(tt, func(): player.press_action("attack", tt))
+			t += 0.06
+		var hp0 := boss.hp
+		var last_hp := boss.hp
+		while Game.clock < t0 + 3.0:
+			await ticks(1)
+			if boss.hp < last_hp:
+				hits_at.append(Game.clock - t0)
+				last_hp = boss.hp
+			if boss.state == Boss.S.REACT:
+				boss.state = Boss.S.NEUTRAL
+				boss.set_facing(PI)
+		var gaps: Array = []
+		for i in range(1, hits_at.size()):
+			gaps.append(snappedf(float(hits_at[i]) - float(hits_at[i - 1]), 0.01))
+		print("  mash @%.1fm: %d hits in 3 s, first at %.2fs, gaps %s" % [d, hits_at.size(),
+			float(hits_at[0]) if hits_at.size() > 0 else -1.0, str(gaps)])
+		if d <= 2.4:
+			check(hits_at.size() >= 4, "slashes reach a boss %.1f m away (%d hits)" % [d, hits_at.size()])
+		check(hits_at.size() <= 7, "mashing is rate-limited at %.1f m (%d hits in 3 s)" % [d, hits_at.size()])
+		for g in gaps:
+			check(float(g) >= 0.38, "no two slashes land within 0.38 s (gap %.2f)" % float(g))
+		if hits_at.size() > 0:
+			check(float(hits_at[0]) >= 0.18, "first slash lands no sooner than 0.18 s after the press (%.2f)" % float(hits_at[0]))
+
+
+## Guard cancel: guard during the wind-up start or the recovery takes effect at once; guard
+## during the committed swing is queued until the recovery.
+func suite_cancel() -> void:
+	var c := AnimLibrary.get_clip("p_attack_1")
+	var wins: Array = c.raw.get("guard_cancel", [])
+	print("  p_attack_1 guard_cancel %s, hits %s" % [str(wins), str(c.hits.map(func(h): return [h["from"], h["to"]]))])
+	check(wins.size() >= 2, "attack has an early and a late guard-cancel window")
+	for probe in [0.02, _first_hit(c), float(c.hits[0]["to"]) + 0.12]:
+		await setup(3.5)
+		boss.set_facing(PI)
+		var t0 := Game.clock
+		at(t0, func(): player.press_action("attack", t0))
+		var pg: float = t0 + float(probe)
+		at(pg, func(): player.press_guard(pg))
+		await ticks(int(ceil((float(probe) + 0.02) / DT)) + 1)
+		var guarded := player.state == Player.S.GUARD
+		var expect := Player._in_guard_cancel(c, float(probe) - DT)
+		print("  guard at %.2fs into slash -> state %s" % [probe, Player.S.keys()[player.state]])
+		check(guarded == expect, "guard press %.2f s into the slash %s" % [probe, "cancels" if expect else "waits for the recovery"])
+		await ticks(90)
+		check(player.state == Player.S.GUARD, "queued guard comes up after the slash (%s)" % Player.S.keys()[player.state])
+		player.release_guard(Game.clock)
+
+
+## Full fight against the real boss AI with a bot that plays like a decent player: deflects
+## with imperfect timing (sometimes early -> block, sometimes late -> hit), mikiris thrusts,
+## jumps and kicks sweeps, attacks into openings, heals, and deathblows. Exercises the whole
+## flow: posture breaks, deathblows, phase two, victory/death.
+func suite_soak() -> void:
+	seed(12345)
+	await setup(4.0)
+	player.max_hp = Combat.PLAYER_HP * 1.5
+	player.hp = player.max_hp
+	boss.passive = false
+	boss.start_fight()
+	var counts := {}
+	var bump := func(k: String): counts[k] = int(counts.get(k, 0)) + 1
+	player.hit_resolved.connect(func(i, r):
+		bump.call(res_name(r))
+		if verbose:
+			print("    %6.2f %-16s hit %d -> %-7s player %-10s dt %+.0f ms (window %.0f, guard_up %s)" % [Game.clock,
+				str(i.get("clip", "")), int(i.get("index", 0)), res_name(r), Player.S.keys()[player.state],
+				(float(i.get("time", 0.0)) - player.guard_start) * 1000.0, player.guard_window * 1000.0, player.is_guard_up()]))
+	boss.posture_broken.connect(func(): bump.call("posture_break"))
+	boss.life_lost.connect(func(_l): bump.call("life_lost"))
+	var over := [""]
+	boss.defeated.connect(func(): over[0] = "boss defeated")
+	player.died.connect(func(): over[0] = "player died")
+	var handled := {}
+	var leads := {}
+	var serial := [0, ""]
+	var next_attack := 0.0
+	var t_end := Game.clock + 240.0
+	while Game.clock < t_end and over[0] == "":
+		await ticks(1)
+		var now := Game.clock
+		var d := player.distance_to_opponent()
+		player.bot_move = Vector2(0, -1) if d > 3.2 and boss.state != Boss.S.ATTACK else Vector2.ZERO
+		if player.guard_held and now - player.guard_start > 0.1:
+			player.release_guard(now)
+		var ttc := _blade_time_to_contact()
+		if boss.state == Boss.S.ATTACK and boss.anim.clip != null and not boss.anim.loco_active:
+			var c := boss.anim.clip
+			if c.name != serial[1] or boss.anim.time < 0.02:
+				serial[1] = c.name
+				serial[0] += 1
+			var peril := str(c.raw.get("perilous", ""))
+			for i in c.hits.size():
+				var h: Dictionary = c.hits[i]
+				var key := "%d:%d" % [serial[0], i]
+				if handled.has(key):
+					continue
+				if peril == "sweep":
+					if boss.anim.time >= float(h["from"]) - 0.3:
+						handled[key] = true
+						player.press_action("jump", now)
+						var kt := now + 0.32
+						at(kt, func(): player.press_action("jump", kt))
+					continue
+				if peril == "thrust" and randf() < 0.75:
+					if boss.anim.time >= float(h["from"]) - 0.16:
+						handled[key] = true
+						player.press_action("dodge", now)
+					continue
+				# React to the blade itself, like a player: press when its time-to-contact drops
+				# to the intended lead. Mostly well-timed (30-170 ms before contact); 15% early
+				# (-> block) to exercise the block path too.
+				if not leads.has(key):
+					leads[key] = randf_range(0.03, 0.17) if randf() > 0.15 else randf_range(0.24, 0.32)
+				if boss.anim.time >= float(h["from"]) - 0.35 and ttc <= float(leads[key]):
+					handled[key] = true
+					if player.guard_held:
+						player.release_guard(now)
+					player.press_guard(now)
+		elif boss.is_deathblow_ready() and d < 3.0:
+			player.press_action("attack", now)
+		elif now >= next_attack and d < 2.8:
+			# Punish openings (his recoil / flinch / recovery); only occasionally poke from neutral.
+			var opening := boss.state == Boss.S.REACT or (boss.state == Boss.S.ATTACK and boss._in_vuln())
+			if opening or (boss.state == Boss.S.NEUTRAL and randf() < 0.25):
+				player.press_action("attack", now)
+			next_attack = now + randf_range(0.3, 0.9)
+		if player.hp < player.max_hp * 0.35 and player.heal_charges > 0 and d > 3.0:
+			player.press_action("heal", now)
+	print("  soak: %s after %.0f s  %s  boss lives %d, player hp %.0f" % [over[0] if over[0] != "" else "time up",
+		Game.clock - (t_end - 240.0), str(counts), boss.lives_left, player.hp])
+	check(int(counts.get("DEFLECT", 0)) >= 10, "soak: deflects happen (%d)" % int(counts.get("DEFLECT", 0)))
+	check(int(counts.get("BLOCK", 0)) >= 1, "soak: early presses block")
+	check(int(counts.get("posture_break", 0)) >= 1, "soak: his posture breaks")
+	check(int(counts.get("life_lost", 0)) >= 1, "soak: a deathblow takes a life (phase two)")
+
+
+var _ttc_prev: Dictionary = {}
+
+
+## Seconds until the boss's weapon reaches the player's hurtbox at its current closing speed
+## (99 when it isn't closing in).
+func _blade_time_to_contact() -> float:
+	var cap := player.hurt_capsule()
+	var best := 99.0
+	for bn in boss.rig.blades:
+		var pts := boss.rig.blade_world(bn)
+		var dmin := 99.0
+		for k in range(pts.size() - 1):
+			var cp := Geometry3D.get_closest_points_between_segments(pts[k], pts[k + 1], cap[0], cap[1])
+			dmin = minf(dmin, cp[0].distance_to(cp[1]) - float(cap[2]))
+		var prev := float(_ttc_prev.get(bn, dmin))
+		_ttc_prev[bn] = dmin
+		var closing := (prev - dmin) / DT
+		if dmin <= 0.0:
+			best = 0.0
+		elif closing > 0.3:
+			best = minf(best, dmin / closing)
+	return best
+
+
+func _first_hit(c: ClipData) -> float:
+	return float(c.hits[0]["from"])

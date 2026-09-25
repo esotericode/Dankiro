@@ -14,6 +14,9 @@ var stick_sensitivity := GameInput.STICK_SENSITIVITY
 
 var arm: SpringArm3D
 var cam: Camera3D
+## Shadowless key light that follows the camera and only lights the fighters (render layer 2),
+## so they read clearly whichever way you face the moon, without flattening the arena.
+var character_key: DirectionalLight3D
 var _trauma := 0.0
 var _trauma_decay := 3.0
 var _shake_t := 0.0
@@ -41,6 +44,15 @@ func _ready() -> void:
 	cam.current = true
 	Game.camera = self
 	process_priority = 100
+	character_key = DirectionalLight3D.new()
+	character_key.light_color = Color(0.86, 0.89, 1.0)
+	character_key.light_energy = 0.85
+	character_key.light_specular = 0.6
+	character_key.shadow_enabled = false
+	character_key.light_cull_mask = 2
+	character_key.sky_mode = DirectionalLight3D.SKY_MODE_LIGHT_ONLY
+	character_key.top_level = true
+	add_child(character_key)
 
 
 func setup(p: Player, t: Node3D) -> void:
@@ -100,6 +112,9 @@ func _process(delta: float) -> void:
 		yaw -= look.x * stick_sensitivity * real_dt
 		pitch = clampf(pitch - look.y * stick_sensitivity * 0.7 * real_dt, -1.2, 0.55)
 	rotation = Vector3(pitch, yaw, 0.0)
+	# Key light from above the camera's right shoulder, looking along the view.
+	var key_dir := Basis(Vector3.UP, yaw + 0.35) * Vector3(0.0, -0.62, -1.0)
+	character_key.global_basis = Basis.looking_at(key_dir.normalized(), Vector3.UP)
 	# Pull in a little when looking up so the ground doesn't fill the screen.
 	arm.spring_length = lerpf(distance, distance * 0.8, clampf(pitch / 0.55, 0.0, 1.0))
 	_apply_shake(real_dt)

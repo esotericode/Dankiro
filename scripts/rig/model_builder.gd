@@ -23,6 +23,10 @@ static func _ensure_loaded() -> void:
 		push_error("Could not parse %s" % PATH)
 
 
+## Render layers for character meshes: 1 (world) + 2 (lit by the camera's character key light).
+const CHARACTER_LAYERS := 1 | 2
+
+
 static func build(rig: HumanoidRig, model_name: String) -> Dictionary:
 	_ensure_loaded()
 	var model: Dictionary = _data.get(model_name, {})
@@ -60,6 +64,7 @@ static func build(rig: HumanoidRig, model_name: String) -> Dictionary:
 		mi.scale = _v3(pd["scale"])
 		if not bool(pd.get("shadow", true)):
 			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.layers = CHARACTER_LAYERS
 		parent.add_child(mi)
 	var chains: Array = []
 	for c in model.get("chains", []):
@@ -88,6 +93,7 @@ static func build(rig: HumanoidRig, model_name: String) -> Dictionary:
 			if cn != null:
 				cols.append([cn, float(ca[1]), _v3(ca[2])])
 		sc.colliders = cols
+		sc.layers = CHARACTER_LAYERS
 		rig.add_child(sc)
 		chains.append(sc)
 	var lights: Array = []

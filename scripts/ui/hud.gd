@@ -17,10 +17,12 @@ Controls ........ F1                          Back
 Timing debug .... F3     Fullscreen .... F11
 
 [b]HOW TO FIGHT[/b]
-- Tap guard just before a blade lands to [color=#ffd27a]DEFLECT[/color] (0.2 s window). Mashing shrinks
-  the window; a clean deflect restores it. Holding guard only blocks (costs your posture).
+- Tap guard just before a blade lands to [color=#ffd27a]DEFLECT[/color] (0.2 s window). Re-pressing within
+  0.5 s of letting go shrinks the window; a clean deflect restores it. Holding guard only blocks.
+- Your slashes commit: guard can only cut in at the very start of a swing or after it.
 - Fill his posture bar with deflects, then press Attack on the red mark: [color=#ff5040]DEATHBLOW[/color].
-- [img=26x26]res://textures/kanji_danger_icon.png[/img] Perilous THRUST: dodge [i]toward[/i] him for a MIKIRI COUNTER (or deflect it).
+- [img=26x26]res://textures/kanji_danger_icon.png[/img] Perilous THRUST: press Dodge with [i]no direction[/i] (or toward him) as the
+  thrust comes in for a MIKIRI COUNTER. Too early won't work. You can also deflect it; blocking fails.
 - [img=26x26]res://textures/kanji_danger_icon.png[/img] Perilous SWEEP: JUMP over it. Jump again near him to kick off his head.
 - His posture recovers when you back off, and faster while his vitality is high."""
 
@@ -351,8 +353,8 @@ func _update_debug() -> void:
 	lines.append("[F3] timing debug")
 	lines.append(_last_timing)
 	if player:
-		lines.append("player: %s  posture %.0f  window %.0f ms" % [Player.S.keys()[player.state], player.posture,
-			player.guard_window * 1000.0])
+		lines.append("player: %s  posture %.0f  window %.0f ms (spam lvl %d)  deflect chain %d" % [Player.S.keys()[player.state],
+			player.posture, player.guard_window * 1000.0, player.spam_level, player.deflect_chain])
 	if boss:
 		var clip := boss.anim.clip.name if boss.anim.clip != null and not boss.anim.loco_active else "locomotion"
 		lines.append("boss: %s  %s @ %.2fs  posture %.0f" % [Boss.S.keys()[boss.state], clip, boss.anim.time, boss.posture])

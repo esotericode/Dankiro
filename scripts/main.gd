@@ -29,16 +29,17 @@ func _ready() -> void:
 	arena.name = "Arena"
 	world.add_child(arena)
 
+	# Positions are set before entering the tree so the bodies never spawn overlapping.
 	player = Player.new()
 	player.name = "Player"
+	player.position = PLAYER_START
 	world.add_child(player)
-	player.global_position = PLAYER_START
 	player.set_facing(0.0)
 
 	boss = Boss.new()
 	boss.name = "Boss"
+	boss.position = BOSS_START
 	world.add_child(boss)
-	boss.global_position = BOSS_START
 	boss.set_facing(PI)
 
 	player.opponent = boss

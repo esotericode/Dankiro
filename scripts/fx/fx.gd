@@ -90,16 +90,19 @@ static func _free_later(node: Node, seconds: float) -> void:
 static func sparks(parent: Node, pos: Vector3, normal: Vector3, kind: int) -> void:
 	var n := normal.normalized() if normal.length() > 0.001 else Vector3.UP
 	var cfg := {
-		SPARK_DEFLECT: {"amount": 70, "vmin": 5.0, "vmax": 13.0, "life": 0.42, "len": 0.13, "flash": 1.35, "light": 9.0,
-			"col": Color(1.0, 0.95, 0.8), "col2": Color(1.0, 0.55, 0.15), "embers": 28, "star": true},
-		SPARK_PARRY: {"amount": 55, "vmin": 4.0, "vmax": 11.0, "life": 0.38, "len": 0.12, "flash": 1.15, "light": 7.0,
-			"col": Color(1.0, 0.9, 0.7), "col2": Color(1.0, 0.45, 0.1), "embers": 18, "star": true},
-		SPARK_BLOCK: {"amount": 22, "vmin": 2.5, "vmax": 6.0, "life": 0.3, "len": 0.07, "flash": 0.55, "light": 2.5,
-			"col": Color(1.0, 0.7, 0.35), "col2": Color(0.9, 0.3, 0.05), "embers": 8, "star": false},
-		SPARK_MIKIRI: {"amount": 90, "vmin": 4.0, "vmax": 12.0, "life": 0.55, "len": 0.14, "flash": 1.8, "light": 10.0,
-			"col": Color(1.0, 0.95, 0.85), "col2": Color(1.0, 0.5, 0.12), "embers": 36, "star": true},
-		SPARK_BREAK: {"amount": 120, "vmin": 5.0, "vmax": 15.0, "life": 0.6, "len": 0.16, "flash": 2.4, "light": 12.0,
-			"col": Color(1.0, 0.98, 0.9), "col2": Color(1.0, 0.4, 0.1), "embers": 40, "star": true},
+		# Deflect: an intense, compact golden burst with long fast streaks (Sekiro's "perfect"
+		# deflect read) - clearly bigger and brighter than a block, without hiding the clash.
+		SPARK_DEFLECT: {"amount": 64, "vmin": 6.0, "vmax": 15.0, "life": 0.4, "len": 0.17, "flash": 0.8, "light": 5.0,
+			"col": Color(1.0, 0.86, 0.52), "col2": Color(1.0, 0.5, 0.12), "embers": 26, "star": true},
+		SPARK_PARRY: {"amount": 50, "vmin": 5.0, "vmax": 12.0, "life": 0.36, "len": 0.14, "flash": 0.7, "light": 4.0,
+			"col": Color(1.0, 0.82, 0.5), "col2": Color(1.0, 0.45, 0.1), "embers": 18, "star": true},
+		# Block: a small, dull spit of sparks - no flash star, barely any light.
+		SPARK_BLOCK: {"amount": 16, "vmin": 2.0, "vmax": 5.0, "life": 0.26, "len": 0.06, "flash": 0.32, "light": 1.2,
+			"col": Color(1.0, 0.62, 0.3), "col2": Color(0.8, 0.26, 0.05), "embers": 6, "star": false},
+		SPARK_MIKIRI: {"amount": 80, "vmin": 5.0, "vmax": 13.0, "life": 0.5, "len": 0.16, "flash": 1.1, "light": 6.0,
+			"col": Color(1.0, 0.88, 0.6), "col2": Color(1.0, 0.5, 0.12), "embers": 32, "star": true},
+		SPARK_BREAK: {"amount": 110, "vmin": 5.0, "vmax": 15.0, "life": 0.6, "len": 0.17, "flash": 1.5, "light": 8.0,
+			"col": Color(1.0, 0.92, 0.75), "col2": Color(1.0, 0.4, 0.1), "embers": 40, "star": true},
 		SPARK_GROUND: {"amount": 26, "vmin": 2.0, "vmax": 6.5, "life": 0.4, "len": 0.08, "flash": 0.7, "light": 3.0,
 			"col": Color(1.0, 0.75, 0.4), "col2": Color(0.9, 0.3, 0.05), "embers": 10, "star": false},
 	}
@@ -164,14 +167,14 @@ static func sparks(parent: Node, pos: Vector3, normal: Vector3, kind: int) -> vo
 	_free_later(e, e.lifetime + 0.3)
 	# Flash billboard (+ star streaks for deflects)
 	flash(parent, pos, float(c["flash"]), col, bool(c["star"]))
-	light_pulse(parent, pos + n * 0.15, Color(1.0, 0.72, 0.4), float(c["light"]), 5.0, 0.16)
+	light_pulse(parent, pos + n * 0.15, Color(1.0, 0.7, 0.38), float(c["light"]), 4.0, 0.12)
 
 
 static func flash(parent: Node, pos: Vector3, size: float, color: Color, star: bool) -> void:
 	var fkey := "flash_" + color.to_html()
 	if not _textures.has(fkey):
 		var fm := _billboard_material(radial_texture("flash", Color(1, 1, 1, 1), Color(1, 0.6, 0.2, 0)))
-		fm.albedo_color = Color(color.r * 1.6, color.g * 1.6, color.b * 1.6, 1.0)
+		fm.albedo_color = Color(color.r * 1.35, color.g * 1.35, color.b * 1.35, 1.0)
 		_textures[fkey] = fm
 	var q := QuadMesh.new()
 	q.size = Vector2(size, size)
@@ -184,8 +187,8 @@ static func flash(parent: Node, pos: Vector3, size: float, color: Color, star: b
 	mi.scale = Vector3.ONE * 0.35
 	var tw := mi.create_tween()
 	_real_time(tw)   # stays alive during hit-stop freeze frames
-	tw.tween_property(mi, "scale", Vector3.ONE, 0.035).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
-	tw.tween_property(mi, "scale", Vector3.ONE * 0.05, 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.tween_property(mi, "scale", Vector3.ONE, 0.03).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
+	tw.tween_property(mi, "scale", Vector3.ONE * 0.05, 0.1).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	tw.tween_callback(mi.queue_free)
 	if star:
 		if _star_mat == null:
@@ -202,7 +205,7 @@ static func flash(parent: Node, pos: Vector3, size: float, color: Color, star: b
 			_star_mat = _billboard_material(t)
 		for k in 2:
 			var sq := QuadMesh.new()
-			sq.size = Vector2(size * 2.6, size * 0.09)
+			sq.size = Vector2(size * 1.7, size * 0.06)
 			var s := MeshInstance3D.new()
 			s.mesh = sq
 			s.material_override = _star_mat
@@ -213,8 +216,8 @@ static func flash(parent: Node, pos: Vector3, size: float, color: Color, star: b
 			s.scale = Vector3(0.3, 1.0, 1.0)
 			var tw2 := s.create_tween()
 			_real_time(tw2)
-			tw2.tween_property(s, "scale", Vector3(1.0, 1.0, 1.0), 0.04).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
-			tw2.tween_property(s, "scale", Vector3(1.3, 0.0, 1.0), 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+			tw2.tween_property(s, "scale", Vector3(1.0, 1.0, 1.0), 0.03).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
+			tw2.tween_property(s, "scale", Vector3(1.25, 0.0, 1.0), 0.11).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 			tw2.tween_callback(s.queue_free)
 
 

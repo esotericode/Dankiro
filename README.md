@@ -1,16 +1,21 @@
 # Dankiro
 
-A Sekiro-inspired boss fight prototype for **Godot 4.7** (Forward+).
+A Sekiro-inspired boss fight prototype for **Godot 4.7** (Forward+, tested on 4.7.2).
 One arena, one duel: you (a shinobi with a katana) against **Sojin, the Twin Fang**, an
-armoured warrior with a staff that has a curved blade on each end.
+armoured warrior with a 3.2 m staff that has a curved blade on each end.
 
-![Characters](docs/characters_preview.png)
+The combat is tuned against a written spec of how Sekiro actually works:
+[docs/SEKIRO_MECHANICS.md](docs/SEKIRO_MECHANICS.md). An automated combat lab checks the game
+against it (see [Testing](#testing)).
 
-*Offline preview renders of the character data (`tools/model_preview.py`), not in-engine screenshots.*
+![Deflecting Sojin's Rising Fang](docs/screenshot_deflect.png)
+
+*In-engine (Godot 4.7.2, rendered with Movie Maker): a perfect deflect of his Rising Fang.
+Offline renders of the character models are in [docs/characters_preview.png](docs/characters_preview.png).*
 
 ## Running it
 
-1. Install Godot **4.7** (standard build; no C# needed).
+1. Install Godot **4.7** (standard build, no C# needed; 4.7.2 is what it's tested on).
 2. Open `project.godot` in the editor. The first open imports the audio, textures and font.
 3. Press **F5**.
 
@@ -39,32 +44,52 @@ The input map is registered in code (`scripts/autoload/game_input.gd`); actions 
 
 ## Combat
 
-### Deflecting
+### Deflecting (and blocking)
 
 - Pressing guard opens a **0.200 s deflect window** (12 frames at 60 fps, as in Sekiro). If a
-  blade touches you inside the window, you deflect: bright sparks, a star flash, a light pulse,
-  a ringing "ting", a ~75 ms hit-stop, a small shove, controller rumble, and posture damage to
-  the boss. A deflect can never break your own posture.
-- **Mashing is penalised.** A press within 0.45 s of the previous one (without a deflect in
-  between) shrinks the next window: 200, 133, 100, 83, 67 ms. **A successful deflect resets
-  it**, so deflecting a combo in rhythm works but blind mashing doesn't.
-- **Holding** guard past the window only **blocks**: dull clank, no vitality damage, a big chunk
-  of *your* posture. Fill your posture while blocking and your guard breaks.
-- A tapped guard stays up for 0.23 s (longer than the widest window), so tap-deflects work.
+  blade touches you inside the window, you deflect. You get a bright golden spark burst with
+  streaks, a star flash, a light pulse, a loud ringing "clang", a ~75 ms hit-stop, a small
+  shove, controller rumble, and posture damage to the boss. A deflect can never break your own
+  posture.
+- **Spam penalty (as in Sekiro).** Pressing guard within **0.5 s of releasing it** shrinks the
+  next window: 200 → 133 → 100 → 67 → 0 ms. It clears after 0.5 s without a quick re-press, and
+  **immediately after a successful deflect**, so deflecting a flurry in rhythm works but
+  mashing doesn't. Holding guard and letting go just before re-pressing counts too.
+- **Blocking**: if a blade lands outside the window while your guard is up (held, or a tap
+  less than 0.35 s old), you block. Blocking costs no vitality but a big chunk of *your*
+  posture, with a quiet, dull clank and a small spark. Fill your posture while blocking and your
+  guard breaks. Pressing too early therefore blocks; only a very early tap lets a strike through.
+- Deflecting several strikes in a row (each within 1.2 s) hits his posture harder: +12% per
+  deflect, up to +36%.
 - Timing is measured precisely. Physics runs at 120 Hz with agile input flushing. Presses are
   stamped with sub-tick game time, and blade contact time is found by a swept blade-versus-capsule
   test (`Combat.blade_vs_capsule`), so the window isn't rounded to frames. Press **F3** to see how
-  many milliseconds before contact you pressed, and whether you were early or late.
+  many milliseconds before contact you pressed, your current window, and your spam level.
+
+### Your sword
+
+- Slashes are committed, like Wolf's. The first cut lands ~0.28 s after the press, and chained
+  slashes come every ~0.45–0.6 s: a diagonal cut, a rising return cut, then a heavy overhead.
+  Mashing attack can't go faster than that.
+- **Guard can cancel a slash only at the very start of the wind-up or in the recovery** after
+  the blade has passed. Pressed during the committed swing, the guard is queued: it comes up
+  (with its deflect window) as soon as the recovery opens.
+- When he blocks a slash, your sword bounces and the next one comes a beat later. Keep hitting
+  his guard and he **parries** you, knocking your sword away, then counters.
 
 ### Perilous attacks (危)
 
 The kanji flashes red above him with a deep warning sound and his blades glow hot.
 
-- **Perilous thrust:** step (dodge) **toward** him as he lunges to perform a **Mikiri Counter**.
-  You stomp the blade and deal heavy posture damage. You can also deflect it. Blocking fails.
-- **Perilous sweep:** a low, full 360° spin. **Jump** over it; dodge i-frames don't save you.
-  While airborne near him, press **jump again** to kick off him, which deals posture damage and
-  staggers him out of the sweep. You can follow up with an air attack.
+- **Perilous thrust:** perform a **Mikiri Counter**. Press **dodge with no direction** (or
+  toward him) as the thrust comes in. A neutral dodge is a short step *forward*, as in Sekiro.
+  The thrust must arrive during the step's first 0.33 s, so dodging as soon as the kanji
+  appears is too early. You stomp the blade and deal heavy posture damage. You can also deflect
+  the thrust; blocking it fails.
+- **Perilous sweep:** a low, full 360° spin. It can't be blocked or deflected, and dodge
+  i-frames don't save you. **Jump** over it. While airborne near him, press **jump again** to
+  kick off him. That deals posture damage (×1.6 during a sweep) and staggers him out of the
+  sweep. You can follow up with an air attack.
 
 ### Posture and the deathblow
 
@@ -78,8 +103,10 @@ The kanji flashes red above him with a deep warning sound and his blades glow ho
 
 ### His behaviour
 
+- His whole staff is dangerous: hit windows test both blades *and* the shaft, so standing
+  close is no escape. During wind-ups he shuffles in to his striking distance, so a strike
+  started at the edge of his range still arrives.
 - He guards most attacks from neutral and often strikes right after you stop hitting his guard.
-- Keep attacking into his guard and he **parries** you, knocking your sword away, then counters.
 - He punishes healing at range with thrusts and leaping cleaves.
 - His attack strings end in mix-ups: combo → combo → *(delayed overhead | perilous thrust | perilous sweep)*.
 
@@ -87,17 +114,58 @@ The kanji flashes red above him with a deep warning sound and his blades glow ho
 | --- | --- | --- |
 | Rising Fang → Turning Fang → Heaven's Fall | Coils right, low blade trails behind | Deflect each hit. The overhead finisher is **delayed**, so wait for it. |
 | Fang Jabs | Draws the staff back at the hip (no kanji) | Deflect twice. Mikiri doesn't work on these. |
-| Perilous Thrust 危 | Turns side-on, crouches, aims the blade at you | Mikiri (step toward him) or deflect |
+| Perilous Thrust 危 | Turns side-on, crouches, aims the blade at you | Mikiri (neutral dodge as it comes) or deflect |
 | Perilous Sweep 危 | Sinks low, staff held low on his left | Jump, then kick |
 | Whirling Fangs | Spins the staff like a windmill at his side | Deflect the rhythm (4 hits), then the finishing cut |
 | Falling Crescent | Crouches at range, leaps with the staff overhead | Deflect on landing (high) |
 | Parry Counter | Deflects your attack | Guard right away |
+
+## Testing
+
+Everything below runs headless from the project folder with the `godot` binary on your PATH.
+
+**Combat lab**: `tests/combat_lab.tscn` spawns the fighters, drives the player with scripted,
+time-stamped inputs (through the same `press_guard` / `press_action` calls the controller
+uses), forces boss attacks and checks the results against
+[docs/SEKIRO_MECHANICS.md](docs/SEKIRO_MECHANICS.md).
+
+```
+godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--verbose]
+```
+
+| Suite | What it checks |
+| --- | --- |
+| `reach` | Every hit window of every boss attack connects from point-blank (1.0 m) to the edge of its range, straight on and 25° off-axis |
+| `deflect` | Presses 0–200 ms before contact deflect; earlier ones block (held, or a tap still up); late ones get hit; perilous thrusts can't be blocked; a deflect never guard-breaks you |
+| `spam` | The window shrinks 200/133/100/67/0 ms when mashing, clears after 0.5 s and on a deflect |
+| `mikiri` | A neutral or forward step timed 0–0.4 s before the thrust counters it; too early doesn't; side steps never do |
+| `sweep` | Guarding and dodge i-frames fail against the sweep, jumping clears it, and the kick deals posture |
+| `attack` | Slash reach, and that mashing is rate-limited (no two hits within 0.38 s) |
+| `cancel` | Guard cancels a slash only in the early wind-up and in the recovery |
+| `soak` | A full fight against the real AI with a bot player: deflects, blocks, posture breaks, deathblows, phase two |
+
+The run exits with code 0 when every check passes (417 checks plus the soak).
+
+**Captures**: `tests/capture.tscn` stages shots (`overview`, `deflect`, `block`, `mikiri`,
+`sweep`, `slashes`, `parried`) in the real scene, with a bot reacting to his hit windows. It
+records them with Godot's Movie Maker:
+
+```
+godot --write-movie out/frame.png --fixed-fps 30 res://tests/capture.tscn -- deflect
+```
+
+To record at a smaller size, put an `override.cfg` with
+`window/size/window_width_override` / `window_height_override` under `[display]` in the
+project folder (it's git-ignored). Without a GPU, this works under `xvfb-run` with Mesa's
+lavapipe Vulkan driver.
 
 ## Project layout
 
 ```
 project.godot              Godot 4.7, Forward+, 120 Hz physics, agile input flushing
 scenes/main.tscn           root node -> scripts/main.gd (builds and runs the fight)
+tests/                     combat lab (automated checks) and the Movie Maker capture director
+docs/SEKIRO_MECHANICS.md   the combat spec: what Sekiro does and how this project implements it
 scripts/
   autoload/                GameInput (input map), Game (clock, hit-stop, shake), Sfx (audio)
   anim/                    PoseAnimator, ClipData, HumanoidRig (FK + two-bone IK), PoseMath
@@ -119,7 +187,7 @@ You need Python 3.10+ with `numpy scipy matplotlib pillow fonttools`.
 
 | What | Edit | Rebuild | Check |
 | --- | --- | --- | --- |
-| Animations + hit windows | `tools/build_animations.py` | `python3 tools/build_animations.py` | `python3 tools/anim_preview.py b_thrust` renders contact sheets, and `--all --check` reports IK reach and blade reach |
+| Animations + hit windows | `tools/build_animations.py` | `python3 tools/build_animations.py` | `python3 tools/anim_preview.py b_thrust` renders contact sheets, and `--all --check` reports IK reach and blade reach. The build keeps the long staff above the floor: at any dip it inserts a key that tilts the staff about the hands |
 | Character looks | `tools/build_models.py` | `python3 tools/build_models.py` | `python3 tools/model_preview.py boss --zoom head` |
 | Sound effects | `tools/gen_audio.py` | `python3 tools/gen_audio.py [name]` | |
 | Kanji + UI font | `tools/gen_textures.py` | `python3 tools/gen_textures.py` | |
@@ -131,8 +199,9 @@ How the animation system works:
   **weapon transform**. Legs use two-bone IK and hands grip the animated weapon with IK, which
   keeps two-handed staff swings coherent.
 - Keys are interpolated with monotone cubic curves. Clips carry the gameplay metadata: hit
-  windows (`hits`), boss tracking rates (`track`), recovery openings (`vuln`), combo and cancel
-  windows, i-frames and the mikiri window.
+  windows (`hits`), boss tracking rates (`track`), gap-closing (`close`), recovery openings
+  (`vuln`), combo timing (`combo_at`), guard-cancel windows (`guard_cancel`), i-frames and the
+  mikiri window.
 - `tools/rigmath.py` mirrors the GDScript solver exactly, so the previews match the game.
 
 ## Tuning
@@ -145,20 +214,30 @@ How the animation system works:
 
 ## Status
 
-This first milestone was written **without being able to launch Godot**: the build environment's
-network policy blocked the Godot download. What *was* verified:
+This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (417 checks, plus
+a full-fight soak), the game boots and runs with no script errors, and every change to the
+visuals was checked on frames rendered with Movie Maker. The previous milestone had been
+written without being able to launch Godot. That pass fixed:
 
-- Every GDScript file parses (gdtoolkit).
-- Every `:=` type inference was checked by a static scan.
-- Each animation was rendered and checked for IK reach and blade reach with the Python mirror.
-- Character meshes were rendered offline, and backface culling confirmed the triangle winding.
-- The sounds were inspected as spectrograms.
+- **Boss attacks passing through you at close range**: only the blade tips could hit, so the
+  staff swung "through" someone standing inside its arc. Now the whole weapon hits, and every
+  attack is verified to connect from 1.0 m out to its full range.
+- **A bigger, clearer weapon**: a thicker shaft and longer, broader blades (3.2 m tip to tip),
+  kept above the floor in every animation. He also closes distance during wind-ups.
+- **Your slashes**: rebuilt with a proper wind-up, arc and follow-through, a longer katana,
+  cleaner swing trails, Sekiro-like timing instead of machine-gun speed, and guard-cancel
+  windows.
+- **Mikiri**: a timed dodge with no direction (or toward him), not a dash into him.
+- **Deflect vs block**: the spam penalty now works like Sekiro's (keyed to the release, with a
+  0.5 s reset), a tapped guard no longer drops in the middle of a combo, guard presses during
+  hit-stun come up on time, and the deflect is now clearly the loudest, brightest sound in the
+  fight.
+- **Visibility**: a brighter moonlit night, lighter armour and cloth, and a camera-relative key
+  light that only lights the two fighters.
 
-The first run in the editor may still turn up small script errors. Please report anything
-you see in the Output panel. Balance values are first-pass guesses meant for playtesting.
-
-Ideas for next steps: more attacks (grab 危), a third phase, a proper arena prop pass, music,
-camera polish and a settings menu.
+Balance values are still first-pass and meant for playtesting. Ideas for next steps: more
+attacks (grab 危), air deflects, a third phase, a proper arena prop pass, music, camera polish
+and a settings menu.
 
 ## Credits
 

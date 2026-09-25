@@ -5,8 +5,8 @@ extends Node3D
 
 @export var radius := 15.6
 @export var lantern_count := 8
-@export var moon_elevation_deg := 22.0
-@export var moon_azimuth_deg := -140.0     ## 0 = +Z. Default puts the moon behind-left of the boss.
+@export var moon_elevation_deg := 44.0
+@export var moon_azimuth_deg := -150.0     ## 0 = +Z. Default puts the moon high behind-left of the boss.
 @export var tree_count := 34
 
 var _lanterns: Array = []   ## Array of [OmniLight3D, base_energy, seed]
@@ -46,12 +46,13 @@ func _build_environment() -> void:
 	sky.radiance_size = Sky.RADIANCE_SIZE_256
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 1.6
-	env.ambient_light_sky_contribution = 0.85
-	env.ambient_light_color = Color(0.26, 0.29, 0.4)
+	# A bright moonlit night: readable first, moody second.
+	env.ambient_light_energy = 1.0
+	env.ambient_light_sky_contribution = 0.45
+	env.ambient_light_color = Color(0.36, 0.4, 0.56)
 	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	env.tonemap_exposure = 1.1
+	env.tonemap_exposure = 1.18
 	env.tonemap_white = 6.0
 	env.glow_enabled = true
 	env.glow_intensity = 0.85
@@ -65,7 +66,7 @@ func _build_environment() -> void:
 	env.set_glow_level(3, 0.8)
 	env.set_glow_level(4, 0.4)
 	env.fog_enabled = true
-	env.fog_light_color = Color(0.13, 0.15, 0.22)
+	env.fog_light_color = Color(0.14, 0.16, 0.24)
 	env.fog_light_energy = 1.0
 	env.fog_density = 0.0065
 	env.fog_sky_affect = 0.35
@@ -73,14 +74,14 @@ func _build_environment() -> void:
 	env.fog_height = 0.4
 	env.fog_height_density = 0.05
 	env.volumetric_fog_enabled = true
-	env.volumetric_fog_density = 0.012
+	env.volumetric_fog_density = 0.008
 	env.volumetric_fog_albedo = Color(0.7, 0.75, 0.9)
 	env.volumetric_fog_emission = Color(0.012, 0.014, 0.024)
 	env.volumetric_fog_anisotropy = 0.35
 	env.volumetric_fog_length = 48.0
 	env.ssao_enabled = true
 	env.ssao_radius = 1.1
-	env.ssao_intensity = 1.6
+	env.ssao_intensity = 1.2
 	env.adjustment_enabled = true
 	env.adjustment_contrast = 1.08
 	env.adjustment_saturation = 0.95
@@ -89,8 +90,8 @@ func _build_environment() -> void:
 	add_child(we)
 
 	var moon := DirectionalLight3D.new()
-	moon.light_color = Color(0.64, 0.72, 0.98)
-	moon.light_energy = 1.25
+	moon.light_color = Color(0.74, 0.8, 1.0)
+	moon.light_energy = 1.45
 	moon.shadow_enabled = true
 	moon.shadow_blur = 1.5
 	moon.directional_shadow_max_distance = 45.0
@@ -104,8 +105,8 @@ func _build_environment() -> void:
 	add_child(moon)
 	# Weak warm fill from the opposite side so faces never go fully black.
 	var fill := DirectionalLight3D.new()
-	fill.light_color = Color(0.9, 0.55, 0.35)
-	fill.light_energy = 0.12
+	fill.light_color = Color(0.95, 0.62, 0.42)
+	fill.light_energy = 0.4
 	fill.shadow_enabled = false
 	fill.basis = Basis.looking_at(Vector3(-toward_moon.x, -0.4, -toward_moon.z), Vector3.UP)
 	add_child(fill)
@@ -196,14 +197,14 @@ func _build_lanterns() -> void:
 		MeshKit.add_mesh(root, MeshKit.sphere(0.07, -1.0, 8), stone, Vector3(0, 1.6, 0))
 		var l := OmniLight3D.new()
 		l.light_color = Color(1.0, 0.58, 0.28)
-		l.light_energy = 2.2
-		l.omni_range = 8.0
+		l.light_energy = 2.8
+		l.omni_range = 9.0
 		l.omni_attenuation = 1.3
 		l.light_volumetric_fog_energy = 0.6
 		l.shadow_enabled = i % 4 == 0
 		l.position = Vector3(0, 1.1, 0)
 		root.add_child(l)
-		_lanterns.append([l, 2.2, randf() * 10.0])
+		_lanterns.append([l, 2.8, randf() * 10.0])
 
 
 func _build_torii() -> void:

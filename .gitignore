@@ -9,3 +9,6 @@ __pycache__/
 
 # Font downloads used by tools/gen_textures.py
 tools/.cache/
+
+# Local capture resolution override (tests/capture.gd)
+override.cfg

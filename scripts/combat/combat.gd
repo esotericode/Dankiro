@@ -1,25 +1,33 @@
 class_name Combat
 extends RefCounted
 ## Combat tuning + geometry helpers shared by the player and the boss.
+## The rules these numbers implement are documented in docs/SEKIRO_MECHANICS.md.
 ##
 ## Deflect timing follows Sekiro: pressing guard opens a 12-frame (0.200 s at 60 fps)
-## deflect window. Pressing again soon after (mashing) shrinks the next window, but a
-## successful deflect restores the full window, so rhythmically deflecting a combo works
-## while blind mashing is punished. Holding guard past the window becomes a normal block.
+## deflect window. Pressing again within 30 frames (0.5 s) of releasing guard shrinks the
+## next window (12 -> 8 -> 6 -> 4 -> 0 frames); the penalty clears after 0.5 s and immediately
+## after a successful deflect, so deflecting a combo in rhythm works while mashing doesn't.
+## Holding guard past the window (or a tapped guard that is still up) becomes a block.
 
 # --- Deflect -------------------------------------------------------------------------
 const DEFLECT_WINDOW := 0.200
-## Window used for the n-th rapid press in a row (index clamps to the last entry).
-const DEFLECT_SPAM_WINDOWS := [0.200, 0.133, 0.100, 0.083, 0.067]
-## A press this soon after the previous one counts as mashing.
-const SPAM_INTERVAL := 0.45
+## Window used for the n-th quick re-press in a row (index clamps to the last entry).
+const DEFLECT_SPAM_WINDOWS := [0.200, 0.1333, 0.100, 0.0667, 0.0]
+## A press this soon after releasing guard counts as a quick re-press (30 frames).
+const SPAM_RESET := 0.5
 ## Contact is evaluated at physics-tick resolution; a press registered in the same tick
 ## as the contact still counts (like frame-based games evaluate input first).
 const DEFLECT_GRACE := 1.0 / 120.0
-## A tapped guard stays up at least this long (>= the widest deflect window).
-const GUARD_MIN_TIME := 0.23
+## A tapped guard stays up at least this long (20 frames, > the widest deflect window). An
+## attack that lands after the window but while the guard is still up is blocked: pressing too
+## early blocks rather than getting you hit, unless you tapped far too early.
+const GUARD_MIN_TIME := 0.35
 ## Attacks from outside this half-angle (degrees) hit through the guard.
 const GUARD_HALF_ANGLE := 110.0
+## Consecutive deflects (each within this time of the last) deal more posture damage.
+const DEFLECT_CHAIN_TIME := 1.2
+const DEFLECT_CHAIN_BONUS := 0.12
+const DEFLECT_CHAIN_MAX_STEPS := 3
 
 # --- Hit reactions ---------------------------------------------------------------------
 const HITSTOP_DEFLECT := 0.075

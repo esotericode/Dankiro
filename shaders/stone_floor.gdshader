@@ -3,9 +3,9 @@ render_mode diffuse_burley, specular_schlick_ggx;
 // Procedural courtyard floor: concentric rings of flagstones inside `plaza_radius`,
 // a heavy curb ring at the edge, mossy earth outside. World-space so it tiles seamlessly.
 
-uniform vec3 stone_a : source_color = vec3(0.34, 0.33, 0.32);
-uniform vec3 stone_b : source_color = vec3(0.21, 0.205, 0.20);
-uniform vec3 grout_color : source_color = vec3(0.06, 0.058, 0.055);
+uniform vec3 stone_a : source_color = vec3(0.33, 0.325, 0.315);
+uniform vec3 stone_b : source_color = vec3(0.22, 0.215, 0.21);
+uniform vec3 grout_color : source_color = vec3(0.1, 0.098, 0.095);
 uniform vec3 moss_color : source_color = vec3(0.075, 0.10, 0.06);
 uniform vec3 earth_color : source_color = vec3(0.07, 0.065, 0.055);
 uniform float ring_width = 1.3;

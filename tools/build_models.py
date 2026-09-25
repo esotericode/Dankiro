@@ -108,13 +108,13 @@ def torus(inner, outer, rings=24, ring_segments=8):
 # =====================================================================================
 def player():
     m = Model()
-    m.mat("cloth", (0.15, 0.148, 0.155), 0.92, rim=0.3, rim_tint=0.6)
-    m.mat("cloth2", (0.30, 0.27, 0.23), 0.9, rim=0.25, rim_tint=0.6)
+    m.mat("cloth", (0.23, 0.225, 0.235), 0.9, rim=0.45, rim_tint=0.6)
+    m.mat("cloth2", (0.40, 0.36, 0.30), 0.88, rim=0.35, rim_tint=0.6)
     m.mat("wrap", (0.62, 0.58, 0.50), 0.95)
-    m.mat("leather", (0.16, 0.10, 0.065), 0.6, rim=0.15)
-    m.mat("scarf", (0.55, 0.10, 0.05), 0.85, rim=0.35, rim_tint=0.3, double_sided=True)
+    m.mat("leather", (0.23, 0.15, 0.095), 0.6, rim=0.25)
+    m.mat("scarf", (0.66, 0.12, 0.06), 0.85, rim=0.4, rim_tint=0.3, double_sided=True)
     m.mat("skin", (0.60, 0.44, 0.35), 0.65, subsurface=0.25)
-    m.mat("hair", (0.035, 0.03, 0.03), 0.55, double_sided=True)
+    m.mat("hair", (0.06, 0.052, 0.05), 0.55, double_sided=True, rim=0.3)
     m.mat("iron", (0.09, 0.085, 0.08), 0.45, 0.85)
     m.mat("gold", (0.78, 0.58, 0.28), 0.32, 1.0)
     m.mat("steel", (0.80, 0.82, 0.86), 0.14, 1.0)
@@ -169,7 +169,7 @@ def player():
         m.part("foot_" + s, box((0.085, 0.055, 0.21)), "sole", (0, -0.045, -0.055))
 
     # katana: origin at the tsuba, blade along +Y
-    m.part("weapon", blade(0.72, 0.031, 0.0075, 0.022, 0.1, 18), "steel", (0, 0.035, 0))
+    m.part("weapon", blade(0.78, 0.033, 0.0078, 0.024, 0.1, 20), "steel", (0, 0.035, 0))
     m.part("weapon", box((0.034, 0.036, 0.013)), "gold", (0, 0.02, 0))
     m.part("weapon", cylinder(0.042, 0.042, 0.008, 20), "iron")
     m.part("weapon", cylinder(0.0155, 0.017, 0.26, 12), "tsuka", (0, -0.135, 0), scale=(1, 1, 1.25))
@@ -195,17 +195,17 @@ def player():
 # =====================================================================================
 def boss():
     m = Model()
-    m.mat("lacquer", (0.03, 0.028, 0.032), 0.2, clearcoat=0.9, clearcoat_roughness=0.08, rim=0.35, rim_tint=0.15)
-    m.mat("red", (0.36, 0.035, 0.03), 0.3, clearcoat=0.8, clearcoat_roughness=0.1, rim=0.2)
-    m.mat("cloth", (0.085, 0.018, 0.022), 0.9, rim=0.35, rim_tint=0.5)
-    m.mat("crimson", (0.46, 0.04, 0.035), 0.85, rim=0.3, rim_tint=0.4, double_sided=True)
+    m.mat("lacquer", (0.085, 0.078, 0.09), 0.22, clearcoat=0.9, clearcoat_roughness=0.08, rim=0.5, rim_tint=0.2)
+    m.mat("red", (0.46, 0.05, 0.04), 0.3, clearcoat=0.8, clearcoat_roughness=0.1, rim=0.3)
+    m.mat("cloth", (0.17, 0.045, 0.05), 0.9, rim=0.45, rim_tint=0.5)
+    m.mat("crimson", (0.56, 0.06, 0.05), 0.85, rim=0.35, rim_tint=0.4, double_sided=True)
     m.mat("gold", (0.86, 0.63, 0.26), 0.28, 1.0)
-    m.mat("iron", (0.11, 0.10, 0.095), 0.42, 0.9)
-    m.mat("hair", (0.87, 0.84, 0.79), 0.72, double_sided=True, rim=0.45, rim_tint=0.2)
+    m.mat("iron", (0.2, 0.19, 0.18), 0.4, 0.9)
+    m.mat("hair", (0.9, 0.87, 0.82), 0.72, double_sided=True, rim=0.45, rim_tint=0.2)
     m.mat("dark", (0.012, 0.01, 0.01), 0.9)
     m.mat("fang", (0.92, 0.9, 0.84), 0.4)
     m.mat("ember", (1.0, 0.36, 0.08), 1.0, unshaded=True, emission=[1.0, 0.36, 0.08], emission_energy=7.0, unique=True)
-    m.mat("blade", (0.34, 0.34, 0.37), 0.26, 1.0, metallic_specular=0.7, emission=[1.0, 0.24, 0.05],
+    m.mat("blade", (0.55, 0.55, 0.58), 0.24, 1.0, metallic_specular=0.75, emission=[1.0, 0.24, 0.05],
           emission_energy=0.35, unique=True)
 
     # ---- pelvis, sash, armoured skirt
@@ -290,17 +290,18 @@ def boss():
             m.part("shin_" + s, box((0.008, 0.3, 0.008)), "gold", (-0.03 + 0.03 * k, -0.24, -0.083 + abs(k - 1) * 0.008))
         m.part("foot_" + s, box((0.1, 0.07, 0.26)), "iron", (0, -0.05, -0.06))
 
-    # ---- twin-bladed staff: origin at the shaft center, upper blade toward +Y
-    m.part("weapon", cylinder(0.021, 0.021, 1.72, 12), "lacquer")
-    m.part("weapon", cylinder(0.0238, 0.0238, 0.46, 12), "crimson")
-    for yv in (-0.72, -0.5, -0.24, 0.24, 0.5, 0.72):
-        m.part("weapon", cylinder(0.025, 0.025, 0.016, 12), "gold", (0, yv, 0))
+    # ---- twin-bladed staff: origin at the shaft center, upper blade toward +Y.
+    # Heavy polearm: 29 mm shaft, 0.70 m blades (3.2 m tip to tip) so it reads clearly at range.
+    m.part("weapon", cylinder(0.029, 0.029, 1.80, 14), "lacquer")
+    m.part("weapon", cylinder(0.0325, 0.0325, 0.50, 14), "crimson")
+    for yv in (-0.76, -0.52, -0.26, 0.26, 0.52, 0.76):
+        m.part("weapon", cylinder(0.034, 0.034, 0.02, 14), "gold", (0, yv, 0))
     for name, rot in (("end_upper", (0, 0, 0)), ("end_lower", (180, 0, 0))):
         m.holder(name, "weapon", (0, 0, 0), rot)
-        m.part(name, lathe([(0.0, 0.82), (0.024, 0.82), (0.03, 0.85), (0.036, 0.875), (0.03, 0.89), (0.0, 0.89)], 14), "gold")
+        m.part(name, lathe([(0.0, 0.84), (0.032, 0.84), (0.042, 0.87), (0.05, 0.895), (0.042, 0.915), (0.0, 0.915)], 16), "gold")
         for sx in (-1.0, 1.0):
-            m.part(name, horn((0.05 * sx, 0.0, 0.0), (0.075 * sx, 0.07, 0.0), 0.011, 8, 8), "gold", (0.01 * sx, 0.87, 0))
-        m.part(name, blade(0.58, 0.052, 0.0095, 0.085, 0.2, 20, 0.058), "blade", (0, 0.885, 0))
+            m.part(name, horn((0.07 * sx, 0.0, 0.0), (0.10 * sx, 0.095, 0.0), 0.016, 8, 8), "gold", (0.012 * sx, 0.895, 0))
+        m.part(name, blade(0.70, 0.074, 0.014, 0.10, 0.2, 22, 0.08), "blade", (0, 0.905, 0))
 
     body = [["chest", 0.26, [0, 0.1, 0.02]], ["hips", 0.24, [0, -0.05, 0]]]
     mane = [(0.0, 0.25, 0.06), (-0.05, 0.24, 0.07), (0.05, 0.24, 0.07), (-0.08, 0.2, 0.09), (0.08, 0.2, 0.09)]
@@ -312,8 +313,8 @@ def boss():
         m.chain("hips", "crimson", (0.07 * sx, 0.04, 0.17), (0.1 * sx, -1.0, 0.25), segments=9, seg_len=0.09,
                 width_start=0.09, width_end=0.07, stiffness=0.03, gravity=6.0, wind_strength=1.0, colliders=body)
     for end in (1.0, -1.0):
-        m.chain("weapon", "crimson", (0, 0.8 * end, 0.0), (0, -1, 0), side_axis=[0, 0, 1], segments=5, seg_len=0.07,
-                width_start=0.035, width_end=0.012, stiffness=0.02, gravity=7.0, damping=0.9, wind_strength=0.5)
+        m.chain("weapon", "crimson", (0, 0.82 * end, 0.0), (0, -1, 0), side_axis=[0, 0, 1], segments=6, seg_len=0.075,
+                width_start=0.045, width_end=0.014, stiffness=0.02, gravity=7.0, damping=0.9, wind_strength=0.5)
     return m
 
 

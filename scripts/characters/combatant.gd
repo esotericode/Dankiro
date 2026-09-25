@@ -177,8 +177,15 @@ func process_weapon_hits() -> void:
 			var blade := str(h.get("blade", ""))
 			if not now_pts.has(blade):
 				continue
-			var prev: PackedVector3Array = _blade_prev.get(blade, PackedVector3Array())
-			var res := Combat.blade_vs_capsule(prev, now_pts[blade], cap[0], cap[1], float(cap[2]) + 0.03)
+			# Staff-type weapons hit with their whole length (both blades and the shaft), so a
+			# swing can't pass through someone standing inside the blades' arc.
+			var names: Array = rig.blades.keys() if rig.hit_whole_weapon else [blade]
+			var res := {}
+			for bn in names:
+				var prev: PackedVector3Array = _blade_prev.get(bn, PackedVector3Array())
+				var r := Combat.blade_vs_capsule(prev, now_pts[bn], cap[0], cap[1], float(cap[2]) + 0.03)
+				if not r.is_empty() and (res.is_empty() or float(r["frac"]) < float(res["frac"])):
+					res = r
 			if res.is_empty():
 				continue
 			_hits_done[i] = true

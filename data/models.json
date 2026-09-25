@@ -4,24 +4,24 @@
   "materials": {
    "cloth": {
     "color": [
-     0.15,
-     0.148,
-     0.155
+     0.23,
+     0.225,
+     0.235
     ],
-    "roughness": 0.92,
+    "roughness": 0.9,
     "metallic": 0.0,
-    "rim": 0.3,
+    "rim": 0.45,
     "rim_tint": 0.6
    },
    "cloth2": {
     "color": [
-     0.3,
-     0.27,
-     0.23
+     0.4,
+     0.36,
+     0.3
     ],
-    "roughness": 0.9,
+    "roughness": 0.88,
     "metallic": 0.0,
-    "rim": 0.25,
+    "rim": 0.35,
     "rim_tint": 0.6
    },
    "wrap": {
@@ -35,23 +35,23 @@
    },
    "leather": {
     "color": [
-     0.16,
-     0.1,
-     0.065
+     0.23,
+     0.15,
+     0.095
     ],
     "roughness": 0.6,
     "metallic": 0.0,
-    "rim": 0.15
+    "rim": 0.25
    },
    "scarf": {
     "color": [
-     0.55,
-     0.1,
-     0.05
+     0.66,
+     0.12,
+     0.06
     ],
     "roughness": 0.85,
     "metallic": 0.0,
-    "rim": 0.35,
+    "rim": 0.4,
     "rim_tint": 0.3,
     "double_sided": true
    },
@@ -67,13 +67,14 @@
    },
    "hair": {
     "color": [
-     0.035,
-     0.03,
-     0.03
+     0.06,
+     0.052,
+     0.05
     ],
     "roughness": 0.55,
     "metallic": 0.0,
-    "double_sided": true
+    "double_sided": true,
+    "rim": 0.3
    },
    "iron": {
     "color": [
@@ -1573,12 +1574,12 @@
     "parent": "weapon",
     "mesh": {
      "type": "blade",
-     "length": 0.72,
-     "width": 0.031,
-     "thickness": 0.0075,
-     "curve": 0.022,
+     "length": 0.78,
+     "width": 0.033,
+     "thickness": 0.0078,
+     "curve": 0.024,
      "kissaki": 0.1,
-     "steps": 18,
+     "steps": 20,
      "tip_width": -1.0
     },
     "mat": "steel",
@@ -2070,49 +2071,49 @@
   "materials": {
    "lacquer": {
     "color": [
-     0.03,
-     0.028,
-     0.032
+     0.085,
+     0.078,
+     0.09
     ],
-    "roughness": 0.2,
+    "roughness": 0.22,
     "metallic": 0.0,
     "clearcoat": 0.9,
     "clearcoat_roughness": 0.08,
-    "rim": 0.35,
-    "rim_tint": 0.15
+    "rim": 0.5,
+    "rim_tint": 0.2
    },
    "red": {
     "color": [
-     0.36,
-     0.035,
-     0.03
+     0.46,
+     0.05,
+     0.04
     ],
     "roughness": 0.3,
     "metallic": 0.0,
     "clearcoat": 0.8,
     "clearcoat_roughness": 0.1,
-    "rim": 0.2
+    "rim": 0.3
    },
    "cloth": {
     "color": [
-     0.085,
-     0.018,
-     0.022
+     0.17,
+     0.045,
+     0.05
     ],
     "roughness": 0.9,
     "metallic": 0.0,
-    "rim": 0.35,
+    "rim": 0.45,
     "rim_tint": 0.5
    },
    "crimson": {
     "color": [
-     0.46,
-     0.04,
-     0.035
+     0.56,
+     0.06,
+     0.05
     ],
     "roughness": 0.85,
     "metallic": 0.0,
-    "rim": 0.3,
+    "rim": 0.35,
     "rim_tint": 0.4,
     "double_sided": true
    },
@@ -2127,18 +2128,18 @@
    },
    "iron": {
     "color": [
-     0.11,
-     0.1,
-     0.095
+     0.2,
+     0.19,
+     0.18
     ],
-    "roughness": 0.42,
+    "roughness": 0.4,
     "metallic": 0.9
    },
    "hair": {
     "color": [
+     0.9,
      0.87,
-     0.84,
-     0.79
+     0.82
     ],
     "roughness": 0.72,
     "metallic": 0.0,
@@ -2183,13 +2184,13 @@
    },
    "blade": {
     "color": [
-     0.34,
-     0.34,
-     0.37
+     0.55,
+     0.55,
+     0.58
     ],
-    "roughness": 0.26,
+    "roughness": 0.24,
     "metallic": 1.0,
-    "metallic_specular": 0.7,
+    "metallic_specular": 0.75,
     "emission": [
      1.0,
      0.24,
@@ -5497,10 +5498,10 @@
     "parent": "weapon",
     "mesh": {
      "type": "cylinder",
-     "r_top": 0.021,
-     "r_bottom": 0.021,
-     "height": 1.72,
-     "segs": 12
+     "r_top": 0.029,
+     "r_bottom": 0.029,
+     "height": 1.8,
+     "segs": 14
     },
     "mat": "lacquer",
     "pos": [
@@ -5523,10 +5524,10 @@
     "parent": "weapon",
     "mesh": {
      "type": "cylinder",
-     "r_top": 0.0238,
-     "r_bottom": 0.0238,
-     "height": 0.46,
-     "segs": 12
+     "r_top": 0.0325,
+     "r_bottom": 0.0325,
+     "height": 0.5,
+     "segs": 14
     },
     "mat": "crimson",
     "pos": [
@@ -5549,15 +5550,15 @@
     "parent": "weapon",
     "mesh": {
      "type": "cylinder",
-     "r_top": 0.025,
-     "r_bottom": 0.025,
-     "height": 0.016,
-     "segs": 12
+     "r_top": 0.034,
+     "r_bottom": 0.034,
+     "height": 0.02,
+     "segs": 14
     },
     "mat": "gold",
     "pos": [
      0,
-     -0.72,
+     -0.76,
      0
     ],
     "rot": [
@@ -5575,15 +5576,15 @@
     "parent": "weapon",
     "mesh": {
      "type": "cylinder",
-     "r_top": 0.025,
-     "r_bottom": 0.025,
-     "height": 0.016,
-     "segs": 12
+     "r_top": 0.034,
+     "r_bottom": 0.034,
+     "height": 0.02,
+     "segs": 14
     },
     "mat": "gold",
     "pos": [
      0,
-     -0.5,
+     -0.52,
      0
     ],
     "rot": [
@@ -5601,15 +5602,15 @@
     "parent": "weapon",
     "mesh": {
      "type": "cylinder",
-     "r_top": 0.025,
-     "r_bottom": 0.025,
-     "height": 0.016,
-     "segs": 12
+     "r_top": 0.034,
+     "r_bottom": 0.034,
+     "height": 0.02,
+     "segs": 14
     },
     "mat": "gold",
     "pos": [
      0,
-     -0.24,
+     -0.26,
      0
     ],
     "rot": [
@@ -5627,15 +5628,15 @@
     "parent": "weapon",
     "mesh": {
      "type": "cylinder",
-     "r_top": 0.025,
-     "r_bottom": 0.025,
-     "height": 0.016,
-     "segs": 12
+     "r_top": 0.034,
+     "r_bottom": 0.034,
+     "height": 0.02,
+     "segs": 14
     },
     "mat": "gold",
     "pos": [
      0,
-     0.24,
+     0.26,
      0
     ],
     "rot": [
@@ -5653,15 +5654,15 @@
     "parent": "weapon",
     "mesh": {
      "type": "cylinder",
-     "r_top": 0.025,
-     "r_bottom": 0.025,
-     "height": 0.016,
-     "segs": 12
+     "r_top": 0.034,
+     "r_bottom": 0.034,
+     "height": 0.02,
+     "segs": 14
     },
     "mat": "gold",
     "pos": [
      0,
-     0.5,
+     0.52,
      0
     ],
     "rot": [
@@ -5679,15 +5680,15 @@
     "parent": "weapon",
     "mesh": {
      "type": "cylinder",
-     "r_top": 0.025,
-     "r_bottom": 0.025,
-     "height": 0.016,
-     "segs": 12
+     "r_top": 0.034,
+     "r_bottom": 0.034,
+     "height": 0.02,
+     "segs": 14
     },
     "mat": "gold",
     "pos": [
      0,
-     0.72,
+     0.76,
      0
     ],
     "rot": [
@@ -5708,30 +5709,30 @@
      "profile": [
       [
        0.0,
-       0.82
+       0.84
       ],
       [
-       0.024,
-       0.82
+       0.032,
+       0.84
       ],
       [
-       0.03,
-       0.85
+       0.042,
+       0.87
       ],
       [
-       0.036,
-       0.875
+       0.05,
+       0.895
       ],
       [
-       0.03,
-       0.89
+       0.042,
+       0.915
       ],
       [
        0.0,
-       0.89
+       0.915
       ]
      ],
-     "segments": 14,
+     "segments": 16,
      "sx": 1.0,
      "sz": 1.0,
      "flat": false
@@ -5758,24 +5759,24 @@
     "mesh": {
      "type": "horn",
      "p1": [
-      -0.05,
+      -0.07,
       0.0,
       0.0
      ],
      "p2": [
-      -0.075,
-      0.07,
+      -0.1,
+      0.095,
       0.0
      ],
-     "base_radius": 0.011,
+     "base_radius": 0.016,
      "steps": 8,
      "segments": 8,
      "squash": 1.0
     },
     "mat": "gold",
     "pos": [
-     -0.01,
-     0.87,
+     -0.012,
+     0.895,
      0
     ],
     "rot": [
@@ -5794,24 +5795,24 @@
     "mesh": {
      "type": "horn",
      "p1": [
-      0.05,
+      0.07,
       0.0,
       0.0
      ],
      "p2": [
-      0.075,
-      0.07,
+      0.1,
+      0.095,
       0.0
      ],
-     "base_radius": 0.011,
+     "base_radius": 0.016,
      "steps": 8,
      "segments": 8,
      "squash": 1.0
     },
     "mat": "gold",
     "pos": [
-     0.01,
-     0.87,
+     0.012,
+     0.895,
      0
     ],
     "rot": [
@@ -5829,18 +5830,18 @@
     "parent": "end_upper",
     "mesh": {
      "type": "blade",
-     "length": 0.58,
-     "width": 0.052,
-     "thickness": 0.0095,
-     "curve": 0.085,
+     "length": 0.7,
+     "width": 0.074,
+     "thickness": 0.014,
+     "curve": 0.1,
      "kissaki": 0.2,
-     "steps": 20,
-     "tip_width": 0.058
+     "steps": 22,
+     "tip_width": 0.08
     },
     "mat": "blade",
     "pos": [
      0,
-     0.885,
+     0.905,
      0
     ],
     "rot": [
@@ -5861,30 +5862,30 @@
      "profile": [
       [
        0.0,
-       0.82
+       0.84
       ],
       [
-       0.024,
-       0.82
+       0.032,
+       0.84
       ],
       [
-       0.03,
-       0.85
+       0.042,
+       0.87
       ],
       [
-       0.036,
-       0.875
+       0.05,
+       0.895
       ],
       [
-       0.03,
-       0.89
+       0.042,
+       0.915
       ],
       [
        0.0,
-       0.89
+       0.915
       ]
      ],
-     "segments": 14,
+     "segments": 16,
      "sx": 1.0,
      "sz": 1.0,
      "flat": false
@@ -5911,24 +5912,24 @@
     "mesh": {
      "type": "horn",
      "p1": [
-      -0.05,
+      -0.07,
       0.0,
       0.0
      ],
      "p2": [
-      -0.075,
-      0.07,
+      -0.1,
+      0.095,
       0.0
      ],
-     "base_radius": 0.011,
+     "base_radius": 0.016,
      "steps": 8,
      "segments": 8,
      "squash": 1.0
     },
     "mat": "gold",
     "pos": [
-     -0.01,
-     0.87,
+     -0.012,
+     0.895,
      0
     ],
     "rot": [
@@ -5947,24 +5948,24 @@
     "mesh": {
      "type": "horn",
      "p1": [
-      0.05,
+      0.07,
       0.0,
       0.0
      ],
      "p2": [
-      0.075,
-      0.07,
+      0.1,
+      0.095,
       0.0
      ],
-     "base_radius": 0.011,
+     "base_radius": 0.016,
      "steps": 8,
      "segments": 8,
      "squash": 1.0
     },
     "mat": "gold",
     "pos": [
-     0.01,
-     0.87,
+     0.012,
+     0.895,
      0
     ],
     "rot": [
@@ -5982,18 +5983,18 @@
     "parent": "end_lower",
     "mesh": {
      "type": "blade",
-     "length": 0.58,
-     "width": 0.052,
-     "thickness": 0.0095,
-     "curve": 0.085,
+     "length": 0.7,
+     "width": 0.074,
+     "thickness": 0.014,
+     "curve": 0.1,
      "kissaki": 0.2,
-     "steps": 20,
-     "tip_width": 0.058
+     "steps": 22,
+     "tip_width": 0.08
     },
     "mat": "blade",
     "pos": [
      0,
-     0.885,
+     0.905,
      0
     ],
     "rot": [
@@ -6326,7 +6327,7 @@
     "mat": "crimson",
     "offset": [
      0,
-     0.8,
+     0.82,
      0.0
     ],
     "rest_dir": [
@@ -6339,10 +6340,10 @@
      0,
      1
     ],
-    "segments": 5,
-    "seg_len": 0.07,
-    "width_start": 0.035,
-    "width_end": 0.012,
+    "segments": 6,
+    "seg_len": 0.075,
+    "width_start": 0.045,
+    "width_end": 0.014,
     "stiffness": 0.02,
     "gravity": 7.0,
     "damping": 0.9,
@@ -6353,7 +6354,7 @@
     "mat": "crimson",
     "offset": [
      0,
-     -0.8,
+     -0.82,
      0.0
     ],
     "rest_dir": [
@@ -6366,10 +6367,10 @@
      0,
      1
     ],
-    "segments": 5,
-    "seg_len": 0.07,
-    "width_start": 0.035,
-    "width_end": 0.012,
+    "segments": 6,
+    "seg_len": 0.075,
+    "width_start": 0.045,
+    "width_end": 0.014,
     "stiffness": 0.02,
     "gravity": 7.0,
     "damping": 0.9,

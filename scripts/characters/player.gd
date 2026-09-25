@@ -1,14 +1,23 @@
 class_name Player
 extends Combatant
-## The shinobi. Deflect-centric controller:
+## The shinobi. Deflect-centric controller built to match Sekiro (docs/SEKIRO_MECHANICS.md):
 ##  * Guard presses are stamped with sub-tick precise game time (Game.precise_now) and the
 ##    deflect window is evaluated against the exact blade contact time.
-##  * Mashing shrinks the window (Combat.DEFLECT_SPAM_WINDOWS); a successful deflect resets it.
-##  * Stepping toward a perilous thrust = mikiri counter. Sweeps must be jumped.
+##  * Spam penalty: pressing guard within 0.5 s of *releasing* it shrinks the next window
+##    (12 -> 8 -> 6 -> 4 -> 0 frames); it clears after 0.5 s or on a successful deflect.
+##  * Holding guard (or a tapped guard that is still up) blocks: posture damage, no vitality loss.
+##  * Attacks can be cancelled into guard only at the start of the wind-up and in the recovery.
+##  * Mikiri: dodge with no direction (a forward step, as in Sekiro) or toward him, timed so
+##    the perilous thrust arrives during the step's first 0.33 s. Sweeps must be jumped.
+##
+## All input goes through press_guard / release_guard / press_action / release_dodge, so a
+## test bot (tests/combat_lab.gd) can drive the player exactly like a controller does.
 
 signal died
 signal deflect_timed(ms_before_contact: float, window_ms: float, result: String)
 signal heal_charges_changed(charges: int)
+## Emitted for every incoming boss hit after it is resolved (Combat.RESULT_*).
+signal hit_resolved(info: Dictionary, result: int)
 
 enum S { MOVE, GUARD, DEFLECT, BLOCK, ATTACK, DODGE, AIR, AIR_ATTACK, JUMP_KICK, LAND, MIKIRI,
 	HIT, KNOCKDOWN, GUARD_BREAK, REPELLED, HEAL, DEATHBLOW, DEAD }
@@ -33,17 +42,26 @@ var move_input := Vector2.ZERO
 var guard_held := false
 var guard_start := -99.0
 var guard_window := Combat.DEFLECT_WINDOW
-var _last_guard_press := -99.0
-var _spam_level := 0
+var spam_level := 0
+var _last_guard_release := -99.0
 var _last_press_deflected := false
 var _pending_guard := false
 var _buffer: Dictionary = {}          ## action -> game time of press
 var _dodge_held_since := -1.0
+var _combo_queued := false
+var _chain_delay := 0.0               ## extra wait before the next slash (sword bounced off his guard)
+var deflect_chain := 0                ## consecutive deflects (each within DEFLECT_CHAIN_TIME)
+var _last_deflect_time := -99.0
+
+## Test bot: when true, move input comes from `bot_move` instead of the devices.
+var bot_enabled := false
+var bot_move := Vector2.ZERO
 
 var combo_next := "p_attack_1"
 var heal_charges := Combat.HEAL_CHARGES
 var dodge_dir := Vector3.FORWARD
 var dodge_toward_boss := false
+var dodge_neutral := false
 var _dodge_rot := 0.0
 var _mikiri_until := 0.0
 var _invuln_until := -1.0
@@ -74,7 +92,7 @@ func _ready() -> void:
 	if _gourd:
 		_gourd.visible = false
 	trail = WeaponTrail.new()
-	trail.setup(rig, "blade", Color(0.78, 0.86, 1.0, 0.6))
+	trail.setup(rig, "blade", Color(0.8, 0.88, 1.0, 0.8))
 	rig.add_child(trail)
 	anim.play_locomotion(LOCO, 0.0)
 	anim.update(0.0)
@@ -82,41 +100,64 @@ func _ready() -> void:
 
 # ====================================================================== input
 func _unhandled_input(event: InputEvent) -> void:
-	if not controls_enabled or state == S.DEAD:
+	if not controls_enabled or state == S.DEAD or bot_enabled:
 		return
 	if event.is_action_pressed("guard"):
-		_on_guard_pressed()
+		press_guard(Game.precise_now())
 	elif event.is_action_released("guard"):
-		guard_held = false
+		release_guard(Game.precise_now())
 	elif event.is_action_pressed("attack"):
-		_buffer["attack"] = Game.precise_now()
+		press_action("attack", Game.precise_now())
 	elif event.is_action_pressed("dodge"):
-		_buffer["dodge"] = Game.precise_now()
-		_dodge_held_since = Game.clock
+		press_action("dodge", Game.precise_now())
 	elif event.is_action_released("dodge"):
-		_dodge_held_since = -1.0
+		release_dodge()
 	elif event.is_action_pressed("jump"):
-		_buffer["jump"] = Game.precise_now()
+		press_action("jump", Game.precise_now())
 	elif event.is_action_pressed("heal"):
-		_buffer["heal"] = Game.precise_now()
+		press_action("heal", Game.precise_now())
 	elif event.is_action_pressed("lock_on"):
 		locked = not locked and lock_target != null
 		Sfx.play_ui("lockon", -8.0)
 
 
-func _on_guard_pressed() -> void:
-	var now := Game.precise_now()
-	if now - _last_guard_press < Combat.SPAM_INTERVAL and not _last_press_deflected:
-		_spam_level = mini(_spam_level + 1, Combat.DEFLECT_SPAM_WINDOWS.size() - 1)
+## Guard button down at game time `now`. Works out the deflect window for this press.
+func press_guard(now: float) -> void:
+	if guard_held:
+		return
+	if _last_press_deflected:
+		spam_level = 0                       # a clean deflect clears the penalty at once
+	elif now - _last_guard_release <= Combat.SPAM_RESET:
+		spam_level = mini(spam_level + 1, Combat.DEFLECT_SPAM_WINDOWS.size() - 1)
 	else:
-		_spam_level = 0
-	_last_guard_press = now
+		spam_level = 0
 	_last_press_deflected = false
 	guard_held = true
 	if _can_guard_now():
 		_begin_guard(now)
 	else:
 		_pending_guard = true
+
+
+func release_guard(now: float) -> void:
+	if not guard_held:
+		return
+	guard_held = false
+	_last_guard_release = now
+
+
+func press_action(action: String, now: float) -> void:
+	_buffer[action] = now
+	if action == "dodge":
+		_dodge_held_since = Game.clock
+	elif action == "attack" and state == S.ATTACK and anim.clip != null:
+		# Pressing during the swing queues the next slash (pressing during the wind-up doesn't).
+		if anim.time >= _first_hit_from(anim.clip) - 0.1:
+			_combo_queued = true
+
+
+func release_dodge() -> void:
+	_dodge_held_since = -1.0
 
 
 func _buffered(action: String) -> bool:
@@ -131,10 +172,12 @@ func _consume(action: String) -> void:
 func _physics_process(delta: float) -> void:
 	if not controls_enabled:
 		move_input = Vector2.ZERO
+	elif bot_enabled:
+		move_input = bot_move
 	else:
 		move_input = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
-		if not Input.is_action_pressed("guard"):
-			guard_held = false
+		if guard_held and not Input.is_action_pressed("guard"):
+			release_guard(Game.clock)   # release event lost (focus change etc.)
 	if Game.camera != null and Game.camera.has_method("get_yaw"):
 		camera_yaw = float(Game.camera.call("get_yaw"))
 	if lock_target == null or (lock_target is Boss and (lock_target as Boss).is_dead()):
@@ -152,11 +195,17 @@ func _physics_process(delta: float) -> void:
 
 
 func _update_state(delta: float) -> Vector3:
+	# A guard pressed while it couldn't come up (mid-swing, hit-stun, a dodge's early frames...)
+	# comes up the moment it can; its deflect window starts then.
+	if _pending_guard and _can_guard_now() and state != S.MOVE and state != S.GUARD \
+			and state != S.DEFLECT and state != S.BLOCK:
+		_begin_guard(Game.clock)
+		return Vector3.ZERO
 	match state:
 		S.MOVE, S.GUARD:
 			return _state_move(delta)
 		S.DEFLECT, S.BLOCK:
-			if state_time > 0.12 and _try_actions([ "attack", "dodge", "jump"]):
+			if state_time > 0.12 and _try_actions(["attack", "dodge", "jump"]):
 				return Vector3.ZERO
 			if anim.finished:
 				_to_neutral()
@@ -228,7 +277,9 @@ func _start_state(s: int) -> void:
 
 
 func _to_neutral() -> void:
-	if guard_held or _pending_guard:
+	# Stay guarding while the button is held or a tapped guard is still up (a re-press during a
+	# deflect / block reaction must keep its window when that reaction animation ends).
+	if guard_held or _pending_guard or Game.clock - guard_start < Combat.GUARD_MIN_TIME:
 		_start_state(S.GUARD)
 		if _pending_guard:
 			_begin_guard(Game.clock)
@@ -244,10 +295,7 @@ func _can_guard_now() -> bool:
 		S.MOVE, S.GUARD, S.DEFLECT, S.BLOCK:
 			return true
 		S.ATTACK:
-			var last_hit_end := 0.0
-			for h in anim.clip.hits:
-				last_hit_end = maxf(last_hit_end, float(h["to"]))
-			return anim.time > last_hit_end + 0.02
+			return _in_guard_cancel(anim.clip, anim.time)
 		S.DODGE:
 			return state_time > 0.26
 		S.LAND:
@@ -263,10 +311,36 @@ func _can_guard_now() -> bool:
 	return false
 
 
+## Sekiro-style attack commitment: guard can interrupt the very start of the wind-up and the
+## recovery after the blade has passed, but not the committed swing in between.
+static func _in_guard_cancel(c: ClipData, t: float) -> bool:
+	if c == null:
+		return true
+	for w in c.raw.get("guard_cancel", []):
+		var wa: Array = w
+		if t >= float(wa[0]) and t <= float(wa[1]):
+			return true
+	return false
+
+
+static func _first_hit_from(c: ClipData) -> float:
+	var t := 99.0
+	for h in c.hits:
+		t = minf(t, float(h["from"]))
+	return 0.0 if t == 99.0 else t
+
+
+## True while the guard pose is up: held, or a tapped guard that hasn't dropped yet.
+func is_guard_up() -> bool:
+	if state != S.GUARD and state != S.DEFLECT and state != S.BLOCK:
+		return false
+	return guard_held or Game.clock - guard_start < Combat.GUARD_MIN_TIME
+
+
 func _begin_guard(t: float) -> void:
 	_pending_guard = false
 	guard_start = t
-	guard_window = float(Combat.DEFLECT_SPAM_WINDOWS[_spam_level])
+	guard_window = float(Combat.DEFLECT_SPAM_WINDOWS[spam_level])
 	if state == S.DEFLECT or state == S.BLOCK:
 		return  # keep the reaction animation; the new window is live
 	if state != S.GUARD:
@@ -347,40 +421,45 @@ func _try_actions(actions: Array) -> bool:
 # ---------------------------------------------------------------------------- attacks
 func _start_attack(clip_name: String) -> void:
 	_start_state(S.ATTACK)
-	anim.play(clip_name, 0.06)
+	anim.play(clip_name, 0.08)
 	reset_hits()
+	_combo_queued = false
+	_chain_delay = 0.0
 	combo_next = str(anim.clip.raw.get("next", "p_attack_1"))
 	if locked and lock_target != null:
 		face_now(lock_target.global_position)
 	elif move_input.length() > 0.2:
 		face_now(global_position + _wish_dir())
-	Sfx.play("swing_light", rig.joint_world("hand_r"), -2.0, 1.0 + randf_range(-0.05, 0.05))
 
 
 func _state_attack(delta: float) -> Vector3:
 	var c := anim.clip
-	var combo: Array = c.raw.get("combo", [0.2, 0.6])
-	var cancel := c.get_float("cancel", 0.3)
-	if anim.time >= float(combo[0]) and _buffered("attack"):
-		if _try_deathblow():
-			_consume("attack")
-			return Vector3.ZERO
+	var combo_at := c.get_float("combo_at", 0.45) + _chain_delay
+	if _combo_queued and anim.time >= combo_at:
+		_combo_queued = false
 		_consume("attack")
-		_start_attack(combo_next)
+		if not _try_deathblow():
+			_start_attack(combo_next)
 		return Vector3.ZERO
 	if _pending_guard and _can_guard_now():
 		_begin_guard(Game.clock)
 		return Vector3.ZERO
-	if anim.time >= cancel and _try_actions(["dodge", "jump"]):
+	if anim.time >= combo_at and _buffered("attack"):
+		_consume("attack")
+		if not _try_deathblow():
+			_start_attack(combo_next)
+		return Vector3.ZERO
+	if anim.time >= c.get_float("cancel", 0.4) and _try_actions(["dodge", "jump"]):
 		return Vector3.ZERO
 	var extra := Vector3.ZERO
 	var lunge: Array = c.raw.get("lunge", [0.0, 0.0])
 	if anim.time <= float(lunge[1]) and locked and lock_target != null:
-		turn_toward(lock_target.global_position, 900.0, delta)
+		turn_toward(lock_target.global_position, 720.0, delta)
 		var d := distance_to_opponent()
-		if d > 1.55 and d < 3.6:
+		var stop_at := c.get_float("lunge_to", 1.7)
+		if d > stop_at + 0.05 and d < 3.8:
 			var t_left := maxf(0.06, float(lunge[1]) - anim.time)
-			extra = forward() * clampf((d - 1.45) / (t_left + 0.1), 0.0, 5.5)
+			extra = forward() * clampf((d - stop_at) / (t_left + 0.08), 0.0, 5.0)
 	if anim.finished:
 		_to_neutral()
 	return extra
@@ -393,6 +472,11 @@ func _on_weapon_contact(info: Dictionary) -> void:
 	var res := boss.receive_player_attack(info, self)
 	if res == Combat.RESULT_DEFLECT:
 		_on_parried()
+	elif res == Combat.RESULT_BLOCK:
+		# Sword bounces off his guard: a jolt up the arms and a beat before the next slash.
+		anim.kick(Vector3(0.0, 0.5, 1.4), Vector3(2.2, 0.0, 0.0))
+		_chain_delay = 0.1
+		push(-forward() * 1.2)
 
 
 func _on_parried() -> void:
@@ -435,11 +519,13 @@ func _start_dodge() -> void:
 	var to_boss := Vector3.ZERO
 	if lock_target != null:
 		to_boss = Combat.flat(lock_target.global_position - global_position)
-	if wish.length() < 0.2:
-		# Neutral step: backstep away from the target (or backwards).
-		wish = -to_boss.normalized() if locked and to_boss.length() > 0.1 else -forward()
+	dodge_neutral = wish.length() < 0.2
+	if dodge_neutral:
+		# As in Sekiro, a dodge with no direction is a short step *forward* (toward the
+		# lock-on target). That is the reliable way to Mikiri Counter a perilous thrust.
+		wish = to_boss.normalized() if locked and to_boss.length() > 0.1 else forward()
 	dodge_dir = Combat.flat(wish).normalized()
-	dodge_toward_boss = to_boss.length() > 0.1 and rad_to_deg(dodge_dir.angle_to(to_boss.normalized())) < 55.0
+	dodge_toward_boss = to_boss.length() > 0.1 and rad_to_deg(dodge_dir.angle_to(to_boss.normalized())) < 50.0
 	var clip_name := "p_dodge_fwd"
 	if locked and lock_target != null:
 		face_now(lock_target.global_position)
@@ -465,8 +551,17 @@ func _start_dodge() -> void:
 	var ifr: Array = anim.clip.raw.get("iframes", [0.02, 0.26])
 	_iframes = Vector2(float(ifr[0]), float(ifr[1]))
 	var mk: Variant = anim.clip.raw.get("mikiri", null)
-	_mikiri_until = float((mk as Array)[1]) if mk != null else 0.36
+	_mikiri_until = float((mk as Array)[1]) if mk != null else -1.0
 	Sfx.play("dodge", global_position + Vector3.UP, -4.0)
+
+
+## True during the mikiri frames of a neutral / forward step taken toward `attacker`.
+func can_mikiri(attacker: Node3D) -> bool:
+	if state != S.DODGE or state_time > _mikiri_until:
+		return false
+	if not (dodge_neutral or dodge_toward_boss):
+		return false
+	return Combat.angle_to(global_position, forward(), attacker.global_position) < 60.0
 
 
 func _state_dodge(_delta: float) -> Vector3:
@@ -616,6 +711,9 @@ func _on_anim_event(_clip: String, ev: Dictionary) -> void:
 			Fx.light_pulse(get_parent(), global_position + Vector3(0, 1.2, 0), Color(1.0, 0.6, 0.3), 2.0, 3.0, 0.5)
 		"sfx":
 			Sfx.play(str(ev.get("name", "")), rig.joint_world("chest"), -3.0)
+		"swing":
+			var bank := str(ev.get("name", "swing_light"))
+			Sfx.play(bank, rig.joint_world("hand_r"), -1.0, float(ev.get("pitch", 1.0)))
 		"deathblow_hit":
 			if lock_target is Boss:
 				(lock_target as Boss).on_deathblow_stab(rig.blade_world("blade"))
@@ -635,15 +733,19 @@ func _facing_ok(from_pos: Vector3) -> bool:
 
 ## Resolves an incoming boss hit. Returns a Combat.RESULT_* value.
 func receive_attack(info: Dictionary, attacker: Combatant) -> int:
+	var res := _resolve_attack(info, attacker)
+	hit_resolved.emit(info, res)
+	return res
+
+
+func _resolve_attack(info: Dictionary, attacker: Combatant) -> int:
 	var kind := str(info.get("kind", "normal"))
 	var t: float = float(info.get("time", Game.clock))
 	var pos: Vector3 = info.get("point", global_position + Vector3.UP)
-	if state == S.DEAD or state == S.DEATHBLOW:
+	if state == S.DEAD or state == S.DEATHBLOW or state == S.MIKIRI:
 		return Combat.RESULT_IGNORED
-	if state == S.MIKIRI:
-		return Combat.RESULT_IGNORED
-	# Mikiri counter: step into the thrust.
-	if kind == "thrust" and state == S.DODGE and dodge_toward_boss and state_time <= _mikiri_until:
+	# Mikiri Counter: a neutral / forward step into a perilous thrust.
+	if kind == "thrust" and can_mikiri(attacker):
 		_do_mikiri(info, attacker)
 		return Combat.RESULT_MIKIRI
 	# Invulnerability (sweeps ignore dodge i-frames: jump them).
@@ -660,11 +762,12 @@ func receive_attack(info: Dictionary, attacker: Combatant) -> int:
 			_do_deflect(info, attacker, dt)
 			return Combat.RESULT_DEFLECT
 		deflect_timed.emit(dt * 1000.0, guard_window * 1000.0, "early" if dt > guard_window else "late")
-		if guard_held and kind != "thrust":
+		# Perilous thrusts can be deflected but never blocked.
+		if is_guard_up() and kind != "thrust":
 			_do_block(info, attacker, pos)
 			return Combat.RESULT_BLOCK
-	elif kind != "sweep" and _last_guard_press > t - 0.6:
-		deflect_timed.emit((t - _last_guard_press) * 1000.0, guard_window * 1000.0, "miss")
+	elif kind != "sweep" and guard_start > t - 0.6:
+		deflect_timed.emit((t - guard_start) * 1000.0, guard_window * 1000.0, "miss")
 	_do_hit(info, attacker, pos)
 	return Combat.RESULT_HIT
 
@@ -681,7 +784,12 @@ func _in_clip_iframes() -> bool:
 
 func _do_deflect(info: Dictionary, attacker: Combatant, dt: float) -> void:
 	_last_press_deflected = true
-	_spam_level = 0
+	spam_level = 0
+	if Game.clock - _last_deflect_time <= Combat.DEFLECT_CHAIN_TIME:
+		deflect_chain += 1
+	else:
+		deflect_chain = 1
+	_last_deflect_time = Game.clock
 	add_posture(float(info.get("posture_deflect", 6.0)), false)
 	var dir := str(info.get("dir", "mid"))
 	if dir == "low":
@@ -742,7 +850,6 @@ func _do_hit(info: Dictionary, attacker: Combatant, pos: Vector3) -> void:
 	if Game.hud != null and Game.hud.has_method("flash_damage"):
 		Game.hud.call("flash_damage")
 	face_now(attacker.global_position)
-	guard_held = Input.is_action_pressed("guard")
 	if hp <= 0.0:
 		_die()
 		return
