@@ -27,7 +27,7 @@ the script backs off and retries, so let it run. For another version, set
 
 - Combat lab (headless, about 6 min for everything, exits 0 when all checks pass):
   `godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--verbose]`
-  Suites: reach, deflect, spam, mikiri, sweep, attack, cancel, shuriken, soak.
+  Suites: reach, deflect, spam, mikiri, sweep, shuriken, attack, cancel, soak.
 - Rendered frames (to actually *see* a change), using Movie Maker with software Vulkan:
   ```
   printf '[display]\nwindow/size/window_width_override=960\nwindow/size/window_height_override=540\n' > override.cfg

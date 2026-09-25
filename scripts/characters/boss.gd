@@ -19,11 +19,13 @@ const LOCO := {"idle": "b_idle", "fwd": "b_walk_fwd", "back": "b_walk_back", "le
 const WALK := 1.8
 const STRAFE := 1.25
 const RUN := 4.8
+const CHARGE := 6.4                  ## running at you: faster than your run, a touch under your sprint
+const ARENA_RADIUS := 13.5
 const DEATHBLOW_WINDOW_END := 2.75   ## b_posture_break time when he starts rising
 
 ## steps: [options ("a|b"), chance]; range: [min_d, max_d] meters; weight
 const SEQUENCES := {
-	"fang_string": {"steps": [["b_combo_1", 1.0], ["b_combo_2", 0.85], ["b_combo_3|b_thrust|b_sweep|b_backhand", 0.75]],
+	"fang_string": {"steps": [["b_combo_1", 1.0], ["b_combo_2", 0.85], ["b_combo_3|b_thrust|b_sweep|b_sweep|b_backhand", 0.75]],
 		"range": [0.0, 3.3], "weight": 3.0},
 	"double_fang": {"steps": [["b_combo_1", 1.0], ["b_combo_2", 0.9], ["b_backhand", 0.4]], "range": [0.0, 3.2], "weight": 1.4},
 	"backhand": {"steps": [["b_backhand", 1.0], ["b_combo_2|b_sweep", 0.45]], "range": [0.0, 3.1], "weight": 1.0},
@@ -31,10 +33,27 @@ const SEQUENCES := {
 	"jabs": {"steps": [["b_jab", 1.0], ["b_sweep|b_combo_2|b_thrust", 0.6]], "range": [0.0, 3.4], "weight": 1.6},
 	"whirl": {"steps": [["b_whirl", 1.0]], "range": [0.0, 2.8], "weight": 1.2},
 	"thrust": {"steps": [["b_thrust", 1.0]], "range": [2.8, 5.6], "weight": 1.8},
-	"sweep": {"steps": [["b_sweep", 1.0]], "range": [0.0, 2.9], "weight": 1.1},
+	"sweep": {"steps": [["b_sweep", 1.0]], "range": [0.0, 3.4], "weight": 2.0},
 	"leap": {"steps": [["b_leap", 1.0], ["b_combo_2", 0.35]], "range": [4.6, 11.0], "weight": 2.6},
 	"retreat": {"steps": [["b_backstep", 1.0], ["b_thrust|b_leap", 0.9]], "range": [0.0, 2.0], "weight": 0.9},
+	"shuriken_4": {"steps": [["b_shuriken_4", 1.0], ["b_leap|b_thrust", 0.4]], "range": [0.0, 4.5], "weight": 1.1},
+	"shuriken_5": {"steps": [["b_shuriken_5", 1.0], ["b_leap", 0.35]], "range": [0.0, 4.5], "weight": 0.8},
+	"dash_cut": {"steps": [["b_dash_cut", 1.0], ["b_combo_2|b_sweep|b_thrust", 0.5]], "range": [3.0, 4.2], "weight": 1.0},
 }
+
+## Non-attack behaviours that compete with the sequences: [min, max] distance and weight.
+##  charge     - run at you and flow into a running cut
+##  reposition - run to another spot around you, then open with a special from there
+##  hold       - stand and watch for a moment (breaks his rhythm)
+##  flourish   - twirl the staff while you keep your distance (you can punish it)
+const MOVES := {
+	"charge": {"range": [5.0, 40.0], "weight": 2.4},
+	"reposition": {"range": [1.5, 6.5], "weight": 0.7},
+	"hold": {"range": [2.2, 9.0], "weight": 0.55},
+	"flourish": {"range": [5.5, 12.0], "weight": 0.3},
+}
+## Specials he opens with after repositioning, by distance.
+const SPECIALS := ["leap", "thrust", "shuriken_4", "shuriken_5", "charge"]
 
 var state: int = S.INTRO
 var state_time := 0.0
@@ -57,6 +76,12 @@ var _since_blocked := 99.0
 var _guard_timer := 0.0
 var _flinches := 0
 var _last_step_phase := 0.0
+var _mode := ""                     ## "" (stalk), "charge", "reposition", "hold"
+var _mode_time := 0.0
+var _mode_target := Vector3.ZERO
+var _strafe_speed := 1.0
+var _dist_prev := 0.0
+var _retreat := 0.0                 ## seconds the player has spent backing away from him
 
 var blade_mat: StandardMaterial3D
 var eye_mat: StandardMaterial3D
@@ -212,6 +237,7 @@ func _physics_process(delta: float) -> void:
 func _to_neutral(cd: float) -> void:
 	state = S.NEUTRAL
 	state_time = 0.0
+	_mode = ""
 	cooldown = cd
 	_seq.clear()
 	root_scale = 1.0
@@ -228,33 +254,63 @@ func _state_neutral(delta: float) -> Vector3:
 	var d := distance_to_opponent()
 	var to := Combat.flat(opponent.global_position - global_position)
 	var dirp := to.normalized() if to.length() > 0.01 else forward()
-	var side := Vector3(-dirp.z, 0.0, dirp.x) * strafe_dir
 	cooldown -= delta
-	_strafe_timer -= delta
-	if _strafe_timer <= 0.0:
-		_strafe_timer = randf_range(1.4, 3.2)
-		strafe_dir = -strafe_dir if randf() < 0.6 else strafe_dir
-	# React to the player's windups by raising the guard.
+	_mode_time += delta
+	# Backing away from him doesn't work: he notices and closes the gap.
+	if d > 3.6 and d - _dist_prev > 1.4 * delta:
+		_retreat += delta
+	else:
+		_retreat = maxf(0.0, _retreat - delta * 0.5)
+	_dist_prev = d
 	if opponent is Player:
 		var p: Player = opponent
-		if p.state == Player.S.ATTACK and d < 3.4 and p.anim.time < 0.12 \
+		# React to the player's windups by raising the guard.
+		if p.state == Player.S.ATTACK and d < 3.4 and p.anim.time < 0.12 and _mode != "charge" \
 				and Combat.angle_to(global_position, forward(), p.global_position) < 70.0 and randf() < 0.85:
+			_mode = ""
 			_enter_guard(0.8)
 			return Vector3.ZERO
 		# Punish healing
 		if p.state == Player.S.HEAL and cooldown > 0.2:
 			cooldown = 0.15
+	if _retreat > 0.45 and _mode == "":
+		_retreat = 0.0
+		cooldown = 0.0
+	match _mode:
+		"charge":
+			return _mode_charge(delta, d, dirp)
+		"reposition":
+			return _mode_reposition(delta, d)
+		"hold":
+			anim.play_locomotion(LOCO)
+			anim.set_locomotion_velocity(Vector3.ZERO, WALK, false)
+			turn_toward(opponent.global_position, 200.0, delta)
+			if _mode_time > _mode_target.x:
+				_mode = ""
+				cooldown = minf(cooldown, 0.1)
+			return Vector3.ZERO
+	return _mode_stalk(delta, d, dirp)
+
+
+## Default footsies: strafe at a varying pace, drift in and out of range, then pick an action.
+func _mode_stalk(delta: float, d: float, dirp: Vector3) -> Vector3:
+	var side := Vector3(-dirp.z, 0.0, dirp.x) * strafe_dir
+	_strafe_timer -= delta
+	if _strafe_timer <= 0.0:
+		_strafe_timer = randf_range(0.9, 2.6)
+		strafe_dir = -strafe_dir if randf() < 0.6 else strafe_dir
+		_strafe_speed = randf_range(0.55, 1.35)
 	var vel := Vector3.ZERO
 	var running := false
 	if d > 6.5:
 		vel = dirp * RUN
 		running = true
 	elif d > 3.3:
-		vel = dirp * WALK + side * 0.4
+		vel = dirp * WALK + side * 0.4 * _strafe_speed
 	elif d < 1.9:
 		vel = -dirp * 1.2 + side * 0.6
 	else:
-		vel = side * STRAFE + dirp * (d - 2.6) * 0.8
+		vel = side * STRAFE * _strafe_speed + dirp * (d - 2.5) * 0.9
 	if running:
 		turn_toward(global_position + vel, 360.0, delta)
 	else:
@@ -263,29 +319,114 @@ func _state_neutral(delta: float) -> Vector3:
 	anim.play_locomotion(LOCO)
 	anim.set_locomotion_velocity(local, WALK, running)
 	if cooldown <= 0.0:
-		var seq_name := _pick_sequence(d)
-		if seq_name != "":
-			_start_sequence(seq_name)
+		var pick := _pick_action(d)
+		if pick != "" and _begin_action(pick, d):
 			return Vector3.ZERO
 	return vel
 
 
-func _pick_sequence(d: float) -> String:
+## Runs straight at the player; in range, flows into the running cut.
+func _mode_charge(delta: float, d: float, dirp: Vector3) -> Vector3:
+	turn_toward(opponent.global_position, 540.0, delta)
+	var vel := dirp * CHARGE
+	anim.play_locomotion(LOCO)
+	anim.set_locomotion_velocity(Basis(Vector3.UP, -facing) * vel, WALK, true)
+	if d < 3.6:
+		_mode = ""
+		_start_sequence("dash_cut")
+		return Vector3.ZERO
+	if _mode_time > 3.5:
+		_mode = ""
+		cooldown = 0.2
+	return vel
+
+
+## Runs to a spot around the player, then opens with a special from there.
+func _mode_reposition(delta: float, d: float) -> Vector3:
+	var to_t := Combat.flat(_mode_target - global_position)
+	if to_t.length() < 0.7 or _mode_time > 2.6:
+		_mode = ""
+		face_now(opponent.global_position)
+		var special := _pick_special(d)
+		if special == "charge":
+			_begin_action("charge", d)
+		elif special != "":
+			_start_sequence(special)
+		else:
+			cooldown = 0.1
+		return Vector3.ZERO
+	var vel := to_t.normalized() * RUN
+	turn_toward(global_position + vel, 540.0, delta)
+	anim.play_locomotion(LOCO)
+	anim.set_locomotion_velocity(Basis(Vector3.UP, -facing) * vel, WALK, true)
+	return vel
+
+
+func _pick_special(d: float) -> String:
+	var options: Array = []
+	for sname in SPECIALS:
+		var r: Array = MOVES[sname]["range"] if MOVES.has(sname) else SEQUENCES[sname]["range"]
+		if d >= float(r[0]) - 0.3 and d <= float(r[1]) + 0.5:
+			options.append(sname)
+	if options.is_empty():
+		return ""
+	return str(options[randi() % options.size()])
+
+
+## Starts an attack sequence or a movement mode. Returns false if nothing started.
+func _begin_action(pick: String, d: float) -> bool:
+	_mode_time = 0.0
+	match pick:
+		"charge":
+			_mode = "charge"
+			return true
+		"reposition":
+			var from_p := Combat.flat(global_position - opponent.global_position)
+			if from_p.length() < 0.1:
+				from_p = -forward()
+			var ang := deg_to_rad(randf_range(55.0, 115.0)) * (1.0 if randf() < 0.5 else -1.0)
+			var spot := opponent.global_position + (Basis(Vector3.UP, ang) * from_p.normalized()) * randf_range(5.8, 7.6)
+			var flat_spot := Combat.flat(spot)
+			if flat_spot.length() > ARENA_RADIUS:
+				spot = flat_spot.normalized() * ARENA_RADIUS
+			_mode_target = Vector3(spot.x, global_position.y, spot.z)
+			_mode = "reposition"
+			return true
+		"hold":
+			_mode = "hold"
+			_mode_target = Vector3(randf_range(0.6, 1.4), 0, 0)
+			return true
+		"flourish":
+			_seq.clear()
+			_play_attack("b_intro", 0.0)
+			return true
+	_start_sequence(pick)
+	return true
+
+
+func _pick_action(d: float) -> String:
 	var options: Array = []
 	var total := 0.0
 	var healing := opponent is Player and (opponent as Player).state == Player.S.HEAL
+	var catalog := {}
 	for sname in SEQUENCES:
-		var sd: Dictionary = SEQUENCES[sname]
+		catalog[sname] = SEQUENCES[sname]
+	for mname in MOVES:
+		catalog[mname] = MOVES[mname]
+	for sname in catalog:
+		var sd: Dictionary = catalog[sname]
 		var r: Array = sd["range"]
 		if d < float(r[0]) or d > float(r[1]):
 			continue
 		var w := float(sd["weight"])
 		if sname == _last_seq:
 			w *= 0.35 if _repeat >= 1 else 0.7
-		if healing and (sname == "thrust" or sname == "leap" or sname == "fang_string"):
+		if healing and (sname == "thrust" or sname == "leap" or sname == "fang_string" or sname == "charge"):
 			w *= 3.0
-		if phase >= 2 and (sname == "fang_string" or sname == "whirl" or sname == "leap"):
+		if phase >= 2 and (sname == "fang_string" or sname == "whirl" or sname == "leap" or sname == "charge"):
 			w *= 1.4
+		if phase >= 2 and sname == "hold":
+			w *= 0.5
 		options.append([sname, w])
 		total += w
 	if options.is_empty():
@@ -299,6 +440,7 @@ func _pick_sequence(d: float) -> String:
 
 
 func _start_sequence(seq_name: String) -> void:
+	_mode = ""
 	if seq_name == _last_seq:
 		_repeat += 1
 	else:
@@ -358,7 +500,10 @@ func _state_attack(delta: float) -> Vector3:
 			return Vector3.ZERO
 		_seq.clear()
 	if anim.finished:
-		_to_neutral(randf_range(0.45, 1.25) / aggression)
+		var cd := randf_range(0.45, 1.25) / aggression
+		if distance_to_opponent() > 5.0:
+			cd = minf(cd, 0.2)          # you got away from that one: he comes after you
+		_to_neutral(cd)
 		return Vector3.ZERO
 	return _close_distance(c, t)
 
@@ -392,7 +537,8 @@ func _check_mikiri() -> void:
 			continue
 		if t < float(h["from"]) - 0.06 or t > float(h["to"]):
 			continue
-		if not p.can_mikiri(self):
+		var release := _release_time(h)
+		if not p.can_mikiri(self, release):
 			return
 		var pts := rig.blade_world(str(h.get("blade", "upper")))
 		if pts.is_empty():
@@ -400,7 +546,7 @@ func _check_mikiri() -> void:
 		var tip := pts[pts.size() - 1]
 		var reach := Combat.flat(tip - global_position).dot(forward())
 		var pd := distance_to_opponent()
-		if reach + 0.55 >= pd - p.hurt_radius and Combat.angle_to(global_position, forward(), p.global_position) < 40.0:
+		if reach + 0.3 >= pd - p.hurt_radius and Combat.angle_to(global_position, forward(), p.global_position) < 40.0:
 			_hits_done[i] = true
 			var info := h.duplicate()
 			info["index"] = i
@@ -409,6 +555,13 @@ func _check_mikiri() -> void:
 			info["time"] = Game.clock
 			_on_weapon_contact(info)
 			return
+
+
+## Game time at which this hit's thrust was released (clip time "mikiri_from"); -INF if none.
+func _release_time(h: Dictionary) -> float:
+	if not h.has("mikiri_from") or anim.clip == null:
+		return -INF
+	return Game.clock - (anim.time - float(h["mikiri_from"])) / maxf(anim.speed, 0.01)
 
 
 func _in_vuln() -> bool:
@@ -522,6 +675,8 @@ func _on_weapon_contact(info: Dictionary) -> void:
 	if not (opponent is Player):
 		return
 	var p: Player = opponent
+	if info.has("mikiri_from") and not info.has("release_time"):
+		info["release_time"] = _release_time(info)
 	var res := p.receive_attack(info, self)
 	match res:
 		Combat.RESULT_DEFLECT:
@@ -668,8 +823,27 @@ func _on_anim_event(_clip: String, ev: Dictionary) -> void:
 				Game.shake(0.22, 0.2)
 		"boss_parry":
 			pass
+		"throw":
+			_throw_shuriken(int(ev.get("index", 0)))
+		"glint":
+			Fx.flash(get_parent(), rig.joint_world("hand_l"), 0.28, Color(1.0, 0.85, 0.6), true)
 		"roar":
 			_enter_phase_two()
+
+
+## Shuriken from the left hand at where the player will be (a little lead on their movement).
+## Resolved by the player like any strike; deflecting them costs him no posture (as in Sekiro).
+func _throw_shuriken(index: int) -> void:
+	if not (opponent is Player):
+		return
+	var from := rig.joint_world("hand_l")
+	var aim := opponent.global_position + Vector3(0, 1.05, 0)
+	var flight := from.distance_to(aim) / Shuriken.SPEED
+	aim += Combat.flat(opponent.velocity) * flight * 0.6
+	var info := {"kind": "projectile", "dir": "mid", "dmg": 8, "posture_block": 12, "posture_deflect": 3,
+		"boss_posture": 0, "clip": anim.clip.name if anim.clip != null else "", "index": index}
+	Shuriken.throw(get_parent(), from, aim, self, opponent as Player, info)
+	Sfx.play("throw", from, 0.0, 1.0, 0.06)
 
 
 func _begin_perilous(kind: String) -> void:

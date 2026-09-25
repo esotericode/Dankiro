@@ -1,7 +1,7 @@
 extends Node
 ## Scripted capture director for visual checks with Godot's Movie Maker:
 ##   godot --write-movie out/frame.png --fixed-fps 30 res://tests/capture.tscn -- <shot>
-## Shots: overview, deflect, block, mikiri, sweep, slashes, parried.
+## Shots: overview, deflect, block, mikiri, sweep, whirl, shuriken, shuriken5, charge, slashes, parried.
 ## Loads the real game scene (arena, lighting, HUD, lock-on camera), skips the intro, stages
 ## the fighters and drives the player with a bot that reacts to the boss's hit windows.
 
@@ -84,6 +84,23 @@ func _process(_delta: float) -> void:
 	if has_meta("auto_guard") and boss != null:
 		var cfg: Array = get_meta("auto_guard")
 		_auto_guard_tick(float(cfg[0]), float(cfg[1]))
+		_auto_guard_projectiles(float(cfg[0]))
+
+
+var _seen_projectiles: Dictionary = {}
+
+
+func _auto_guard_projectiles(lead: float) -> void:
+	for n in player.get_parent().get_children():
+		if n is Shuriken and (n as Shuriken)._flying and not _seen_projectiles.has(n.get_instance_id()):
+			var cap := player.hurt_capsule()
+			var q := Geometry3D.get_closest_point_to_segment(n.global_position, cap[0], cap[1])
+			if (q.distance_to(n.global_position) - float(cap[2])) / Shuriken.SPEED <= lead + 0.03:
+				_seen_projectiles[n.get_instance_id()] = true
+				if player.guard_held:
+					player.release_guard(Game.clock)
+				player.press_guard(Game.clock)
+				_release_at = Game.clock + 0.05
 
 
 func _auto_guard_tick(lead: float, hold: float) -> void:
@@ -142,16 +159,47 @@ func shot_block() -> void:
 func shot_mikiri() -> void:
 	_stage(3.2)
 	at(0.3, func(): boss_string(["b_thrust"]))
-	at(0.3 + 0.62, func(): player.press_action("dodge", Game.clock))
-	_end_at = 2.8
+	at(0.3 + 0.74, func(): player.press_action("dodge", Game.clock))      # neutral step on the release
+	_end_at = 3.0
 
 
 func shot_sweep() -> void:
-	_stage(2.2)
+	_stage(2.6)
 	at(0.3, func(): boss_string(["b_sweep"]))
-	at(0.3 + 0.52, func(): player.press_action("jump", Game.clock))
-	at(0.3 + 0.84, func(): player.press_action("jump", Game.clock))
-	_end_at = 2.6
+	at(0.3 + 0.46, func(): player.press_action("jump", Game.clock))
+	at(0.3 + 0.80, func(): player.press_action("jump", Game.clock))
+	_end_at = 2.8
+
+
+func shot_whirl() -> void:
+	_stage(2.4)
+	auto_guard(0.05, 0.08)
+	at(0.3, func(): boss_string(["b_whirl"]))
+	_end_at = 3.6
+
+
+func shot_shuriken() -> void:
+	_stage(2.6)
+	auto_guard(0.06, 0.05)
+	at(0.3, func(): boss_string(["b_shuriken_4"]))
+	_end_at = 2.4
+
+
+func shot_shuriken5() -> void:
+	_stage(2.6)
+	auto_guard(0.06, 0.05)
+	at(0.3, func(): boss_string(["b_shuriken_5"]))
+	_end_at = 2.4
+
+
+## He runs at you from across the arena and flows into the running cut.
+func shot_charge() -> void:
+	_stage(10.0)
+	auto_guard(0.05, 0.1)
+	at(0.3, func():
+		boss.passive = false
+		boss._begin_action("charge", 10.0))
+	_end_at = 3.2
 
 
 ## Player slash string against a guarding boss.

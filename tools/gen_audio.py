@@ -332,6 +332,15 @@ def build(only=None):
         splat[st:st + len(s)] += s[: max(0, len(splat) - st)]
     out("deathblow_pull", reverb(mix(slide * 0.8, splat, flesh(0.3, 270) * 0.5), 0.8, 0.15), peak_db=-1.0)
     out("flick", swing(0.2, 700, 3000, q=3.0, seed=280, whistle=0.3, peak=0.35), peak_db=-5.0)
+    # --- shuriken throw: a sharp, high whip of air with a faint metallic whir (mono: 3D)
+    for i in range(2):
+        x = swing(0.16, 900, 4200 + i * 300, q=4.0, seed=300 + i, whistle=0.5, peak=0.25)
+        whir = partials(0.16, 2600 + i * 180, [1.0, 2.76], [0.05, 0.03], [0.25, 0.12], seed=310 + i)
+        out("throw_%d" % (i + 1), mix(x, whir), peak_db=-4.0, st=False)
+    # --- tell before the throw: a quick steel draw (hand to belt)
+    out("draw", reverb(mix(swing(0.12, 1500, 5000, q=5.0, seed=320, whistle=0.2, peak=0.4),
+                           partials(0.25, 3100, BAR, [0.06, 0.04, 0.02, 0.01, 0.01], [0.4, 0.3, 0.2, 0.1, 0.05], seed=321)),
+                       0.4, 0.12), peak_db=-6.0, st=False)
 
     # --- body sounds
     out("kick", reverb(mix(thud(0.35, 120, 55, 0.05, 0.9, 900, 290) * 1.3,

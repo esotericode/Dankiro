@@ -12,7 +12,7 @@ The automated checks in `tests/` (see the README) verify the rules marked **[tes
 | Rule (Sekiro) | Dankiro |
 | --- | --- |
 | Pressing guard opens a **12-frame (0.200 s) deflect window**. A blade that lands inside it is deflected. | `DEFLECT_WINDOW = 0.200`. Blade contact time is measured sub-tick with a swept test, and the press is stamped with sub-tick time. **[tested]** |
-| **Spam penalty.** Pressing guard again soon after *releasing* it shrinks the next window, and each further quick press shrinks it more, down to 4 frames and then 0 if you mash. | Windows 12 → 8 → 6 → 4 → 0 frames. A press counts as "quick" if it comes within 30 frames (0.5 s) of the last release. **[tested]** |
+| **Spam penalty.** Pressing guard again soon after *releasing* it shrinks the next window, and each further quick press shrinks it more: "to as little as 4 frames, even 0 frames if you spam it too fast" (datamined, Fextralife). | Windows 12 → 8 → 6 → 4 → 0 frames: the fifth quick press in a row gets no window. A press counts as "quick" if it comes within 30 frames (0.5 s) of the last release. **[tested]** |
 | The penalty clears after **30 frames** without a quick press, and **immediately after a successful deflect**, so deflecting a fast flurry in rhythm works. | Same. **[tested]** |
 | Holding guard and releasing it just before pressing again also builds the penalty. | Same, because the penalty keys off the release. |
 | **Holding guard** when a blade lands outside the window **blocks**: no vitality damage, a large hit to *your* posture, and a dull, quiet clank with a small spark. | Block when the guard pose is up (held, or still settling after a tap). **[tested]** |
@@ -30,22 +30,33 @@ A red kanji flashes with a warning sound. Sekiro has three kinds; this boss uses
 | Kind | Sekiro | Dankiro |
 | --- | --- | --- |
 | **Thrust** | Can be deflected but not blocked. Its counter is the **Mikiri Counter**. | Blocking a perilous thrust fails and you get hit. **[tested]** |
-| **Sweep** | Can't be blocked or deflected, and dodge i-frames don't help. **Jump** over it, then press **jump again** while above or in front of him to **kick off his head** for major posture damage, with a bonus against sweeps. | Same. The kick deals ×1.6 posture during a sweep. **[tested]** |
+| **Sweep** | Can't be blocked or deflected, and dodge i-frames don't help. **Jump** over it, then press **jump again** while above or in front of him to **kick off his head** for major posture damage, with a bonus against sweeps. | Same. The kick deals ×1.6 posture during a sweep. The sweep is low (shin height), ~2.5 m long and travels forward while he closes in during the coil, so backstepping or walking away gets caught: it forces the jump. **[tested]** |
 | Grab | Can't be blocked. Dodge it. | Not used by this boss. |
+
+### Projectiles
+
+In Sekiro, thrown weapons such as shuriken and kunai are deflected or blocked like blades, and
+deflecting them doesn't damage the thrower's posture. Dankiro's shuriken volleys work the
+same way: every throw can be deflected (sparks, clang) or blocked, and hits if ignored.
+**[tested]**
 
 ### Mikiri Counter
 
-- **Input: dodge with no direction held, or held toward the enemy.** In Sekiro a neutral dodge
-  is a *forward* step, which is why the neutral press is the reliable way to mikiri. Side and
-  back dodges never mikiri.
-- **Timing matters.** Dodging when the kanji first appears is too early: the counter only
-  happens if the thrust arrives while the step is still in its mikiri frames. Community players
-  describe it as "forgiving", so the window is generous but real.
+- **Input: dodge with no direction held.** A neutral dodge is a short *forward* step toward the
+  enemy you face. Players consistently report that holding forward while pressing dodge tends
+  to give an ordinary dodge rather than the counter, and that side or back dodges never
+  counter. Dankiro follows that: only a neutral step counters. Holding forward gives a plain
+  forward step, which the thrust runs through.
+- **Timing: after the thrust is released.** The thrust can only be countered once the spear
+  starts going forward. Dodging when the kanji first appears, or during the wind-up, is too
+  early. Once it is moving, the window is generous: a thrust that lands while you're still in
+  the step is countered.
 - You stomp the blade into the ground, dealing heavy posture damage, and the enemy is left
   briefly open.
-- Dankiro: a neutral dodge while locked on is a short forward step (~1.3 m, not a dash). If
-  the perilous thrust reaches you within the step's first **0.33 s (20 frames)**, you mikiri.
-  **[tested]**
+- Dankiro: the thrust has a visible pull-back and hold, then the release. A neutral step
+  started from 0.1 s before the release onward counters it, as long as the thrust lands during
+  the step. Stepping during the pull-back gets you hit, and a well-timed step with forward held
+  only i-frames through the thrust. **[tested]**
 
 ## 3. Your attacks
 
@@ -81,7 +92,11 @@ A red kanji flashes with a warning sound. Sekiro has three kinds; this boss uses
   [Posture](https://sekiroshadowsdietwice.wiki.fextralife.com/Posture)
 - Steam community threads on
   [how the Mikiri Counter works](https://steamcommunity.com/app/814380/discussions/0/598531619385683737/)
-  (neutral dodge = forward, wait for the thrust) and
+  (neutral dodge = forward, wait for the thrust),
+  [Mikiri Counter and timing](https://steamcommunity.com/app/814380/discussions/0/1850323802579482370/)
+  (holding forward doesn't work, just press dodge; the window spans the step),
+  [Mikiri dodge feels off](https://steamcommunity.com/app/814380/discussions/0/3592212630603805295/)
+  (it only works once the thrust starts going forward) and
   [when to use the jump kick](https://steamcommunity.com/app/814380/discussions/0/1753520068682799746/)
 - Logan Taylor, [*Song of Sword and Fist: Sifu, Sekiro, and the Anatomy of a Perfect Parry*](https://medium.com/@gatherer286/song-of-sword-and-fist-sifu-sekiro-and-the-anatomy-of-a-perfect-parry-2f9c4c26867a)
   (deflect vs block audio and visual feedback)

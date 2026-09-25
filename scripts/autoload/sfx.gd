@@ -35,6 +35,8 @@ const BANKS := {
 	"body_fall": ["body_fall"],
 	"lockon": ["lockon"],
 	"leap": ["leap"],
+	"throw": ["throw_1", "throw_2"],
+	"draw": ["draw"],
 }
 
 const POOL_3D := 24

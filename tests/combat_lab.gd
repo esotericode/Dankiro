@@ -5,7 +5,7 @@ extends Node3D
 ##
 ## Run (from the project folder):
 ##   godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--verbose]
-## Suites: reach, deflect, spam, mikiri, sweep, attack, cancel, soak (default: all).
+## Suites: reach, deflect, spam, mikiri, sweep, shuriken, attack, cancel, soak (default: all).
 ## Exit code 0 when every check passes.
 
 const DT := 1.0 / 120.0
@@ -32,7 +32,7 @@ func _ready() -> void:
 		if not a.begins_with("--"):
 			suites.append(a)
 	if suites.is_empty():
-		suites = ["reach", "deflect", "spam", "mikiri", "sweep", "attack", "cancel", "soak"]
+		suites = ["reach", "deflect", "spam", "mikiri", "sweep", "shuriken", "attack", "cancel", "soak"]
 	await get_tree().physics_frame
 	for s in suites:
 		print("\n=== suite: %s ===" % s)
@@ -158,7 +158,7 @@ const BOSS_ATTACKS := {
 	# far end of the range the AI uses the attack from (Boss.SEQUENCES) plus a little.
 	"b_combo_1": [1.0, 3.4], "b_combo_2": [1.0, 3.4], "b_combo_3": [1.0, 3.4], "b_backhand": [1.0, 3.4],
 	"b_jab": [1.0, 3.5], "b_whirl": [1.0, 3.0], "b_parry_counter": [1.0, 3.0], "b_thrust": [1.0, 5.6],
-	"b_sweep": [1.0, 3.0], "b_leap": [4.8, 8.0],
+	"b_sweep": [1.0, 3.4], "b_leap": [4.8, 8.0], "b_dash_cut": [1.3, 3.8],
 }
 
 
@@ -291,25 +291,28 @@ func suite_spam() -> void:
 		check(r1 == "DEFLECT", "rhythmic second deflect works after a deflect")
 
 
-## Mikiri: a neutral (or forward) step whose first 0.33 s overlaps the perilous thrust's
-## arrival counters it; a step taken too early doesn't; side steps never do.
+## Mikiri (Sekiro): only a *neutral* step (no direction held) counters, and only once the
+## thrust is released (the spear starts going forward). Stepping during the pull-back is too
+## early; holding forward gives a plain dodge; side steps never counter.
 func suite_mikiri() -> void:
+	var rel_t := AnimLibrary.get_clip("b_thrust").get_float("mikiri_from", 0.74)
 	for d in [2.4, 3.4, 4.4]:
 		var cts := await contact_times("b_thrust", d)
 		if cts.is_empty():
 			check(false, "thrust never reaches a player at %.1f m" % d)
 			continue
-		var rel := float(cts[0]["rel"])
+		var contact := float(cts[0]["rel"])
 		var row := PackedStringArray()
-		var early_fail := false
-		var any_ok := false
-		for o in [0.9, 0.7, 0.5, 0.4, 0.3, 0.2, 0.12, 0.05, 0.0]:
+		for o in [-0.45, -0.3, -0.16, -0.12, -0.09, -0.05, 0.0, 0.05, 0.1]:
+			var press_rel: float = rel_t + float(o)
+			if press_rel >= contact - 0.01:
+				continue
 			for dir_name in ["neutral", "fwd", "side"]:
-				if dir_name != "neutral" and not (o == 0.2):
+				if dir_name != "neutral" and float(o) != 0.0:
 					continue
 				await setup(d)
 				var t0 := boss_attack("b_thrust")
-				var pt: float = t0 + rel - float(o)
+				var pt: float = t0 + press_rel
 				var mv := Vector2.ZERO
 				if dir_name == "fwd":
 					mv = Vector2(0, -1)
@@ -321,29 +324,23 @@ func suite_mikiri() -> void:
 				at(pt + 0.05, func(): player.bot_move = Vector2.ZERO)
 				await run_until_boss_done()
 				var got := res_name(first_result())
-				row.append("%s%.2f:%s" % [dir_name[0], o, got[0]])
+				row.append("%s%+.2f:%s" % [dir_name[0], o, got[0]])
 				if dir_name == "neutral":
-					if got == "MIKIRI":
-						any_ok = true
-						if float(o) >= 0.7:
-							early_fail = true
-				elif dir_name == "fwd":
-					check(got == "MIKIRI", "forward step 0.2 s before the thrust at %.1f m mikiris (%s)" % [d, got])
+					if float(o) >= -Combat.MIKIRI_EARLY_GRACE:
+						check(got == "MIKIRI", "neutral step %+.2f s from the release at %.1f m mikiris (%s)" % [o, d, got])
+					else:
+						check(got != "MIKIRI", "neutral step during the pull-back (%+.2f s) at %.1f m is too early (%s)" % [o, d, got])
 				else:
-					check(got != "MIKIRI", "side step never mikiris (%.1f m)" % d)
-		check(any_ok, "a neutral step can mikiri the thrust at %.1f m" % d)
-		check(not early_fail, "a neutral step taken 0.7 s+ early does not mikiri (%.1f m)" % d)
-		print("  thrust @%.1fm contact %.3fs  %s" % [d, rel, " ".join(row)])
-	# Neutral step 0.2 s before contact must work at mid range (the reliable input).
-	var cts2 := await contact_times("b_thrust", 3.0)
+					check(got != "MIKIRI", "%s step at the release never mikiris (%.1f m, %s)" % [dir_name, d, got])
+		print("  thrust @%.1fm release %.2fs contact %.3fs  %s" % [d, rel_t, contact, " ".join(row)])
+	# Posture damage of a clean counter.
 	await setup(3.0)
 	var t1 := boss_attack("b_thrust")
-	var p2: float = t1 + float(cts2[0]["rel"]) - 0.2
+	var p2: float = t1 + rel_t
 	at(p2, func(): player.press_action("dodge", p2))
 	await run_until_boss_done()
-	check(first_result() == Combat.RESULT_MIKIRI, "neutral step 0.2 s before contact at 3.0 m -> MIKIRI (%s)" % res_name(first_result()))
-	var pb := boss.posture
-	check(pb >= Combat.MIKIRI_POSTURE - 0.5, "mikiri deals heavy posture damage (%.0f)" % pb)
+	check(first_result() == Combat.RESULT_MIKIRI, "neutral step on the release at 3.0 m -> MIKIRI (%s)" % res_name(first_result()))
+	check(boss.posture >= Combat.MIKIRI_POSTURE - 0.5, "mikiri deals heavy posture damage (%.0f)" % boss.posture)
 
 
 ## Sweep: can't be blocked or deflected, dodging doesn't help, jumping clears it and a
@@ -369,6 +366,22 @@ func suite_sweep() -> void:
 	at(pd, func(): player.press_action("dodge", pd))
 	await run_until_boss_done()
 	check(first_result() == Combat.RESULT_HIT, "dodging into a sweep fails: i-frames don't apply (%s)" % res_name(first_result()))
+	# Getting away instead of jumping: a backstep or walking backwards (locked on) from 2.5 m
+	# as the kanji shows must still get caught - the sweep is long, low and travels.
+	for how in ["backstep", "walk back"]:
+		await setup(2.5)
+		t0 = boss_attack("b_sweep")
+		var pb: float = t0 + 0.15
+		if how == "backstep":
+			at(pb, func():
+				player.bot_move = Vector2(0, 1)
+				player.press_action("dodge", pb))
+			at(pb + 0.06, func(): player.bot_move = Vector2.ZERO)
+		else:
+			at(pb, func(): player.bot_move = Vector2(0, 1))
+		await run_until_boss_done()
+		player.bot_move = Vector2.ZERO
+		check(first_result() == Combat.RESULT_HIT, "%s away from the sweep still gets hit (%s)" % [how, res_name(first_result())])
 	# Jump windows.
 	var row := PackedStringArray()
 	var cleared := 0
@@ -393,6 +406,56 @@ func suite_sweep() -> void:
 	await run_until_boss_done()
 	print("  jump+kick: boss posture %.0f, boss state %s" % [boss.posture, Boss.S.keys()[boss.state]])
 	check(boss.posture >= Combat.KICK_POSTURE, "kicking off him during the sweep deals posture (%.0f)" % boss.posture)
+
+
+## Shuriken volleys: he leaps back and throws 3 fast + 1 delayed, or 5 fast. Every throw can
+## be deflected (no posture to him, as in Sekiro) or blocked, and hits if ignored.
+func suite_shuriken() -> void:
+	for clip in ["b_shuriken_4", "b_shuriken_5"]:
+		var n_throws := 4 if clip == "b_shuriken_4" else 5
+		# Arrival times against a player standing still.
+		await setup(3.0)
+		var t0 := boss_attack(clip)
+		await run_until_boss_done(3.0)
+		await ticks(60)
+		var arrivals: Array = []
+		for r in _results:
+			arrivals.append(float(r["t"]) - t0)
+		var gaps: Array = []
+		for i in range(1, arrivals.size()):
+			gaps.append(snappedf(float(arrivals[i]) - float(arrivals[i - 1]), 0.01))
+		print("  %s: %d hits, arrivals %s, gaps %s" % [clip, arrivals.size(), str(arrivals.map(func(x): return snappedf(x, 0.01))), str(gaps)])
+		check(arrivals.size() == n_throws, "%s: all %d shuriken reach a still player (%d)" % [clip, n_throws, arrivals.size()])
+		if arrivals.size() != n_throws:
+			continue
+		if clip == "b_shuriken_4":
+			check(float(gaps[0]) < 0.22 and float(gaps[1]) < 0.22 and float(gaps[2]) > 0.3,
+				"b_shuriken_4 is 3 fast + 1 delayed (gaps %s)" % str(gaps))
+		else:
+			for g in gaps:
+				check(float(g) < 0.22, "b_shuriken_5 throws come fast (gap %.2f)" % float(g))
+		check(float(arrivals[0]) > 0.6, "the first shuriken arrives after a readable tell (%.2f s)" % float(arrivals[0]))
+		# Deflect each one 80 ms before it lands (tap).
+		await setup(3.0)
+		t0 = boss_attack(clip)
+		for a in arrivals:
+			var pt: float = t0 + float(a) - 0.08
+			at(pt, func(): player.press_guard(pt))
+			at(pt + 0.04, func(): player.release_guard(pt + 0.04))
+		await run_until_boss_done(3.0)
+		await ticks(60)
+		var got := _results.map(func(r): return res_name(int(r["res"])))
+		check(got.count("DEFLECT") == n_throws, "%s: every throw deflected on time (%s)" % [clip, str(got)])
+		check(boss.posture <= 0.01, "%s: deflecting shuriken costs him no posture (%.1f)" % [clip, boss.posture])
+		# Holding guard blocks them all.
+		await setup(3.0)
+		t0 = boss_attack(clip)
+		at(t0 + 0.1, func(): player.press_guard(t0 + 0.1))
+		await run_until_boss_done(3.0)
+		await ticks(60)
+		got = _results.map(func(r): return res_name(int(r["res"])))
+		check(got.count("BLOCK") == n_throws, "%s: holding guard blocks every throw (%s)" % [clip, str(got)])
+		player.release_guard(Game.clock)
 
 
 ## Player attacks: reach and rhythm. Mashing attack must not produce hits faster than the
@@ -485,14 +548,33 @@ func suite_soak() -> void:
 	var serial := [0, ""]
 	var next_attack := 0.0
 	var t_end := Game.clock + 240.0
+	var last_desc := ""
 	while Game.clock < t_end and over[0] == "":
 		await ticks(1)
 		var now := Game.clock
+		if verbose:
+			var desc := "%s %s %s" % [Boss.S.keys()[boss.state], boss._mode,
+				boss.anim.clip.name if boss.anim.clip != null and not boss.anim.loco_active else "loco"]
+			if desc != last_desc:
+				print("    %6.2f boss %-40s d=%.1f cd=%.2f" % [now - (t_end - 240.0), desc, player.distance_to_opponent(), boss.cooldown])
+				last_desc = desc
 		var d := player.distance_to_opponent()
+		# The lock-on camera keeps looking at him, so "forward" always means toward him.
+		player.camera_yaw = Combat.yaw_of(Combat.flat(boss.global_position - player.global_position))
 		player.bot_move = Vector2(0, -1) if d > 3.2 and boss.state != Boss.S.ATTACK else Vector2.ZERO
 		if player.guard_held and now - player.guard_start > 0.1:
 			player.release_guard(now)
 		var ttc := _blade_time_to_contact()
+		for sh in world.get_children():
+			if sh is Shuriken and (sh as Shuriken)._flying and not handled.has(sh.get_instance_id()):
+				var cap := player.hurt_capsule()
+				var dist := Geometry3D.get_closest_point_to_segment(sh.global_position, cap[0], cap[1]).distance_to(sh.global_position)
+				var lead_s := randf_range(0.04, 0.16)
+				if (dist - float(cap[2])) / Shuriken.SPEED <= lead_s:
+					handled[sh.get_instance_id()] = true
+					if player.guard_held:
+						player.release_guard(now)
+					player.press_guard(now)
 		if boss.state == Boss.S.ATTACK and boss.anim.clip != null and not boss.anim.loco_active:
 			var c := boss.anim.clip
 			if c.name != serial[1] or boss.anim.time < 0.02:

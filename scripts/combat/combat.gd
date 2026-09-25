@@ -53,6 +53,9 @@ const BOSS_POSTURE_REGEN := 9.0
 const BOSS_POSTURE_DELAY := 1.5
 const BOSS_LIVES := 2
 const MIKIRI_POSTURE := 32.0
+## A Mikiri step may start this long before the thrust's release ("the spear starts going
+## forward") and still count; any earlier is a plain dodge into the thrust.
+const MIKIRI_EARLY_GRACE := 0.1
 const KICK_POSTURE := 16.0
 const FINAL_DEFLECT_BONUS := 1.35            ## extra posture for deflecting a combo's last hit
 

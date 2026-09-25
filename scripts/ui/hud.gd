@@ -21,9 +21,10 @@ Timing debug .... F3     Fullscreen .... F11
   0.5 s of letting go shrinks the window; a clean deflect restores it. Holding guard only blocks.
 - Your slashes commit: guard can only cut in at the very start of a swing or after it.
 - Fill his posture bar with deflects, then press Attack on the red mark: [color=#ff5040]DEATHBLOW[/color].
-- [img=26x26]res://textures/kanji_danger_icon.png[/img] Perilous THRUST: press Dodge with [i]no direction[/i] (or toward him) as the
-  thrust comes in for a MIKIRI COUNTER. Too early won't work. You can also deflect it; blocking fails.
-- [img=26x26]res://textures/kanji_danger_icon.png[/img] Perilous SWEEP: JUMP over it. Jump again near him to kick off his head.
+- [img=26x26]res://textures/kanji_danger_icon.png[/img] Perilous THRUST: he draws the staff back, holds... press Dodge with [i]no direction[/i]
+  as he RELEASES for a MIKIRI COUNTER. During the pull-back is too early. Deflecting works; blocking fails.
+- [img=26x26]res://textures/kanji_danger_icon.png[/img] Perilous SWEEP: low and long - you can't back out of it. JUMP, then jump again to kick.
+- Shuriken: he leaps back and throws 3 fast + 1 late, or 5 fast. Deflect each one.
 - His posture recovers when you back off, and faster while his vitality is high."""
 
 var player: Player

@@ -81,13 +81,16 @@ The input map is registered in code (`scripts/autoload/game_input.gd`); actions 
 
 The kanji flashes red above him with a deep warning sound and his blades glow hot.
 
-- **Perilous thrust:** perform a **Mikiri Counter**. Press **dodge with no direction** (or
-  toward him) as the thrust comes in. A neutral dodge is a short step *forward*, as in Sekiro.
-  The thrust must arrive during the step's first 0.33 s, so dodging as soon as the kanji
-  appears is too early. You stomp the blade and deal heavy posture damage. You can also deflect
-  the thrust; blocking it fails.
-- **Perilous sweep:** a low, full 360° spin. It can't be blocked or deflected, and dodge
-  i-frames don't save you. **Jump** over it. While airborne near him, press **jump again** to
+- **Perilous thrust:** he turns side-on, draws the staff back through his front hand, holds at
+  full coil, then releases into a long lunge. Perform a **Mikiri Counter** by pressing
+  **dodge with no direction held** *as he releases*: a neutral dodge is a short step forward
+  into the thrust, as in Sekiro. Stepping during the pull-back is too early (you get hit), and
+  holding forward gives a plain dodge that only slips through it. The counter stomps the blade
+  for heavy posture damage. You can also deflect the thrust; blocking it fails.
+- **Perilous sweep:** he slides his grip to the end of the staff, sinks low and spins a full
+  turn with the far blade flat at shin height, ~2.5 m out, travelling forward. It can't be
+  blocked or deflected, dodge i-frames don't save you, and backing off doesn't get you out of
+  range. **Jump** over it. While airborne near him, press **jump again** to
   kick off him. That deals posture damage (×1.6 during a sweep) and staggers him out of the
   sweep. You can follow up with an air attack.
 
@@ -104,8 +107,12 @@ The kanji flashes red above him with a deep warning sound and his blades glow ho
 ### His behaviour
 
 - His whole staff is dangerous: hit windows test both blades *and* the shaft, so standing
-  close is no escape. During wind-ups he shuffles in to his striking distance, so a strike
-  started at the edge of his range still arrives.
+  close is no escape. During wind-ups he shuffles in to his striking distance and tracks you
+  hard, so a strike started at the edge of his range still arrives.
+- He moves with intent: he stalks at a varying pace, sometimes stops to watch you, runs to a new
+  spot and opens with a special from there, and **runs at you** to flow into a running cut.
+  Backing off or running away makes him charge or leap after you. If you keep your distance he
+  may twirl his staff at you, which leaves him open.
 - He guards most attacks from neutral and often strikes right after you stop hitting his guard.
 - He punishes healing at range with thrusts and leaping cleaves.
 - His attack strings end in mix-ups: combo → combo → *(delayed overhead | perilous thrust | perilous sweep)*.
@@ -114,9 +121,11 @@ The kanji flashes red above him with a deep warning sound and his blades glow ho
 | --- | --- | --- |
 | Rising Fang → Turning Fang → Heaven's Fall | Coils right, low blade trails behind | Deflect each hit. The overhead finisher is **delayed**, so wait for it. |
 | Fang Jabs | Draws the staff back at the hip (no kanji) | Deflect twice. Mikiri doesn't work on these. |
-| Perilous Thrust 危 | Turns side-on, crouches, aims the blade at you | Mikiri (neutral dodge as it comes) or deflect |
-| Perilous Sweep 危 | Sinks low, staff held low on his left | Jump, then kick |
-| Whirling Fangs | Spins the staff like a windmill at his side | Deflect the rhythm (4 hits), then the finishing cut |
+| Perilous Thrust 危 | Turns side-on, draws the staff back and holds at full coil | Mikiri (neutral dodge on the release) or deflect |
+| Perilous Sweep 危 | Slides his grip to the staff's end, sinks low and coils to his left | Jump, then kick |
+| Whirling Fangs | Raises the staff level overhead with a whoosh, then drops it into a windmill at his side | Deflect the rhythm (4 hits), then the finishing cut |
+| Shuriken volley | Quick crouch, hand to his belt with a glint of steel, then leaps back | Deflect each throw: **3 fast + 1 delayed**, or **5 fast** |
+| Running Cut | Runs at you, staff swinging up behind his shoulder | Deflect (it tracks hard) |
 | Falling Crescent | Crouches at range, leaps with the staff overhead | Deflect on landing (high) |
 | Parry Counter | Deflects your attack | Guard right away |
 
@@ -135,19 +144,20 @@ godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--v
 
 | Suite | What it checks |
 | --- | --- |
-| `reach` | Every hit window of every boss attack connects from point-blank (1.0 m) to the edge of its range, straight on and 25° off-axis |
+| `reach` | Every hit window of every boss attack (including the running cut) connects from point-blank to the edge of its range, straight on and 25° off-axis |
 | `deflect` | Presses 0–200 ms before contact deflect; earlier ones block (held, or a tap still up); late ones get hit; perilous thrusts can't be blocked; a deflect never guard-breaks you |
 | `spam` | The window shrinks 200/133/100/67/0 ms when mashing, clears after 0.5 s and on a deflect |
-| `mikiri` | A neutral or forward step timed 0–0.4 s before the thrust counters it; too early doesn't; side steps never do |
-| `sweep` | Guarding and dodge i-frames fail against the sweep, jumping clears it, and the kick deals posture |
+| `mikiri` | Only a neutral step from the release on counters the thrust; during the pull-back is too early; forward-held and side steps never counter |
+| `sweep` | Guarding, dodge i-frames, backstepping and walking away all fail against the sweep; jumping clears it, and the kick deals posture |
+| `shuriken` | Volley rhythms (3 fast + 1 delayed, 5 fast), a readable tell before the first, every throw deflectable (no posture to him) or blockable |
 | `attack` | Slash reach, and that mashing is rate-limited (no two hits within 0.38 s) |
 | `cancel` | Guard cancels a slash only in the early wind-up and in the recovery |
-| `soak` | A full fight against the real AI with a bot player: deflects, blocks, posture breaks, deathblows, phase two |
+| `soak` | A full fight against the real AI (charges, repositioning, volleys) with a bot player that reacts to the blade and to incoming shuriken: deflects, blocks, posture breaks, deathblows, phase two |
 
-The run exits with code 0 when every check passes (417 checks plus the soak).
+The run exits with code 0 when every check passes (482 checks, including the soak).
 
 **Captures**: `tests/capture.tscn` stages shots (`overview`, `deflect`, `block`, `mikiri`,
-`sweep`, `slashes`, `parried`) in the real scene, with a bot reacting to his hit windows. It
+`sweep`, `whirl`, `shuriken`, `shuriken5`, `charge`, `slashes`, `parried`) in the real scene, with a bot reacting to his hit windows. It
 records them with Godot's Movie Maker:
 
 ```
@@ -214,7 +224,7 @@ How the animation system works:
 
 ## Status
 
-This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (417 checks, plus
+This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (482 checks, including
 a full-fight soak), the game boots and runs with no script errors, and every change to the
 visuals was checked on frames rendered with Movie Maker. The previous milestone had been
 written without being able to launch Godot. That pass fixed:

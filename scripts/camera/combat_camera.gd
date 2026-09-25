@@ -7,8 +7,11 @@ var player: Player
 var target: Node3D
 var yaw := PI
 var pitch := -0.22
-var distance := 4.2
-var height := 1.55
+var distance := 4.3
+var height := 1.62
+## Over-the-shoulder offset (to the right) so the boss stays visible beside you instead of
+## being hidden behind your character during his wind-ups.
+var shoulder := 0.55
 var mouse_sensitivity := GameInput.MOUSE_SENSITIVITY
 var stick_sensitivity := GameInput.STICK_SENSITIVITY
 
@@ -29,6 +32,7 @@ func _ready() -> void:
 	arm.spring_length = distance
 	arm.margin = 0.25
 	arm.collision_mask = 1
+	arm.position = Vector3(shoulder, 0.0, 0.0)
 	add_child(arm)
 	var probe := SphereShape3D.new()
 	probe.radius = 0.2

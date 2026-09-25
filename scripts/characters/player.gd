@@ -7,8 +7,8 @@ extends Combatant
 ##    (12 -> 8 -> 6 -> 4 -> 0 frames); it clears after 0.5 s or on a successful deflect.
 ##  * Holding guard (or a tapped guard that is still up) blocks: posture damage, no vitality loss.
 ##  * Attacks can be cancelled into guard only at the start of the wind-up and in the recovery.
-##  * Mikiri: dodge with no direction (a forward step, as in Sekiro) or toward him, timed so
-##    the perilous thrust arrives during the step's first 0.33 s. Sweeps must be jumped.
+##  * Mikiri: dodge with no direction held (a short forward step, as in Sekiro) once the
+##    perilous thrust is released; holding forward gives a plain dodge. Sweeps must be jumped.
 ##
 ## All input goes through press_guard / release_guard / press_action / release_dodge, so a
 ## test bot (tests/combat_lab.gd) can drive the player exactly like a controller does.
@@ -62,6 +62,7 @@ var heal_charges := Combat.HEAL_CHARGES
 var dodge_dir := Vector3.FORWARD
 var dodge_toward_boss := false
 var dodge_neutral := false
+var _dodge_started_at := -99.0
 var _dodge_rot := 0.0
 var _mikiri_until := 0.0
 var _invuln_until := -1.0
@@ -547,6 +548,7 @@ func _start_dodge() -> void:
 		face_now(global_position + dodge_dir)
 		_dodge_rot = 0.0
 	_start_state(S.DODGE)
+	_dodge_started_at = Game.clock
 	anim.play(clip_name, 0.05)
 	var ifr: Array = anim.clip.raw.get("iframes", [0.02, 0.26])
 	_iframes = Vector2(float(ifr[0]), float(ifr[1]))
@@ -555,11 +557,12 @@ func _start_dodge() -> void:
 	Sfx.play("dodge", global_position + Vector3.UP, -4.0)
 
 
-## True during the mikiri frames of a neutral / forward step taken toward `attacker`.
-func can_mikiri(attacker: Node3D) -> bool:
-	if state != S.DODGE or state_time > _mikiri_until:
+## Sekiro's Mikiri Counter: a *neutral* step (no direction held; a short step toward the
+## target) that started no earlier than the thrust's release, while the step is still going.
+func can_mikiri(attacker: Node3D, release_time: float) -> bool:
+	if state != S.DODGE or state_time > _mikiri_until or not dodge_neutral:
 		return false
-	if not (dodge_neutral or dodge_toward_boss):
+	if _dodge_started_at < release_time - Combat.MIKIRI_EARLY_GRACE:
 		return false
 	return Combat.angle_to(global_position, forward(), attacker.global_position) < 60.0
 
@@ -744,8 +747,8 @@ func _resolve_attack(info: Dictionary, attacker: Combatant) -> int:
 	var pos: Vector3 = info.get("point", global_position + Vector3.UP)
 	if state == S.DEAD or state == S.DEATHBLOW or state == S.MIKIRI:
 		return Combat.RESULT_IGNORED
-	# Mikiri Counter: a neutral / forward step into a perilous thrust.
-	if kind == "thrust" and can_mikiri(attacker):
+	# Mikiri Counter: a neutral step into a released perilous thrust.
+	if kind == "thrust" and can_mikiri(attacker, float(info.get("release_time", -INF))):
 		_do_mikiri(info, attacker)
 		return Combat.RESULT_MIKIRI
 	# Invulnerability (sweeps ignore dodge i-frames: jump them).
