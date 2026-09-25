@@ -71,6 +71,13 @@ static func _curve(points: Array) -> Curve:
 	return c
 
 
+## Makes a tween advance in real time (ignoring Engine.time_scale) where supported,
+## so flashes play out during hit-stop freeze frames.
+static func _real_time(tw: Tween) -> void:
+	if tw.has_method("set_ignore_time_scale"):
+		tw.call("set_ignore_time_scale", true)
+
+
 static func _free_later(node: Node, seconds: float) -> void:
 	var tree := node.get_tree()
 	if tree == null:
@@ -176,7 +183,7 @@ static func flash(parent: Node, pos: Vector3, size: float, color: Color, star: b
 	mi.global_position = pos
 	mi.scale = Vector3.ONE * 0.35
 	var tw := mi.create_tween()
-	tw.set_ignore_time_scale(true)   # stays alive during hit-stop freeze frames
+	_real_time(tw)   # stays alive during hit-stop freeze frames
 	tw.tween_property(mi, "scale", Vector3.ONE, 0.035).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
 	tw.tween_property(mi, "scale", Vector3.ONE * 0.05, 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	tw.tween_callback(mi.queue_free)
@@ -205,7 +212,7 @@ static func flash(parent: Node, pos: Vector3, size: float, color: Color, star: b
 			s.rotation.z = deg_to_rad(20.0 + 90.0 * k + randf_range(-15.0, 15.0))
 			s.scale = Vector3(0.3, 1.0, 1.0)
 			var tw2 := s.create_tween()
-			tw2.set_ignore_time_scale(true)
+			_real_time(tw2)
 			tw2.tween_property(s, "scale", Vector3(1.0, 1.0, 1.0), 0.04).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
 			tw2.tween_property(s, "scale", Vector3(1.3, 0.0, 1.0), 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 			tw2.tween_callback(s.queue_free)
@@ -221,7 +228,7 @@ static func light_pulse(parent: Node, pos: Vector3, color: Color, energy: float,
 	parent.add_child(l)
 	l.global_position = pos
 	var tw := l.create_tween()
-	tw.set_ignore_time_scale(true)
+	_real_time(tw)
 	tw.tween_property(l, "light_energy", 0.0, duration).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tw.tween_callback(l.queue_free)
 

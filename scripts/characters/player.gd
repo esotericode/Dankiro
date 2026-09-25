@@ -687,7 +687,8 @@ func _do_deflect(info: Dictionary, attacker: Combatant, dt: float) -> void:
 	if dir == "low":
 		dir = "mid"
 	_start_state(S.DEFLECT)
-	anim.play("p_deflect_" + dir, 0.025)
+	# Start most of the way into the snap so the hit-stop freeze frame shows the clash pose.
+	anim.play("p_deflect_" + dir, 0.02, 1.0, 0.035)
 	face_now(attacker.global_position)
 	var pos: Vector3 = info.get("point", global_position + Vector3(0, 1.3, 0))
 	var cam_dir := Vector3.UP

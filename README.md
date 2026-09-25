@@ -123,6 +123,7 @@ You need Python 3.10+ with `numpy scipy matplotlib pillow fonttools`.
 | Character looks | `tools/build_models.py` | `python3 tools/build_models.py` | `python3 tools/model_preview.py boss --zoom head` |
 | Sound effects | `tools/gen_audio.py` | `python3 tools/gen_audio.py [name]` | |
 | Kanji + UI font | `tools/gen_textures.py` | `python3 tools/gen_textures.py` | |
+| GDScript sanity | | | `python3 tools/check_gdscript.py` cross-checks member and function names and call arity across the scripts |
 
 How the animation system works:
 

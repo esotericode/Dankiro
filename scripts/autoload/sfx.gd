@@ -102,10 +102,11 @@ func _setup_buses() -> void:
 		AudioServer.set_bus_name(idx2, "Ambience")
 		AudioServer.set_bus_send(idx2, "Master")
 	var master := AudioServer.get_bus_index("Master")
-	if AudioServer.get_bus_effect_count(master) == 0:
-		var lim := AudioEffectHardLimiter.new()
-		lim.ceiling_db = -0.5
-		AudioServer.add_bus_effect(master, lim)
+	if AudioServer.get_bus_effect_count(master) == 0 and ClassDB.class_exists("AudioEffectHardLimiter"):
+		var lim := ClassDB.instantiate("AudioEffectHardLimiter") as AudioEffect
+		if lim != null:
+			lim.set("ceiling_db", -0.5)
+			AudioServer.add_bus_effect(master, lim)
 
 
 func _pick(bank: String) -> AudioStream:
