@@ -215,7 +215,7 @@ godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--v
 | `cancel` | Guard cancels a slash only in the early wind-up and in the recovery |
 | `soak` | A full fight against the real AI (charges, repositioning, volleys) with a bot player that reacts to the blade and to incoming shuriken: deflects, blocks, posture breaks, deathblows, the next phase |
 
-The run exits with code 0 when every check passes (620 checks, including the soak). It also
+The run exits with code 0 when every check passes (652 checks, including the soak). It also
 fails if the engine or a script reports any error during the run (it listens through a
 `Logger`), so runtime errors can't hide behind passing gameplay checks.
 
@@ -317,7 +317,7 @@ How the boss model is built (PS2-style: ~25k triangles, one 2048 px atlas with b
 
 ## Status
 
-This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (620 checks, including
+This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (652 checks, including
 a full-fight soak), the game boots and runs with no script errors, and every change to the
 visuals was checked on frames rendered with Movie Maker.
 
