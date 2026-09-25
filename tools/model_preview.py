@@ -121,6 +121,12 @@ def main():
     lib = rm.load_json("data/animations.json")
     rigs = rm.load_json("data/rigs.json")
     models = rm.load_json("data/models.json")
+    if models[args.model].get("scenes"):
+        # Skinned .glb models (the boss) are built and previewed with Blender, and checked in-engine.
+        print("%s is a skinned .glb model: run `python3 tools/build_boss_model.py --preview` (Blender renders in "
+              "tools/preview_out/) or the Movie Maker art shots model / model_head / model_face / model_combo "
+              "in tests/capture.gd." % args.model)
+        return
     rig = rm.Rig(args.model, rigs)
     clip = args.clip or ("b_idle" if args.model == "boss" else "p_idle")
     xf = pose_transforms(rig, clip, args.t, lib)

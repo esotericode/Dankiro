@@ -28,6 +28,8 @@ var wrist_offset := 0.035
 var weapon_kick_pos := Vector3.ZERO
 var weapon_kick_rot := Quaternion.IDENTITY
 var chest_kick := Quaternion.IDENTITY
+## Skinned models (SkinnedModel) that follow the joints; synced after every apply_pose.
+var skins: Array = []
 
 
 func setup(p_rig_name: String) -> void:
@@ -72,6 +74,21 @@ func setup(p_rig_name: String) -> void:
 
 func joint(jname: String) -> Node3D:
 	return joints.get(jname) as Node3D
+
+
+## Joint name -> rest position in model space (identity rotations, hips at hips_height).
+static func rest_joint_positions(rig_def: Dictionary) -> Dictionary:
+	var out := {}
+	for j in rig_def.get("joints", []):
+		var jd: Dictionary = j
+		var o: Array = jd["offset"]
+		var off := Vector3(float(o[0]), float(o[1]), float(o[2]))
+		var parent := str(jd["parent"])
+		if parent == "":
+			out[str(jd["name"])] = Vector3(0.0, float(rig_def.get("hips_height", 1.0)), 0.0) + off
+		else:
+			out[str(jd["name"])] = (out[parent] as Vector3) + off
+	return out
 
 
 ## Applies a sampled/blended pose. Everything is solved in this node's local space.
@@ -164,6 +181,8 @@ func apply_pose(p: Dictionary) -> void:
 		var fa_pos: Vector3 = sh_pos + bu * (offsets[fa] as Vector3)
 		_set_model(fa, Transform3D(bf, fa_pos))
 		_set_model(hd, Transform3D(bf * Basis(hand_q), fa_pos + bf * (offsets[hd] as Vector3)))
+	for s in skins:
+		(s as SkinnedModel).sync(self)
 
 
 func _set_model(jname: String, xf: Transform3D) -> void:

@@ -2,7 +2,8 @@ extends Node
 ## Scripted capture director for visual checks with Godot's Movie Maker:
 ##   godot --write-movie out/frame.png --fixed-fps 30 res://tests/capture.tscn -- <shot>
 ## Shots: overview, deflect, block, mikiri, thrust_backstep, sweep, sweep_flee, whirl, shuriken,
-## shuriken5, charge, slashes, parried.
+## shuriken5, charge, slashes, parried, and art checks: model (orbit), model_head, model_face,
+## model_combo.
 ## Loads the real game scene (arena, lighting, HUD, lock-on camera), skips the intro, stages
 ## the fighters and drives the player with a bot that reacts to the boss's hit windows.
 
@@ -17,6 +18,8 @@ var _last_clip := ""
 var _release_at := -1.0
 var _steps: Array = []          ## [time, Callable]
 var _end_at := 4.0
+var _orbit_cam: Camera3D        ## art-check camera orbiting the boss
+var _orbit := {"radius": 2.8, "height": 1.45, "look_y": 1.3, "speed": 90.0, "start": 0.0}
 
 
 func _ready() -> void:
@@ -82,6 +85,14 @@ func auto_guard(lead := 0.05, hold := 0.12) -> void:
 
 
 func _process(_delta: float) -> void:
+	if _orbit_cam != null and boss != null:
+		var a := deg_to_rad(float(_orbit["start"]) + t * float(_orbit["speed"]))
+		var c := boss.global_position
+		var fwd := boss.forward()
+		var right := fwd.cross(Vector3.UP)
+		var off := (fwd * cos(a) + right * sin(a)) * float(_orbit["radius"])
+		_orbit_cam.global_position = c + off + Vector3.UP * float(_orbit["height"])
+		_orbit_cam.look_at(c + Vector3.UP * float(_orbit["look_y"]), Vector3.UP)
 	if has_meta("auto_guard") and boss != null:
 		var cfg: Array = get_meta("auto_guard")
 		_auto_guard_tick(float(cfg[0]), float(cfg[1]))
@@ -241,3 +252,46 @@ func shot_parried() -> void:
 		var tt := 0.3 + 0.2 * k
 		at(tt, func(): player.press_action("attack", Game.clock))
 	_end_at = 3.2
+
+
+# ------------------------------------------------------------------------- art checks
+func _art_camera(radius: float, height: float, look_y: float, speed: float, start := 0.0) -> void:
+	var cc := Game.camera as Camera3D
+	if cc != null:
+		cc.set_process(false)
+		cc.set_physics_process(false)
+	Game.hud.visible = false
+	_orbit_cam = Camera3D.new()
+	_orbit_cam.fov = 32.0
+	add_child(_orbit_cam)
+	_orbit_cam.current = true
+	_orbit = {"radius": radius, "height": height, "look_y": look_y, "speed": speed, "start": start}
+
+
+## The boss idling while the camera circles him (4 s = one turn).
+func shot_model() -> void:
+	_stage(7.0)
+	_art_camera(3.0, 1.55, 1.2, 90.0)
+	_end_at = 4.0
+
+
+## Close orbit around his head.
+func shot_model_head() -> void:
+	_stage(7.0)
+	_art_camera(1.15, 1.95, 1.86, 90.0)
+	_end_at = 4.0
+
+
+## His opening combo from a fixed 3/4 front view.
+func shot_model_combo() -> void:
+	_stage(3.0)
+	_art_camera(3.6, 1.5, 1.2, 0.0, 35.0)
+	at(0.3, func(): boss_string(["b_combo_1", "b_combo_2", "b_thrust"]))
+	_end_at = 4.2
+
+
+## His face from about the player's eye height, sweeping from his left to his right.
+func shot_model_face() -> void:
+	_stage(7.0)
+	_art_camera(1.0, 1.70, 1.84, 25.0, -50.0)
+	_end_at = 4.0

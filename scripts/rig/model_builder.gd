@@ -66,6 +66,33 @@ static func build(rig: HumanoidRig, model_name: String) -> Dictionary:
 			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		mi.layers = CHARACTER_LAYERS
 		parent.add_child(mi)
+	# Scenes (.glb): "skin" = a skinned model driven by the rig's joints, otherwise a static
+	# model on a joint / holder / the weapon. Their surfaces are restyled by material name.
+	var skins: Array = []
+	for sc_def in model.get("scenes", []):
+		var sd: Dictionary = sc_def
+		var path := str(sd["path"])
+		if not ResourceLoader.exists(path):
+			push_error("Model %s: missing %s" % [model_name, path])
+			continue
+		var ps: PackedScene = load(path)
+		var inst_root: Node3D
+		if str(sd["parent"]) == "skin":
+			var sm := SkinnedModel.attach(rig, ps, sd.get("helpers", {}))
+			if sm == null:
+				push_error("Model %s: %s has no skeleton" % [model_name, path])
+				continue
+			skins.append(sm)
+			inst_root = sm.root
+		else:
+			var sp: Node3D = nodes.get(str(sd["parent"]))
+			if sp == null:
+				push_error("Model %s: unknown parent %s" % [model_name, sd["parent"]])
+				continue
+			inst_root = ps.instantiate() as Node3D
+			sp.add_child(inst_root)
+		for mi_node in inst_root.find_children("*", "MeshInstance3D", true, false):
+			_restyle(mi_node as MeshInstance3D, mats, mat_specs)
 	var chains: Array = []
 	for c in model.get("chains", []):
 		var cd: Dictionary = c
@@ -110,7 +137,43 @@ static func build(rig: HumanoidRig, model_name: String) -> Dictionary:
 		ol.shadow_enabled = false
 		lp.add_child(ol)
 		lights.append(ol)
-	return {"materials": mats, "nodes": nodes, "chains": chains, "lights": lights}
+	return {"materials": mats, "nodes": nodes, "chains": chains, "lights": lights, "skins": skins}
+
+
+## Replaces an imported mesh's materials with ones built from the model's material specs
+## (matched by the glTF material name), keeping the imported textures.
+static func _restyle(mi: MeshInstance3D, mats: Dictionary, specs: Dictionary) -> void:
+	mi.layers = CHARACTER_LAYERS
+	if mi.mesh == null:
+		return
+	for i in mi.mesh.get_surface_count():
+		var src := mi.mesh.surface_get_material(i) as BaseMaterial3D
+		if src == null:
+			continue
+		var mname := src.resource_name
+		if not specs.has(mname):
+			continue
+		var m: StandardMaterial3D = mats.get(mname)
+		if m == null:
+			continue
+		if src.albedo_texture != null:
+			m.albedo_texture = src.albedo_texture
+		if src.roughness_texture != null:
+			m.roughness_texture = src.roughness_texture
+			m.roughness_texture_channel = src.roughness_texture_channel
+		if src.metallic_texture != null:
+			m.metallic_texture = src.metallic_texture
+			m.metallic_texture_channel = src.metallic_texture_channel
+		if src.normal_enabled and src.normal_texture != null:
+			m.normal_enabled = true
+			m.normal_texture = src.normal_texture
+		if src.emission_enabled and src.emission_texture != null:
+			m.emission_enabled = true
+			m.emission_texture = src.emission_texture
+		if src.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED and m.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED:
+			m.transparency = src.transparency
+			m.alpha_scissor_threshold = src.alpha_scissor_threshold
+		mi.set_surface_override_material(i, m)
 
 
 static func make_material(spec: Dictionary) -> StandardMaterial3D:
@@ -141,6 +204,13 @@ static func make_material(spec: Dictionary) -> StandardMaterial3D:
 	if spec.has("subsurface"):
 		m.subsurf_scatter_enabled = true
 		m.subsurf_scatter_strength = float(spec["subsurface"])
+	if spec.has("alpha_scissor"):
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+		m.alpha_scissor_threshold = float(spec["alpha_scissor"])
+	if spec.has("texture"):
+		var tp := str(spec["texture"])
+		if ResourceLoader.exists(tp):
+			m.albedo_texture = load(tp)
 	return m
 
 

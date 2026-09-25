@@ -9,6 +9,10 @@ Run: python3 tools/build_models.py && python3 tools/model_preview.py boss
 import json
 import math
 import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from model3d.boss_spec import BODY_GLB, HAIR_PNG, HELPERS, SASH_PNG, STAFF_GLB  # noqa: E402  (no Blender needed)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -28,6 +32,7 @@ class Model:
         self.parts = []
         self.chains = []
         self.lights = []
+        self.scenes = []
 
     def mat(self, name, color, roughness=0.8, metallic=0.0, **kw):
         d = {"color": r4(color), "roughness": roughness, "metallic": metallic}
@@ -60,9 +65,17 @@ class Model:
             th = min(0.025, (y1 - y0) * 0.25)
             self.part(h, shell(r + flare + 0.004, arc * 0.98, y0, y0 + th, 0.006, 0.002, 10, 1), trim)
 
+    def scene(self, parent, path, **kw):
+        d = {"parent": parent, "path": path}
+        d.update(kw)
+        self.scenes.append(d)
+
     def data(self):
-        return {"materials": self.materials, "holders": self.holders, "parts": self.parts,
-                "chains": self.chains, "lights": self.lights}
+        d = {"materials": self.materials, "holders": self.holders, "parts": self.parts,
+             "chains": self.chains, "lights": self.lights}
+        if self.scenes:
+            d["scenes"] = self.scenes
+        return d
 
 
 # ---------------------------------------------------------------- mesh spec helpers
@@ -198,117 +211,33 @@ def boss():
     m.mat("lacquer", (0.085, 0.078, 0.09), 0.22, clearcoat=0.9, clearcoat_roughness=0.08, rim=0.5, rim_tint=0.2)
     m.mat("red", (0.46, 0.05, 0.04), 0.3, clearcoat=0.8, clearcoat_roughness=0.1, rim=0.3)
     m.mat("cloth", (0.17, 0.045, 0.05), 0.9, rim=0.45, rim_tint=0.5)
-    m.mat("crimson", (0.56, 0.06, 0.05), 0.85, rim=0.35, rim_tint=0.4, double_sided=True)
+    m.mat("crimson", (1.0, 1.0, 1.0), 0.8, rim=0.35, rim_tint=0.4, double_sided=True, texture="res://" + SASH_PNG)
     m.mat("gold", (0.86, 0.63, 0.26), 0.28, 1.0)
     m.mat("iron", (0.2, 0.19, 0.18), 0.4, 0.9)
-    m.mat("hair", (0.9, 0.87, 0.82), 0.72, double_sided=True, rim=0.45, rim_tint=0.2)
+    m.mat("hair", (1.0, 1.0, 1.0), 0.72, double_sided=True, rim=0.45, rim_tint=0.2, alpha_scissor=0.35,
+          texture="res://" + HAIR_PNG)
     m.mat("dark", (0.012, 0.01, 0.01), 0.9)
     m.mat("fang", (0.92, 0.9, 0.84), 0.4)
     m.mat("ember", (1.0, 0.36, 0.08), 1.0, unshaded=True, emission=[1.0, 0.36, 0.08], emission_energy=7.0, unique=True)
-    m.mat("blade", (0.55, 0.55, 0.58), 0.24, 1.0, metallic_specular=0.75, emission=[1.0, 0.24, 0.05],
-          emission_energy=0.35, unique=True)
+    m.mat("blade", (1.0, 1.0, 1.0), 1.0, 1.0, metallic_specular=0.75, emission=[1.0, 0.30, 0.06],
+          emission_energy=0.35, unique=True)          # textures (hamon, edge glow mask) from the glb
 
-    # ---- pelvis, sash, armoured skirt
-    m.part("hips", lathe([(0.0, -0.15), (0.12, -0.14), (0.18, -0.08), (0.195, 0.0), (0.19, 0.09), (0.0, 0.11)], 20, 1.0, 0.8), "cloth")
-    m.part("hips", cylinder(0.206, 0.212, 0.1, 24), "crimson", (0, 0.055, 0), scale=(1, 1, 0.83))
-    m.part("hips", cylinder(0.214, 0.214, 0.014, 24), "gold", (0, 0.1, 0), scale=(1, 1, 0.83))
-    m.part("hips", box((0.09, 0.07, 0.04)), "crimson", (0, 0.05, -0.18), (0, 0, 45))
-    for i, a in enumerate((180.0, 128.0, -128.0)):
-        m.plate("hips", "kusazuri_b%d" % i, 0.215, 50.0, -0.42, 0.02, 0.08, a, "lacquer", "gold", 3)
-    for s in ("l", "r"):
-        sg = -1.0 if s == "r" else 1.0
-        m.plate("thigh_" + s, "kusazuri_f" + s, 0.13, 62.0, -0.33, 0.08, 0.05, 28.0 * sg, "lacquer", "gold", 3)
-        m.plate("thigh_" + s, "kusazuri_s" + s, 0.13, 56.0, -0.30, 0.08, 0.05, 92.0 * sg, "lacquer", "gold", 3)
+    # ---- body: the skinned PS2-style model built by tools/build_boss_model.py (Blender)
+    m.mat("boss_body", (1.0, 1.0, 1.0), 1.0, 1.0, metallic_specular=0.5, rim=0.25, rim_tint=0.35)
+    m.mat("boss_mask", (1.0, 1.0, 1.0), 1.0, 1.0, metallic_specular=0.5, rim=0.2, rim_tint=0.3)
+    m.scene("skin", "res://" + BODY_GLB, helpers=HELPERS)
+    m.light("head", (0, 0.10, -0.34), (1.0, 0.36, 0.08), 0.35, 0.8)
 
-    # ---- torso
-    m.part("spine", lathe([(0.0, -0.02), (0.17, 0.0), (0.18, 0.12), (0.2, 0.24), (0.0, 0.27)], 20, 1.0, 0.8), "cloth")
-    for k in range(3):
-        m.part("spine", cylinder(0.186 + k * 0.006, 0.182 + k * 0.006, 0.05, 22), "lacquer", (0, 0.04 + k * 0.065, 0), scale=(1, 1, 0.8))
-        m.part("spine", cylinder(0.19 + k * 0.006, 0.19 + k * 0.006, 0.008, 22), "gold", (0, 0.015 + k * 0.065, 0), scale=(1, 1, 0.8))
-    m.part("chest", lathe([(0.0, -0.05), (0.2, -0.04), (0.232, 0.05), (0.252, 0.14), (0.24, 0.22), (0.18, 0.275),
-                           (0.06, 0.29), (0.0, 0.292)], 24, 1.0, 0.78), "lacquer")
-    for yv in (0.0, 0.075):
-        rr = 0.222 + yv * 0.35
-        m.part("chest", cylinder(rr + 0.006, rr + 0.004, 0.012, 24), "gold", (0, yv, 0), scale=(1, 1, 0.8))
-    m.holder("mon", "chest", (0, 0.15, -0.197), (90, 0, 0))
-    m.part("mon", cylinder(0.055, 0.055, 0.012, 24), "gold")
-    m.part("mon", cylinder(0.042, 0.042, 0.016, 24), "red")
-    m.part("mon", cylinder(0.012, 0.012, 0.02, 12), "ember", shadow=False)
-    for sx in (-1.0, 1.0):
-        m.part("chest", box((0.12, 0.035, 0.2)), "lacquer", (0.15 * sx, 0.255, 0.0), (0, 0, -14.0 * sx))
-        m.part("chest", box((0.125, 0.008, 0.205)), "gold", (0.15 * sx, 0.275, 0.0), (0, 0, -14.0 * sx))
-
-    # ---- neck + head
-    m.part("neck", lathe([(0.0, -0.02), (0.105, -0.01), (0.085, 0.05), (0.07, 0.11), (0.0, 0.12)], 16, 1.0, 0.9), "lacquer")
-    m.part("neck", cylinder(0.108, 0.108, 0.01, 18), "gold", (0, -0.012, 0))
-    m.part("head", sphere(0.1, 14), "dark", (0, 0.10, 0.0))
-    m.part("head", lathe([(0.0, 0.12), (0.126, 0.125), (0.136, 0.16), (0.13, 0.205), (0.105, 0.245), (0.055, 0.27),
-                          (0.0, 0.276)], 22, 1.0, 1.05), "lacquer")
-    m.part("head", cylinder(0.139, 0.139, 0.02, 22), "gold", (0, 0.138, 0), scale=(1, 1, 1.05))
-    m.part("head", box((0.012, 0.02, 0.24)), "gold", (0, 0.27, 0.0))
-    m.part("head", shell(0.142, 150.0, 0.118, 0.138, 0.01, 0.035, 12, 1), "lacquer")
-    for k in range(3):
-        y1 = 0.135 - k * 0.05
-        m.plate("head", "shikoro%d" % k, 0.145 + k * 0.012, 250.0, y1 - 0.075, y1, 0.05 + k * 0.012, 180.0, "lacquer",
-                "gold" if k == 2 else None, 2)
-    for sx in (-1.0, 1.0):
-        m.part("head", box((0.018, 0.09, 0.075)), "lacquer", (0.155 * sx, 0.1, -0.07), (0, 35.0 * sx, 10.0 * sx))
-        m.part("head", box((0.02, 0.092, 0.012)), "gold", (0.158 * sx, 0.1, -0.105), (0, 35.0 * sx, 10.0 * sx))
-        m.part("head", horn((0.13 * sx, 0.0, 0.03), (0.17 * sx, 0.25, 0.07), 0.034, 16, 12, 0.32), "gold", (0.03 * sx, 0.165, -0.13))
-    m.part("head", sphere(0.022, 12), "ember", (0, 0.17, -0.142), shadow=False)
-    m.part("head", torus(0.02, 0.03, 16, 6), "gold", (0, 0.17, -0.14), (90, 0, 0))
-    m.part("head", shell(0.104, 170.0, -0.012, 0.082, 0.012, -0.012, 12, 3), "red")
-    m.part("head", box((0.026, 0.05, 0.03)), "red", (0, 0.066, -0.108), (-18, 0, 0))
-    for sx in (-1.0, 1.0):
-        m.part("head", cylinder(0.0, 0.008, 0.03, 6), "fang", (0.025 * sx, 0.02, -0.1), (180, 0, 0))
-        m.part("head", box((0.06, 0.012, 0.02)), "red", (0.042 * sx, 0.115, -0.1), (0, 20.0 * sx, -18.0 * sx))
-        m.part("head", sphere(0.0125, 10), "ember", (0.036 * sx, 0.098, -0.094), scale=(1.4, 0.7, 1.0), shadow=False)
-    m.part("head", horn((0, -0.05, -0.01), (0, -0.11, 0.02), 0.022, 8, 8, 0.6), "hair", (0, -0.01, -0.095))
-    m.light("head", (0, 0.1, -0.2), (1.0, 0.36, 0.08), 0.7, 0.9)
-
-    # ---- arms
-    for s in ("l", "r"):
-        sg = 1.0 if s == "r" else -1.0
-        m.part("upper_arm_" + s, limb(0.33, 0.08, 0.066, 16), "cloth")
-        for k in range(3):
-            y1 = 0.07 - k * 0.075
-            m.plate("upper_arm_" + s, "sode%s%d" % (s, k), 0.115 + k * 0.01, 120.0, y1 - 0.12, y1, 0.035, -90.0 * sg,
-                    "lacquer", "gold" if k == 2 else None, 2, (0.025 * sg, 0, 0), 8.0)
-        m.part("forearm_" + s, limb(0.30, 0.062, 0.048, 16), "cloth")
-        m.plate("forearm_" + s, "kote" + s, 0.068, 150.0, -0.27, -0.02, 0.0, -90.0 * sg, "lacquer", None, 2)
-        m.part("forearm_" + s, cylinder(0.056, 0.056, 0.018, 16), "gold", (0, -0.275, 0))
-        m.part("forearm_" + s, cylinder(0.066, 0.066, 0.014, 16), "gold", (0, -0.03, 0))
-        m.part("hand_" + s, box((0.085, 0.1, 0.095)), "iron", (0, -0.045, -0.005))
-
-    # ---- legs
-    for s in ("l", "r"):
-        m.part("thigh_" + s, limb(0.48, 0.108, 0.088, 16, 1.05, 1.0), "cloth")
-        m.part("shin_" + s, limb(0.47, 0.085, 0.07, 16), "cloth")
-        m.plate("shin_" + s, "suneate" + s, 0.082, 150.0, -0.42, -0.07, 0.01, 0.0, "lacquer", "gold", 3)
-        m.part("shin_" + s, shell(0.09, 120.0, -0.06, 0.06, 0.012, 0.0, 8, 1), "lacquer")
-        for k in range(3):
-            m.part("shin_" + s, box((0.008, 0.3, 0.008)), "gold", (-0.03 + 0.03 * k, -0.24, -0.083 + abs(k - 1) * 0.008))
-        m.part("foot_" + s, box((0.1, 0.07, 0.26)), "iron", (0, -0.05, -0.06))
-
-    # ---- twin-bladed staff: origin at the shaft center, upper blade toward +Y.
-    # Heavy polearm: 29 mm shaft, 0.70 m blades (3.2 m tip to tip) so it reads clearly at range.
-    m.part("weapon", cylinder(0.029, 0.029, 1.80, 14), "lacquer")
-    m.part("weapon", cylinder(0.0325, 0.0325, 0.50, 14), "crimson")
-    for yv in (-0.76, -0.52, -0.26, 0.26, 0.52, 0.76):
-        m.part("weapon", cylinder(0.034, 0.034, 0.02, 14), "gold", (0, yv, 0))
-    for name, rot in (("end_upper", (0, 0, 0)), ("end_lower", (180, 0, 0))):
-        m.holder(name, "weapon", (0, 0, 0), rot)
-        m.part(name, lathe([(0.0, 0.84), (0.032, 0.84), (0.042, 0.87), (0.05, 0.895), (0.042, 0.915), (0.0, 0.915)], 16), "gold")
-        for sx in (-1.0, 1.0):
-            m.part(name, horn((0.07 * sx, 0.0, 0.0), (0.10 * sx, 0.095, 0.0), 0.016, 8, 8), "gold", (0.012 * sx, 0.895, 0))
-        m.part(name, blade(0.70, 0.074, 0.014, 0.10, 0.2, 22, 0.08), "blade", (0, 0.905, 0))
+    # ---- twin-bladed staff (tools/build_boss_model.py): origin at the shaft centre, upper blade
+    # toward +Y, 3.2 m tip to tip. The "blade" material glows along the edge (emission mask).
+    m.scene("weapon", "res://" + STAFF_GLB)
 
     body = [["chest", 0.26, [0, 0.1, 0.02]], ["hips", 0.24, [0, -0.05, 0]]]
-    mane = [(0.0, 0.25, 0.06), (-0.05, 0.24, 0.07), (0.05, 0.24, 0.07), (-0.08, 0.2, 0.09), (0.08, 0.2, 0.09)]
+    mane = [(0.0, 0.25, 0.10), (-0.06, 0.24, 0.10), (0.06, 0.24, 0.10), (-0.10, 0.20, 0.11), (0.10, 0.20, 0.11)]
     for i, off in enumerate(mane):
         side = [1, 0, 0.4 * (1 if off[0] > 0 else -1 if off[0] < 0 else 0)]
-        m.chain("head", "hair", off, (off[0] * 2.0, -0.4, 1.0), side_axis=side, segments=9, seg_len=0.085 - i * 0.004,
-                width_start=0.075, width_end=0.018, stiffness=0.05, gravity=5.0, wind_strength=0.9, colliders=body)
+        m.chain("head", "hair", off, (off[0] * 1.5, -1.0, 0.5), side_axis=side, segments=8, seg_len=0.075 - i * 0.003,
+                width_start=0.13, width_end=0.06, stiffness=0.045, gravity=6.0, wind_strength=0.8, colliders=body)
     for sx in (-1.0, 1.0):
         m.chain("hips", "crimson", (0.07 * sx, 0.04, 0.17), (0.1 * sx, -1.0, 0.25), segments=9, seg_len=0.09,
                 width_start=0.09, width_end=0.07, stiffness=0.03, gravity=6.0, wind_strength=1.0, colliders=body)
