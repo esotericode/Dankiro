@@ -575,6 +575,15 @@ func _process_kick() -> void:
 
 
 func _after_move() -> void:
+	# Never stand on the boss's head after a kick: slide off his capsule.
+	for i in get_slide_collision_count():
+		var col := get_slide_collision(i)
+		if col.get_collider() == lock_target and col.get_normal().y > 0.4 and lock_target != null:
+			var away := Combat.flat(global_position - lock_target.global_position)
+			if away.length() < 0.05:
+				away = -forward()
+			push(away.normalized() * 5.0)
+			_air_velocity = away.normalized() * 3.0
 	var on_floor := is_on_floor()
 	if (state == S.AIR or state == S.AIR_ATTACK or state == S.JUMP_KICK) and on_floor and velocity.y <= 0.0 \
 			and state_time > 0.1:

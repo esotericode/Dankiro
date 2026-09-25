@@ -488,6 +488,8 @@ def lerp3(a, b, u):
 
 
 def build_boss():
+    # NOTE: hit "dir" is the side the blade arrives from *as the player sees it* (it picks the
+    # player's deflect pose). The boss's right side is the player's left.
     S = B_STANCE
     # ---------------- idle / guard / locomotion
     clip("b_idle", "boss", [
@@ -579,7 +581,7 @@ def build_boss():
     clip("b_combo_1", "boss", keys, chain=0.68, chain_in=0.10, vuln=[0.80, 1.10],
          track=[[0.0, 0.34, 420], [0.34, 0.46, 160]],
          hits=[{"from": 0.45, "to": 0.58, "blade": "lower", "kind": "normal", "dmg": 26, "posture_block": 22,
-                "posture_deflect": 7, "boss_posture": 11, "dir": "right"}],
+                "posture_deflect": 7, "boss_posture": 11, "dir": "left"}],
          events=[{"t": 0.38, "type": "sfx", "name": "swing_heavy"}])
 
     # ---- Combo 2: "Turning Fang" (flat cut, upper blade, right -> left, counter-clockwise from above)
@@ -600,15 +602,15 @@ def build_boss():
     keys += bkeys_from_swing(sw2, lambda u: {
         "hips": [0, -40 + 70 * u, 0], "chest": [-4 - 6 * u, -36 + 95 * u, 0], "spine": [-4, -14 + 32 * u, 0],
         "neck": [4, 40 - 60 * u, 0], "head": [0, 18 - 28 * u, 0],
-        "hips_pos": [0, 0.98 - 0.02 * u, 0.06 - 0.12 * u], "root": [0, 0, -0.6 * u],
+        "hips_pos": [0, 0.98 - 0.02 * u, 0.06 - 0.12 * u], "root": [0, 0, -0.82 * u],
         "foot_r": lerp3([0.24, 0.08, 0.28], [0.26, 0.08, 0.02], smooth(u)),
         "elbow_l": [-0.7, -0.7, 0.3], "elbow_r": [0.5, -0.9, 0.4]})
-    keys.append(key(0.62, {"chest": [-10, 62, 0], "hips": [0, 34, 0], "root": [0, 0, -0.66]}, ease="out_quad"))
-    keys.append({"t": 1.0, "pose": "b_stance", "set": {"root": [0, 0, -0.7]}, "ease": "inout_sine"})
+    keys.append(key(0.62, {"chest": [-10, 62, 0], "hips": [0, 34, 0], "root": [0, 0, -0.88]}, ease="out_quad"))
+    keys.append({"t": 1.0, "pose": "b_stance", "set": {"root": [0, 0, -0.92]}, "ease": "inout_sine"})
     clip("b_combo_2", "boss", keys, chain=0.62, chain_in=0.10, vuln=[0.72, 1.0],
          track=[[0.0, 0.26, 360], [0.26, 0.34, 120]],
          hits=[{"from": 0.33, "to": 0.46, "blade": "upper", "kind": "normal", "dmg": 26, "posture_block": 22,
-                "posture_deflect": 7, "boss_posture": 11, "dir": "right"}],
+                "posture_deflect": 7, "boss_posture": 11, "dir": "left"}],
          events=[{"t": 0.28, "type": "sfx", "name": "swing_heavy"}])
 
     # ---- Combo 3: "Heaven's Fall" (delayed overhead cleave, upper blade)
@@ -725,16 +727,16 @@ def build_boss():
     keys[1]["set"]["root"] = [0, 0, -0.15]
     # finisher: two-handed diagonal cut, upper blade from high right, through the front, to low left
     fb0 = unit([0.45, 0.60, 0.66])
-    axf, af = arc(fb0, [0.05, 0.25, -1.0])
+    axf, af = arc(fb0, [0.05, -0.12, -1.0])
     RF = [0.36, 1.62, 0.12]
     fin_w = S.copy()
     fin_w.update({"hips_pos": [0, 1.02, 0.08], "hips": [0, -35, 0], "chest": [4, -40, 0], "spine": [2, -12, 0],
                   "neck": [0, 40, 0], "head": [0, 16, 0], "root": [0, 0, -1.15],
                   "elbow_r": [0.9, -0.3, 0.5], "elbow_l": [-0.4, -1.0, 0.4]})
     ef = edge_for(axf, fb0)
-    place(fin_w, RF, fb0, ef, -0.35, -0.80, keys[-1]["set"]["weapon_rot"])
+    place(fin_w, RF, fb0, ef, 0.0, -0.45, keys[-1]["set"]["weapon_rot"])
     pivf = np.array(RF) + np.array([-0.15, -0.2, -0.2])
-    swf, _ = hswing(1.84, 1.98, 7, pivf, axf, af + 70, RF, fb0, ef, -0.35, fin_w["weapon_rot"], ease=in_quad,
+    swf, _ = hswing(1.84, 1.98, 7, pivf, axf, af + 70, RF, fb0, ef, 0.0, fin_w["weapon_rot"], ease=in_quad,
                     pivot_move=[-0.2, -0.15, -0.45])
     keys.append(key(1.74, fin_w, ease="inout_sine"))
     keys.append(key(1.84, dict(fin_w, chest=[6, -44, 0]), ease="linear"))
@@ -746,7 +748,7 @@ def build_boss():
     fin_end = S.copy()
     fin_end.update({"chest": [-16, 40, 0], "hips": [0, 15, 0], "root": [0, 0, -1.65], "hips_pos": [0, 0.96, -0.1],
                     "foot_l": [-0.18, 0.08, -0.52], "elbow_l": [-0.7, -0.7, 0.3]})
-    place(fin_end, [-0.02, 0.92, -0.35], unit([-0.55, -0.55, -0.62]), [0.0, -0.3, 1.0], -0.35, -0.80, swf[-1][2])
+    place(fin_end, [-0.02, 0.92, -0.35], unit([-0.55, -0.55, -0.62]), [0.0, -0.3, 1.0], 0.0, -0.45, swf[-1][2])
     keys.append(key(2.14, fin_end, ease="out_quad"))
     keys.append({"t": 2.65, "pose": "b_stance", "set": {"root": [0, 0, -1.7]}, "ease": "inout_sine"})
 
@@ -759,7 +761,7 @@ def build_boss():
         u = (130 + 180 * k_) / 760.0
         hits.append(whirl_hit(t0 + (t1 - t0) * u, blade))
     hits.append({"from": 1.86, "to": 1.99, "blade": "upper", "kind": "normal", "dmg": 30, "posture_block": 26,
-                 "posture_deflect": 9, "boss_posture": 15, "dir": "right", "final": True})
+                 "posture_deflect": 9, "boss_posture": 15, "dir": "left", "final": True})
     clip("b_whirl", "boss", keys, chain=2.3, vuln=[2.2, 2.62], track=[[0.0, 0.3, 360], [0.3, 1.6, 120], [1.6, 1.8, 200]],
          hits=hits, events=[{"t": 0.30, "type": "sfx", "name": "whirl"}, {"t": 1.80, "type": "sfx", "name": "swing_heavy"}])
 
@@ -839,12 +841,12 @@ def build_boss():
             key(0.38, cwind, ease="inout_sine"), key(0.44, dict(cwind, chest=[-4, -34, 0]))]
     keys += bkeys_from_swing(swc, lambda u: {
         "hips": [0, -38 + 68 * u, 0], "chest": [-4 - 6 * u, -34 + 92 * u, 0], "neck": [4, 38 - 55 * u, 0],
-        "root": [0, 0, -0.55 * u], "elbow_r": [0.5, -0.9, 0.4], "elbow_l": [-0.7, -0.7, 0.3]})
-    keys.append(key(0.74, {"chest": [-10, 60, 0], "root": [0, 0, -0.6]}, ease="out_quad"))
-    keys.append({"t": 1.12, "pose": "b_stance", "set": {"root": [0, 0, -0.62]}, "ease": "inout_sine"})
+        "root": [0, 0, -0.78 * u], "elbow_r": [0.5, -0.9, 0.4], "elbow_l": [-0.7, -0.7, 0.3]})
+    keys.append(key(0.74, {"chest": [-10, 60, 0], "root": [0, 0, -0.84]}, ease="out_quad"))
+    keys.append({"t": 1.12, "pose": "b_stance", "set": {"root": [0, 0, -0.86]}, "ease": "inout_sine"})
     clip("b_parry_counter", "boss", keys, chain=0.8, vuln=[0.8, 1.1], track=[[0.0, 0.36, 400], [0.36, 0.46, 140]],
          hits=[{"from": 0.46, "to": 0.58, "blade": "upper", "kind": "normal", "dmg": 26, "posture_block": 22,
-                "posture_deflect": 7, "boss_posture": 12, "dir": "right", "final": True}],
+                "posture_deflect": 7, "boss_posture": 12, "dir": "left", "final": True}],
          events=[{"t": 0.0, "type": "boss_parry"}, {"t": 0.42, "type": "sfx", "name": "swing_heavy"}])
 
     # ---- Backstep hop
@@ -857,6 +859,35 @@ def build_boss():
                                 key(0.26, hop, ease="out_quad"), key(0.44, landp, ease="in_quad"),
                                 {"t": 0.72, "pose": "b_stance", "set": {"root": [0, 0, 2.6]}, "ease": "inout_sine"}],
          chain=0.5, events=[{"t": 0.05, "type": "sfx", "name": "dodge"}, {"t": 0.44, "type": "sfx", "name": "land"}])
+
+    # ---- Backhand: flat cut from the boss's left to his right (arrives from the player's RIGHT)
+    bs_ = unit([-0.85, 0.08, 0.52])
+    axb, abk = arc(bs_, [0.0, 0.0, -1.0])
+    RB = [0.12, 1.30, 0.08]
+    bwind = S.copy()
+    bwind.update({"hips_pos": [0, 0.99, 0.04], "hips": [0, 32, 0], "spine": [-4, 14, 0], "chest": [-4, 36, 0],
+                  "neck": [4, -36, 0], "head": [0, -16, 0], "foot_l": [-0.18, 0.08, -0.32], "foot_r": [0.22, 0.08, 0.30],
+                  "elbow_l": [-0.6, -0.9, 0.3], "elbow_r": [0.4, -1.0, 0.3], "root": [0, 0, 0]})
+    eb = edge_for(axb, bs_)
+    place(bwind, RB, bs_, eb, -0.30, 0.15, S["weapon_rot"])
+    pivb = np.array(RB) + bs_ * 0.2
+    swb, _ = hswing(0.36, 0.50, 7, pivb, axb, abk + 80, RB, bs_, eb, -0.30, bwind["weapon_rot"], ease=in_quad,
+                    pivot_move=[0.05, 0.0, -0.5])
+    keys = [key(0.0, "b_stance"), key(0.26, bwind, ease="inout_sine"),
+            key(0.36, dict(bwind, chest=[-4, 40, 0]), ease="linear")]
+    keys += bkeys_from_swing(swb, lambda u: {
+        "hips": [0, 32 - 64 * u, 0], "chest": [-4 - 6 * u, 40 - 92 * u, 0], "spine": [-4, 14 - 30 * u, 0],
+        "neck": [4, -36 + 56 * u, 0], "head": [0, -16 + 26 * u, 0],
+        "hips_pos": [0, 0.99 - 0.02 * u, 0.04 - 0.12 * u], "root": [0, 0, -0.85 * u],
+        "foot_r": lerp3([0.22, 0.08, 0.30], [0.24, 0.08, 0.02], smooth(u)),
+        "elbow_l": [-0.7, -0.7, 0.3], "elbow_r": [0.6, -0.8, 0.4]})
+    keys.append(key(0.68, {"chest": [-10, -56, 0], "hips": [0, -30, 0], "root": [0, 0, -0.92]}, ease="out_quad"))
+    keys.append({"t": 1.05, "pose": "b_stance", "set": {"root": [0, 0, -0.95]}, "ease": "inout_sine"})
+    clip("b_backhand", "boss", keys, chain=0.66, chain_in=0.12, vuln=[0.76, 1.05],
+         track=[[0.0, 0.30, 380], [0.30, 0.40, 120]],
+         hits=[{"from": 0.39, "to": 0.52, "blade": "upper", "kind": "normal", "dmg": 26, "posture_block": 22,
+                "posture_deflect": 7, "boss_posture": 12, "dir": "right", "final": True}],
+         events=[{"t": 0.34, "type": "sfx", "name": "swing_heavy"}])
 
     # =========================================================== REACTIONS
     rec = S.copy()

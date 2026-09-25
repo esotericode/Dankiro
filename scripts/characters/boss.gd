@@ -23,9 +23,10 @@ const DEATHBLOW_WINDOW_END := 2.75   ## b_posture_break time when he starts risi
 
 ## steps: [options ("a|b"), chance]; range: [min_d, max_d] meters; weight
 const SEQUENCES := {
-	"fang_string": {"steps": [["b_combo_1", 1.0], ["b_combo_2", 0.85], ["b_combo_3|b_thrust|b_sweep", 0.75]],
+	"fang_string": {"steps": [["b_combo_1", 1.0], ["b_combo_2", 0.85], ["b_combo_3|b_thrust|b_sweep|b_backhand", 0.75]],
 		"range": [0.0, 3.3], "weight": 3.0},
-	"double_fang": {"steps": [["b_combo_1", 1.0], ["b_combo_2", 0.9]], "range": [0.0, 3.2], "weight": 1.4},
+	"double_fang": {"steps": [["b_combo_1", 1.0], ["b_combo_2", 0.9], ["b_backhand", 0.4]], "range": [0.0, 3.2], "weight": 1.4},
+	"backhand": {"steps": [["b_backhand", 1.0], ["b_combo_2|b_sweep", 0.45]], "range": [0.0, 3.1], "weight": 1.0},
 	"heavens_fall": {"steps": [["b_combo_3", 1.0]], "range": [0.0, 3.0], "weight": 1.1},
 	"jabs": {"steps": [["b_jab", 1.0], ["b_sweep|b_combo_2|b_thrust", 0.6]], "range": [0.0, 3.4], "weight": 1.6},
 	"whirl": {"steps": [["b_whirl", 1.0]], "range": [0.0, 2.8], "weight": 1.2},
