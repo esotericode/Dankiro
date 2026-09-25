@@ -1,7 +1,8 @@
 extends Node
 ## Scripted capture director for visual checks with Godot's Movie Maker:
 ##   godot --write-movie out/frame.png --fixed-fps 30 res://tests/capture.tscn -- <shot>
-## Shots: overview, deflect, block, mikiri, sweep, whirl, shuriken, shuriken5, charge, slashes, parried.
+## Shots: overview, deflect, block, mikiri, thrust_backstep, sweep, sweep_flee, whirl, shuriken,
+## shuriken5, charge, slashes, parried.
 ## Loads the real game scene (arena, lighting, HUD, lock-on camera), skips the intro, stages
 ## the fighters and drives the player with a bot that reacts to the boss's hit windows.
 
@@ -169,6 +170,28 @@ func shot_sweep() -> void:
 	at(0.3 + 0.46, func(): player.press_action("jump", Game.clock))
 	at(0.3 + 0.80, func(): player.press_action("jump", Game.clock))
 	_end_at = 2.8
+
+
+## Running away from the sweep as the kanji shows: he slides after you and the spin still
+## catches you.
+func shot_sweep_flee() -> void:
+	_stage(2.6)
+	at(0.3, func(): boss_string(["b_sweep"]))
+	at(0.4, func():
+		player.bot_move = Vector2(0, 1)
+		player.press_action("dodge", Game.clock))
+	_end_at = 2.2
+
+
+## Backstepping away from the perilous thrust: he tracks you and the lunge stretches.
+func shot_thrust_backstep() -> void:
+	_stage(3.2)
+	at(0.3, func(): boss_string(["b_thrust"]))
+	at(0.3 + 0.64, func():
+		player.bot_move = Vector2(0, 1)
+		player.press_action("dodge", Game.clock))
+	at(0.3 + 0.70, func(): player.release_dodge())
+	_end_at = 2.4
 
 
 func shot_whirl() -> void:

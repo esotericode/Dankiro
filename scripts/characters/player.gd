@@ -67,6 +67,7 @@ var _dodge_rot := 0.0
 var _mikiri_until := 0.0
 var _invuln_until := -1.0
 var _iframes := Vector2(-1, -1)
+var _iframes_except: Array = []      ## attack kinds the current step's i-frames don't cover
 var _kick_used := false
 var _air_attack_used := false
 var _kick_connected := false
@@ -466,9 +467,9 @@ func _state_attack(delta: float) -> Vector3:
 	return extra
 
 
-func _on_weapon_contact(info: Dictionary) -> void:
+func _on_weapon_contact(info: Dictionary) -> int:
 	if not (lock_target is Boss):
-		return
+		return Combat.RESULT_NONE
 	var boss: Boss = lock_target
 	var res := boss.receive_player_attack(info, self)
 	if res == Combat.RESULT_DEFLECT:
@@ -478,6 +479,7 @@ func _on_weapon_contact(info: Dictionary) -> void:
 		anim.kick(Vector3(0.0, 0.5, 1.4), Vector3(2.2, 0.0, 0.0))
 		_chain_delay = 0.1
 		push(-forward() * 1.2)
+	return res
 
 
 func _on_parried() -> void:
@@ -550,8 +552,9 @@ func _start_dodge() -> void:
 	_start_state(S.DODGE)
 	_dodge_started_at = Game.clock
 	anim.play(clip_name, 0.05)
-	var ifr: Array = anim.clip.raw.get("iframes", [0.02, 0.26])
+	var ifr: Array = anim.clip.raw.get("iframes", [0.02, 0.22])
 	_iframes = Vector2(float(ifr[0]), float(ifr[1]))
+	_iframes_except = anim.clip.raw.get("iframes_except", [])
 	var mk: Variant = anim.clip.raw.get("mikiri", null)
 	_mikiri_until = float((mk as Array)[1]) if mk != null else -1.0
 	Sfx.play("dodge", global_position + Vector3.UP, -4.0)
@@ -586,8 +589,12 @@ func root_motion_velocity(delta: float) -> Vector3:
 	return v
 
 
-func is_dodge_invulnerable() -> bool:
-	return state == S.DODGE and state_time >= _iframes.x and state_time <= _iframes.y
+## Whether a step's i-frames cover an attack of this kind. As in Sekiro, sweeps ignore dodge
+## i-frames, and a forward step's i-frames don't cover thrusts.
+func is_dodge_invulnerable(kind := "") -> bool:
+	if state != S.DODGE or state_time < _iframes.x or state_time > _iframes.y:
+		return false
+	return kind != "sweep" and not _iframes_except.has(kind)
 
 
 # ---------------------------------------------------------------------------- jumping
@@ -737,7 +744,8 @@ func _facing_ok(from_pos: Vector3) -> bool:
 ## Resolves an incoming boss hit. Returns a Combat.RESULT_* value.
 func receive_attack(info: Dictionary, attacker: Combatant) -> int:
 	var res := _resolve_attack(info, attacker)
-	hit_resolved.emit(info, res)
+	if res != Combat.RESULT_EVADED:      # an evaded strike isn't resolved yet: it may still land
+		hit_resolved.emit(info, res)
 	return res
 
 
@@ -754,8 +762,8 @@ func _resolve_attack(info: Dictionary, attacker: Combatant) -> int:
 	# Invulnerability (sweeps ignore dodge i-frames: jump them).
 	if Game.clock < _invuln_until:
 		return Combat.RESULT_IGNORED
-	if kind != "sweep" and is_dodge_invulnerable():
-		return Combat.RESULT_IGNORED
+	if is_dodge_invulnerable(kind):
+		return Combat.RESULT_EVADED
 	if state == S.KNOCKDOWN and _in_clip_iframes():
 		return Combat.RESULT_IGNORED
 	var guarding := (state == S.GUARD or state == S.DEFLECT or state == S.BLOCK) and _facing_ok(attacker.global_position)

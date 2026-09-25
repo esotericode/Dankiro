@@ -29,8 +29,8 @@ A red kanji flashes with a warning sound. Sekiro has three kinds; this boss uses
 
 | Kind | Sekiro | Dankiro |
 | --- | --- | --- |
-| **Thrust** | Can be deflected but not blocked. Its counter is the **Mikiri Counter**. | Blocking a perilous thrust fails and you get hit. **[tested]** |
-| **Sweep** | Can't be blocked or deflected, and dodge i-frames don't help. **Jump** over it, then press **jump again** while above or in front of him to **kick off his head** for major posture damage, with a bonus against sweeps. | Same. The kick deals ×1.6 posture during a sweep. The sweep is low (shin height), ~2.5 m long and travels forward while he closes in during the coil, so backstepping or walking away gets caught: it forces the jump. **[tested]** |
+| **Thrust** | Can be deflected but not blocked. Its counter is the **Mikiri Counter**. It tracks you and has long reach, so stepping back just gets you stabbed as the step ends. | Blocking a perilous thrust fails and you get hit. He closes in during the wind-up, tracks you hard through the release, and the lunge stretches (up to 2×) if you backed off. A backstep, two backsteps, a backstep into a sprint, or an early side step all get stabbed, from 2.4 to 4.4 m. **[tested]** |
+| **Sweep** | Can't be blocked or deflected, and dodge i-frames don't help. **Jump** over it, then press **jump again** while above or in front of him to **kick off his head** for major posture damage, with a bonus against sweeps. | Same. The kick deals ×1.6 posture during a sweep. The sweep is low (shin height) and ~2.5 m long. He chases you through the coil at up to sprint speed, and the blade only crosses in front of him once he has closed in. Stepping back or aside, two backsteps, walking away or sprinting away as the kanji shows all get caught, from 1.5 to 3.4 m: it forces the jump. **[tested]** |
 | Grab | Can't be blocked. Dodge it. | Not used by this boss. |
 
 ### Projectiles
@@ -55,8 +55,24 @@ same way: every throw can be deflected (sparks, clang) or blocked, and hits if i
   briefly open.
 - Dankiro: the thrust has a visible pull-back and hold, then the release. A neutral step
   started from 0.1 s before the release onward counters it, as long as the thrust lands during
-  the step. Stepping during the pull-back gets you hit, and a well-timed step with forward held
-  only i-frames through the thrust. **[tested]**
+  the step. Stepping during the pull-back gets you hit, and so does a step with forward held,
+  because a forward step's i-frames don't cover thrusts (see Dodging). **[tested]**
+
+### Dodging
+
+- Wolf's step is a **short, quick step with few i-frames** compared with a Souls roll. The base
+  game's values (from a mod that documents them): **0.2 s** for side and back steps and
+  **0.3 s** for forward steps, but a forward step's i-frames don't cover thrusts, and no
+  step's i-frames cover sweeps. Dark Souls rolls get 0.3 to 0.43 s.
+- Enemies track, and thrusts track hard. Players report that stepping back from a thrust just
+  gets you stabbed as the step ends. A step repositions you (behind an enemy, out of a grab),
+  but it doesn't carry you out of a committed attack's reach.
+- Dankiro: steps travel **1.5 m** (back and side) and **1.1 m** (the neutral forward step), with
+  Sekiro's i-frames (0.02 to 0.22 s, and 0.02 to 0.32 s forward). A strike dodged with
+  i-frames isn't used up: if the blade is still on you when they end, it lands. During a
+  wind-up he closes in, matching how fast you back off, so stepping, walking or sprinting away
+  from the perilous thrust or sweep gets you hit. A side step timed right as the thrust
+  arrives can still slip it, which Sekiro's side-step i-frames allow too. **[tested]**
 
 ## 3. Your attacks
 
@@ -98,5 +114,14 @@ same way: every throw can be deflected (sparks, clang) or blocked, and hits if i
   [Mikiri dodge feels off](https://steamcommunity.com/app/814380/discussions/0/3592212630603805295/)
   (it only works once the thrust starts going forward) and
   [when to use the jump kick](https://steamcommunity.com/app/814380/discussions/0/1753520068682799746/)
+- Dodge i-frames: the [Easier I-frames](https://www.nexusmods.com/sekiro/mods/417) mod
+  (Nexus Mods), whose description lists the base game's values (forward step 0.3 s, not
+  against thrusts or sweeps; side and back steps 0.2 s, not against sweeps), and PC Gamer,
+  [*Sekiro plays almost exactly like Bloodborne with this rad combat mod*](https://www.pcgamer.com/sekiro-plays-almost-exactly-like-bloodborne-with-this-rad-combat-mod/)
+  (the dash has only six i-frames)
+- Steam community threads on dodging thrusts
+  ([1](https://steamcommunity.com/app/814380/discussions/0/3570700856117009777),
+  [2](https://steamcommunity.com/app/814380/discussions/0/1681441347867887898)): thrusts track
+  too well to dodge away from
 - Logan Taylor, [*Song of Sword and Fist: Sifu, Sekiro, and the Anatomy of a Perfect Parry*](https://medium.com/@gatherer286/song-of-sword-and-fist-sifu-sekiro-and-the-anatomy-of-a-perfect-parry-2f9c4c26867a)
   (deflect vs block audio and visual feedback)

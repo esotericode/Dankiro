@@ -486,6 +486,17 @@ func _state_attack(delta: float) -> Vector3:
 		var w: Array = c.raw["root_scale_window"]
 		if t > float(w[1]):
 			root_scale = 1.0
+	# Adaptive lunge ("lunge_reach": [at, until, reach, lunge length]): when the lunge starts he
+	# measures the gap and stretches the lunge so the blade still gets to you if you backed off
+	# (as in Sekiro, you can't just step away from a thrust).
+	if c.raw.has("lunge_reach"):
+		var lr: Array = c.raw["lunge_reach"]
+		var t_prev := t - delta * anim.speed
+		if t_prev < float(lr[0]) and t >= float(lr[0]):
+			var over := distance_to_opponent() + 0.9 - float(lr[2])
+			root_scale = clampf(1.0 + over / float(lr[3]), 1.0, 2.0)
+		elif t > float(lr[1]):
+			root_scale = 1.0
 	# Chain into the next step of the sequence.
 	var chain_t := c.get_float("chain", c.length)
 	if t >= chain_t and not _seq.is_empty():
@@ -520,7 +531,12 @@ func _close_distance(c: ClipData, t: float) -> Vector3:
 	if d <= ideal or d < 0.01:
 		return Vector3.ZERO
 	var t_left := maxf(0.05, float(close[1]) - t)
-	return to / d * minf((d - ideal) / (t_left + 0.1), float(close[3]) * attack_speed)
+	# Close the gap by the end of the window, and never slower than a firm chase that matches
+	# how fast you're backing off (so stepping, walking or running away during the wind-up
+	# doesn't outrun him), up to the clip's max speed.
+	var away := maxf(0.0, Combat.flat(opponent.velocity).dot(to / d))
+	var speed := maxf((d - ideal) / (t_left + 0.1), away + (d - ideal) * 3.5)
+	return to / d * minf(speed, float(close[3]) * attack_speed)
 
 
 ## A perilous thrust meets a player who is in the mikiri frames of a forward step: count it
@@ -671,9 +687,9 @@ func _react(clip_name: String) -> void:
 
 
 # ---------------------------------------------------------------------------- our hits
-func _on_weapon_contact(info: Dictionary) -> void:
+func _on_weapon_contact(info: Dictionary) -> int:
 	if not (opponent is Player):
-		return
+		return Combat.RESULT_NONE
 	var p: Player = opponent
 	if info.has("mikiri_from") and not info.has("release_time"):
 		info["release_time"] = _release_time(info)
@@ -696,6 +712,7 @@ func _on_weapon_contact(info: Dictionary) -> void:
 				_posture_break()
 		Combat.RESULT_BLOCK:
 			anim.kick(Vector3(0.0, 0.3, 0.6), Vector3(0.8, 0.0, 0.0))
+	return res
 
 
 func receive_kick(p: Player, foot: Vector3) -> void:

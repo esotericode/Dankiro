@@ -59,7 +59,9 @@ const MIKIRI_EARLY_GRACE := 0.1
 const KICK_POSTURE := 16.0
 const FINAL_DEFLECT_BONUS := 1.35            ## extra posture for deflecting a combo's last hit
 
-enum { RESULT_NONE, RESULT_DEFLECT, RESULT_BLOCK, RESULT_HIT, RESULT_MIKIRI, RESULT_IGNORED }
+## RESULT_EVADED: dodged through with i-frames. The strike isn't used up: if the blade is still
+## on you when the i-frames end, it lands.
+enum { RESULT_NONE, RESULT_DEFLECT, RESULT_BLOCK, RESULT_HIT, RESULT_MIKIRI, RESULT_IGNORED, RESULT_EVADED }
 
 
 ## Swept test of a blade polyline against a vertical capsule.

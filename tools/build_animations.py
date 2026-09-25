@@ -300,7 +300,10 @@ def build_player():
     clip("p_air_attack", "player", keys,
          hits=[{"from": 0.15, "to": 0.26, "blade": "blade", "dmg": 50, "posture": 12}], cancel=0.4)
 
-    # ---------------- dodge steps (lock-on relative). Root motion 2.3 m.
+    # ---------------- dodge steps (lock-on relative). Short, quick steps. I-frames follow
+    # Sekiro's: 0.2 s for side and back steps, 0.3 s for forward steps, but a forward step's
+    # i-frames don't cover thrusts (you mikiri those), and no step's i-frames cover sweeps.
+    # A step repositions you; it doesn't carry you out of a committed attack's reach.
     for dname, deg, lean in (("fwd", 0, [-18, 0, 0]), ("back", 180, [10, 0, 0]),
                              ("left", 270, [-6, 0, 10]), ("right", 90, [-6, 0, -10])):
         a = math.radians(deg)
@@ -314,16 +317,19 @@ def build_player():
         mid.update({"foot_l": r3(np.array([-0.16, 0.14, 0.2]) - d * 0.05), "foot_r": r3(np.array([0.16, 0.08, -0.18]) + d * 0.1)})
         # The forward (and neutral) step is a short step in, not a dash: it is the Mikiri
         # Counter input, and you shouldn't have to run into him to do it.
-        dist = 1.3 if dname == "fwd" else 2.35
+        dist = 1.1 if dname == "fwd" else 1.5
         keys = [key(0.0, "p_stance"),
                 key(0.06, dict(low, root=r3(d * dist * 0.15)), ease="out_quad"),
                 key(0.18, dict(mid, root=r3(d * dist * 0.74)), ease="linear"),
                 key(0.30, dict(low, root=r3(d * dist * 0.96)), ease="out_quad"),
                 {"t": 0.50, "pose": "p_stance", "set": {"root": r3(d * dist)}, "ease": "inout_sine"}]
-        clip("p_dodge_" + dname, "player", keys, iframes=[0.02, 0.26], cancel=0.34,
+        clip("p_dodge_" + dname, "player", keys, cancel=0.34,
+             iframes=[0.02, 0.32] if dname == "fwd" else [0.02, 0.22],
+             iframes_except=["thrust"] if dname == "fwd" else None,
              mikiri=[0.0, 0.45] if dname == "fwd" else None)
-        if CLIPS["p_dodge_" + dname].get("mikiri") is None:
-            del CLIPS["p_dodge_" + dname]["mikiri"]
+        for k in ("mikiri", "iframes_except"):
+            if CLIPS["p_dodge_" + dname].get(k) is None:
+                del CLIPS["p_dodge_" + dname][k]
 
     # ---------------- jump
     crouch = P_STANCE.copy()
@@ -737,10 +743,13 @@ def build_boss():
             key(T_REL + 0.27, lunge, ease="out_cubic"),
             key(1.36, dict(lunge, chest=[-10, -18, 0], root=[0, 0, -2.45])),
             {"t": 1.95, "pose": "b_stance", "set": {"root": [0, 0, -2.5]}, "ease": "inout_sine"}]
-    clip("b_thrust", "boss", keys, chain=1.7, close=[0.30, 0.70, 4.0, 3.2], vuln=[1.12, 1.85], perilous="thrust",
-         mikiri_from=T_REL,
-         track=[[0.0, 0.66, 440], [0.66, T_REL + 0.02, 180], [T_REL + 0.02, T_REL + 0.14, 40]],
-         hits=[{"from": T_REL + 0.03, "to": T_REL + 0.30, "blade": "upper", "kind": "thrust", "dmg": 38,
+    # Tracking stays strong through the release (step aside early and he stabs you as your
+    # step ends); the lunge stretches if you backed off ("lunge_reach"), and the extended blade
+    # stays live long enough to catch you when a step's i-frames run out.
+    clip("b_thrust", "boss", keys, chain=1.7, close=[0.30, 0.70, 3.6, 3.6], vuln=[1.12, 1.85], perilous="thrust",
+         mikiri_from=T_REL, lunge_reach=[T_REL, T_REL + 0.30, 4.6, 1.9],
+         track=[[0.0, 0.66, 480], [0.66, T_REL + 0.02, 300], [T_REL + 0.02, T_REL + 0.22, 220]],
+         hits=[{"from": T_REL + 0.03, "to": T_REL + 0.36, "blade": "upper", "kind": "thrust", "dmg": 38,
                 "posture_block": 30, "posture_deflect": 9, "boss_posture": 14, "dir": "mid", "final": True,
                 "mikiri_from": T_REL}],
          events=[{"t": 0.05, "type": "perilous", "kind": "thrust"}, {"t": T_REL - 0.03, "type": "sfx", "name": "thrust"}])
@@ -758,7 +767,8 @@ def build_boss():
                  "neck": [10, -30, 0], "head": [4, -18, 0], "foot_l": [-0.40, 0.08, -0.10], "foot_l_rot": [0, 20, 0],
                  "foot_r": [0.36, 0.08, 0.18], "foot_r_rot": [0, -20, 0], "elbow_l": [-0.6, -0.8, 0.5], "elbow_r": [0.5, -0.9, 0.5],
                  "knee_l": [-0.5, 0, -1], "knee_r": [0.5, 0, -1]})
-    place(drop, [0.02, 0.70, -0.10], unit([0.70, 0.35, 0.60]), [0, 0.2, 1], 0.60, 0.30, S["weapon_rot"])
+    place(drop, [0.24, 0.74, 0.04], unit([0.30, 0.28, -0.91]), r3(-unit(np.cross([0.0, -1.0, 0.0], unit([-0.30, -0.28, 0.91])))),
+          0.70, 0.40, S["weapon_rot"])
     coil = drop.copy()                              # coiled left, far blade trailing back-left, low
     coil.update({"hips_pos": [0, 0.62, 0.10], "hips": [0, 46, 0], "spine": [-14, 14, 0], "chest": [-16, 34, 0],
                  "neck": [14, -46, 0], "head": [6, -24, 0]})
@@ -769,22 +779,23 @@ def build_boss():
                       "neck": [18, 0, 0], "head": [6, 0, 0], "foot_l": [-0.40, 0.08, -0.05], "foot_r": [0.40, 0.08, 0.05],
                       "elbow_r": [0.5, -0.9, 0.2], "elbow_l": [-0.5, -0.9, 0.3]})
     place(spin_pose, [0.12, 0.58, -0.34], r3(-far_spin), sw_edge, 0.84, 0.56)
-    SP0, SP1 = 0.72, 1.12                           # the spin
+    SP0, SP1 = 0.72, 1.16                           # the spin: yaw +70 -> -360
+    YAW0 = 70.0
     keys = [key(0.0, "b_stance"), key(0.30, drop, ease="inout_sine"), key(0.56, coil, ease="inout_sine"),
             key(0.68, dict(coil, hips_pos=[0, 0.60, 0.12], chest=[-17, 38, 0]), ease="inout_sine")]
-    for i in range(0, 9):
-        u = i / 8
-        keys.append(key(SP0 + (SP1 - SP0) * u, dict(spin_pose, yaw=round(-360.0 * u, 2),
+    for i in range(0, 11):
+        u = i / 10
+        keys.append(key(SP0 + (SP1 - SP0) * u, dict(spin_pose, yaw=round(YAW0 - (360.0 + YAW0) * u, 2),
                                                      root=[0, 0, round(-0.15 - 1.35 * u, 3)]),
                         ease="in_quad" if i == 0 else None))
-    keys.append(key(1.24, dict(spin_pose, yaw=-384.0, root=[0, 0, -1.58], hips_pos=[0, 0.62, 0.0]), ease="out_quad"))
+    keys.append(key(1.26, dict(spin_pose, yaw=-384.0, root=[0, 0, -1.58], hips_pos=[0, 0.62, 0.0]), ease="out_quad"))
     keys.append(key(1.46, dict(spin_pose, yaw=-360.0, root=[0, 0, -1.6], hips_pos=[0, 0.70, 0.0], chest=[-12, 0, 0]),
                     ease="inout_sine"))
     keys.append(key(1.66, dict(place(S.copy(), [0.12, 1.00, -0.10], [-0.35, 0.50, -0.80], [0, -0.9, -0.45], -0.30, 0.24,
                                      spin_pose["weapon_rot"]), yaw=-360.0, root=[0, 0, -1.62], hips_pos=[0, 0.90, 0.02],
                                chest=[-8, 5, 0]), ease="inout_sine"))
     keys.append({"t": 1.95, "pose": "b_stance", "set": {"root": [0, 0, -1.63], "yaw": -360.0}, "ease": "inout_sine"})
-    clip("b_sweep", "boss", keys, chain=1.75, close=[0.12, 0.66, 2.2, 4.6], vuln=[1.24, 1.9], perilous="sweep",
+    clip("b_sweep", "boss", keys, chain=1.75, close=[0.12, 1.02, 2.0, 7.0], vuln=[1.24, 1.9], perilous="sweep",
          track=[[0.0, 0.62, 480], [0.62, SP0, 140]],
          hits=[{"from": SP0 - 0.02, "to": SP1 + 0.02, "blade": "lower", "kind": "sweep", "dmg": 40, "posture_block": 0,
                 "posture_deflect": 0, "boss_posture": 0, "dir": "low", "final": True}],

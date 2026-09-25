@@ -188,14 +188,15 @@ func process_weapon_hits() -> void:
 					res = r
 			if res.is_empty():
 				continue
-			_hits_done[i] = true
 			var info := h.duplicate()
 			info["index"] = i
 			info["clip"] = anim.clip.name
 			info["point"] = res["point"]
 			# Contact moment inside this tick (sub-tick precise game time).
 			info["time"] = Game.clock - Game.tick_delta * (1.0 - float(res["frac"]))
-			_on_weapon_contact(info)
+			# A strike dodged with i-frames isn't used up: it can still land when they end.
+			if _on_weapon_contact(info) != Combat.RESULT_EVADED:
+				_hits_done[i] = true
 	for bname in now_pts:
 		_blade_prev[bname] = now_pts[bname]
 
@@ -211,8 +212,9 @@ func can_be_hit() -> bool:
 	return true
 
 
-func _on_weapon_contact(_info: Dictionary) -> void:
-	pass
+## Resolves a contact; returns a Combat.RESULT_* value.
+func _on_weapon_contact(_info: Dictionary) -> int:
+	return Combat.RESULT_NONE
 
 
 func _on_anim_event(_clip: String, _ev: Dictionary) -> void:

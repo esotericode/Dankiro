@@ -22,7 +22,7 @@ Timing debug .... F3     Fullscreen .... F11
 - Your slashes commit: guard can only cut in at the very start of a swing or after it.
 - Fill his posture bar with deflects, then press Attack on the red mark: [color=#ff5040]DEATHBLOW[/color].
 - [img=26x26]res://textures/kanji_danger_icon.png[/img] Perilous THRUST: he draws the staff back, holds... press Dodge with [i]no direction[/i]
-  as he RELEASES for a MIKIRI COUNTER. During the pull-back is too early. Deflecting works; blocking fails.
+  as he RELEASES for a MIKIRI COUNTER. During the pull-back is too early. Deflecting works; blocking or backing off fails.
 - [img=26x26]res://textures/kanji_danger_icon.png[/img] Perilous SWEEP: low and long - you can't back out of it. JUMP, then jump again to kick.
 - Shuriken: he leaps back and throws 3 fast + 1 late, or 5 fast. Deflect each one.
 - His posture recovers when you back off, and faster while his vitality is high."""

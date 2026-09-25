@@ -77,6 +77,14 @@ The input map is registered in code (`scripts/autoload/game_input.gd`); actions 
 - When he blocks a slash, your sword bounces and the next one comes a beat later. Keep hitting
   his guard and he **parries** you, knocking your sword away, then counters.
 
+### Dodging
+
+- The dodge is a short, quick step: 1.5 m back or to the side, and 1.1 m for the neutral
+  step, which goes forward. It has Sekiro's i-frames: 0.2 s for side and back steps and 0.3 s
+  forward. A strike that's still on you when the i-frames end hits you, so a step repositions
+  you but doesn't get you out of a committed attack. Hold dodge to sprint.
+- A forward step's i-frames don't cover thrusts, and no step's i-frames cover sweeps.
+
 ### Perilous attacks (危)
 
 The kanji flashes red above him with a deep warning sound and his blades glow hot.
@@ -85,12 +93,14 @@ The kanji flashes red above him with a deep warning sound and his blades glow ho
   full coil, then releases into a long lunge. Perform a **Mikiri Counter** by pressing
   **dodge with no direction held** *as he releases*: a neutral dodge is a short step forward
   into the thrust, as in Sekiro. Stepping during the pull-back is too early (you get hit), and
-  holding forward gives a plain dodge that only slips through it. The counter stomps the blade
-  for heavy posture damage. You can also deflect the thrust; blocking it fails.
+  holding forward gives a plain step that the thrust runs straight through. The counter stomps
+  the blade for heavy posture damage. You can also deflect the thrust; blocking it fails.
+  Backing off doesn't work: he closes in during the wind-up, tracks you through the release
+  and stretches the lunge, so stepping, walking or sprinting away gets you stabbed.
 - **Perilous sweep:** he slides his grip to the end of the staff, sinks low and spins a full
   turn with the far blade flat at shin height, ~2.5 m out, travelling forward. It can't be
-  blocked or deflected, dodge i-frames don't save you, and backing off doesn't get you out of
-  range. **Jump** over it. While airborne near him, press **jump again** to
+  blocked or deflected, dodge i-frames don't save you, and he chases you down during the
+  coil, so stepping, walking or sprinting away doesn't get you out of range. **Jump** over it. While airborne near him, press **jump again** to
   kick off him. That deals posture damage (×1.6 during a sweep) and staggers him out of the
   sweep. You can follow up with an air attack.
 
@@ -147,17 +157,19 @@ godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--v
 | `reach` | Every hit window of every boss attack (including the running cut) connects from point-blank to the edge of its range, straight on and 25° off-axis |
 | `deflect` | Presses 0–200 ms before contact deflect; earlier ones block (held, or a tap still up); late ones get hit; perilous thrusts can't be blocked; a deflect never guard-breaks you |
 | `spam` | The window shrinks 200/133/100/67/0 ms when mashing, clears after 0.5 s and on a deflect |
-| `mikiri` | Only a neutral step from the release on counters the thrust; during the pull-back is too early; forward-held and side steps never counter |
-| `sweep` | Guarding, dodge i-frames, backstepping and walking away all fail against the sweep; jumping clears it, and the kick deals posture |
+| `mikiri` | Only a neutral step from the release on counters the thrust; during the pull-back is too early; forward-held and side steps never counter. Backstepping (once or twice), an early side step, or a backstep into a sprint all still get stabbed, from 2.4 to 4.4 m |
+| `dodge` | Steps are short (1.5 m, 1.1 m for the neutral step) and have Sekiro's i-frames (0.2 s, 0.3 s forward, forward not against thrusts) |
+| `sweep` | Guarding and dodge i-frames fail against the sweep, and so does getting away (stepping back or aside, two backsteps, sprinting or walking away, from 1.5 to 3.4 m); jumping clears it, and the kick deals posture |
 | `shuriken` | Volley rhythms (3 fast + 1 delayed, 5 fast), a readable tell before the first, every throw deflectable (no posture to him) or blockable |
 | `attack` | Slash reach, and that mashing is rate-limited (no two hits within 0.38 s) |
 | `cancel` | Guard cancels a slash only in the early wind-up and in the recovery |
 | `soak` | A full fight against the real AI (charges, repositioning, volleys) with a bot player that reacts to the blade and to incoming shuriken: deflects, blocks, posture breaks, deathblows, phase two |
 
-The run exits with code 0 when every check passes (482 checks, including the soak).
+The run exits with code 0 when every check passes (515 checks, including the soak).
 
 **Captures**: `tests/capture.tscn` stages shots (`overview`, `deflect`, `block`, `mikiri`,
-`sweep`, `whirl`, `shuriken`, `shuriken5`, `charge`, `slashes`, `parried`) in the real scene, with a bot reacting to his hit windows. It
+`thrust_backstep`, `sweep`, `sweep_flee`, `whirl`, `shuriken`, `shuriken5`, `charge`, `slashes`,
+`parried`) in the real scene, with a bot reacting to his hit windows. It
 records them with Godot's Movie Maker:
 
 ```
@@ -224,7 +236,7 @@ How the animation system works:
 
 ## Status
 
-This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (482 checks, including
+This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (515 checks, including
 a full-fight soak), the game boots and runs with no script errors, and every change to the
 visuals was checked on frames rendered with Movie Maker. The previous milestone had been
 written without being able to launch Godot. That pass fixed:
@@ -237,7 +249,7 @@ written without being able to launch Godot. That pass fixed:
 - **Your slashes**: rebuilt with a proper wind-up, arc and follow-through, a longer katana,
   cleaner swing trails, Sekiro-like timing instead of machine-gun speed, and guard-cancel
   windows.
-- **Mikiri**: a timed dodge with no direction (or toward him), not a dash into him.
+- **Mikiri**: a timed dodge with no direction held, not a dash into him.
 - **Deflect vs block**: the spam penalty now works like Sekiro's (keyed to the release, with a
   0.5 s reset), a tapped guard no longer drops in the middle of a combo, guard presses during
   hit-stun come up on time, and the deflect is now clearly the loudest, brightest sound in the

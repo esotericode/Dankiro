@@ -5,7 +5,7 @@ extends Node3D
 ##
 ## Run (from the project folder):
 ##   godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--verbose]
-## Suites: reach, deflect, spam, mikiri, sweep, shuriken, attack, cancel, soak (default: all).
+## Suites: reach, deflect, spam, mikiri, dodge, sweep, shuriken, attack, cancel, soak (default: all).
 ## Exit code 0 when every check passes.
 
 const DT := 1.0 / 120.0
@@ -32,7 +32,7 @@ func _ready() -> void:
 		if not a.begins_with("--"):
 			suites.append(a)
 	if suites.is_empty():
-		suites = ["reach", "deflect", "spam", "mikiri", "sweep", "shuriken", "attack", "cancel", "soak"]
+		suites = ["reach", "deflect", "spam", "mikiri", "dodge", "sweep", "shuriken", "attack", "cancel", "soak"]
 	await get_tree().physics_frame
 	for s in suites:
 		print("\n=== suite: %s ===" % s)
@@ -132,11 +132,31 @@ func run_until_boss_done(max_time := 4.0) -> void:
 
 
 static func res_name(r: int) -> String:
-	return ["none", "DEFLECT", "BLOCK", "HIT", "MIKIRI", "ignored"][r]
+	return ["none", "DEFLECT", "BLOCK", "HIT", "MIKIRI", "ignored", "evaded"][r]
 
 
 func first_result() -> int:
 	return int(_results[0]["res"]) if _results.size() > 0 else Combat.RESULT_NONE
+
+
+## Tries to get away from the attack that's playing, starting at game time `t`, then waits for
+## it to end. "backstep" / "side step": a tapped step, then keep walking that way.
+## "backstep x2": two steps back to back. "backstep + sprint": dodge held, so the step runs
+## into a sprint. "walk back": just walk away.
+func _run_escape(how: String, t: float) -> void:
+	var mv := Vector2(1, 0) if how == "side step" else Vector2(0, 1)
+	at(t, func():
+		player.bot_move = mv
+		if how != "walk back":
+			player.press_action("dodge", t))
+	if how != "backstep + sprint":
+		at(t + 0.05, func(): player.release_dodge())
+	if how == "backstep x2":
+		at(t + 0.36, func(): player.press_action("dodge", t + 0.36))
+		at(t + 0.41, func(): player.release_dodge())
+	await run_until_boss_done()
+	player.bot_move = Vector2.ZERO
+	player.release_dodge()
 
 
 ## Contact times (relative to attack start) of every hit window of `clip` against a
@@ -330,9 +350,21 @@ func suite_mikiri() -> void:
 						check(got == "MIKIRI", "neutral step %+.2f s from the release at %.1f m mikiris (%s)" % [o, d, got])
 					else:
 						check(got != "MIKIRI", "neutral step during the pull-back (%+.2f s) at %.1f m is too early (%s)" % [o, d, got])
+				elif dir_name == "fwd":
+					# A forward step's i-frames don't cover thrusts: holding forward gets you stabbed.
+					check(got == "HIT", "fwd step at the release gets stabbed, no mikiri (%.1f m, %s)" % [d, got])
 				else:
 					check(got != "MIKIRI", "%s step at the release never mikiris (%.1f m, %s)" % [dir_name, d, got])
 		print("  thrust @%.1fm release %.2fs contact %.3fs  %s" % [d, rel_t, contact, " ".join(row)])
+	# Getting away instead: a backstep or a side step at the release, two backsteps, or a
+	# backstep into a sprint as the kanji shows must still get stabbed - he tracks through
+	# the release and the lunge stretches.
+	for d in [2.4, 3.4, 4.4]:
+		for how in ["backstep", "side step", "backstep x2", "backstep + sprint"]:
+			await setup(d)
+			var t2 := boss_attack("b_thrust")
+			await _run_escape(how, t2 + (rel_t - 0.05 if how == "backstep" or how == "side step" else 0.1))
+			check(first_result() == Combat.RESULT_HIT, "%s away from the thrust at %.1f m still gets stabbed (%s)" % [how, d, res_name(first_result())])
 	# Posture damage of a clean counter.
 	await setup(3.0)
 	var t1 := boss_attack("b_thrust")
@@ -341,6 +373,34 @@ func suite_mikiri() -> void:
 	await run_until_boss_done()
 	check(first_result() == Combat.RESULT_MIKIRI, "neutral step on the release at 3.0 m -> MIKIRI (%s)" % res_name(first_result()))
 	check(boss.posture >= Combat.MIKIRI_POSTURE - 0.5, "mikiri deals heavy posture damage (%.0f)" % boss.posture)
+
+
+## Dodge (Sekiro): a short, quick step. It repositions you; it doesn't carry you out of an
+## attack's reach. I-frames match Sekiro's: 0.2 s for side and back steps, 0.3 s for forward
+## steps, which don't cover thrusts (the mikiri suite checks that).
+func suite_dodge() -> void:
+	for dir_name in ["back", "side", "neutral"]:
+		await setup(6.0)
+		var p0 := player.global_position
+		var mv := Vector2(0, 1) if dir_name == "back" else (Vector2(1, 0) if dir_name == "side" else Vector2.ZERO)
+		var t0 := Game.clock
+		at(t0, func():
+			player.bot_move = mv
+			player.press_action("dodge", t0))
+		await ticks(3)
+		player.bot_move = Vector2.ZERO
+		await ticks(90)
+		var moved := Combat.flat(player.global_position - p0).length()
+		print("  %s step: moved %.2f m" % [dir_name, moved])
+		check(moved <= (1.2 if dir_name == "neutral" else 1.6), "%s step is short (%.2f m)" % [dir_name, moved])
+	for clip_name in ["p_dodge_back", "p_dodge_left", "p_dodge_right", "p_dodge_fwd"]:
+		var c := AnimLibrary.get_clip(clip_name)
+		var ifr: Array = c.raw.get("iframes", [0, 0])
+		var want := 0.3 if clip_name == "p_dodge_fwd" else 0.2
+		var got := float(ifr[1]) - float(ifr[0])
+		check(absf(got - want) < 0.005, "%s has Sekiro's %.1f s of i-frames (%.2f s)" % [clip_name, want, got])
+	check(AnimLibrary.get_clip("p_dodge_fwd").raw.get("iframes_except", []).has("thrust"),
+		"a forward step's i-frames don't cover thrusts")
 
 
 ## Sweep: can't be blocked or deflected, dodging doesn't help, jumping clears it and a
@@ -358,30 +418,21 @@ func suite_sweep() -> void:
 	at(pg, func(): player.press_guard(pg))
 	await run_until_boss_done()
 	check(first_result() == Combat.RESULT_HIT, "guarding a sweep fails (%s)" % res_name(first_result()))
-	# Dodge i-frames don't help against a sweep (step into it -> hit). Stepping back out of
-	# its range is legitimate, as in Sekiro.
+	# Dodge i-frames don't help against a sweep (step into it -> hit).
 	await setup(2.2)
 	t0 = boss_attack("b_sweep")
 	var pd: float = t0 + rel - 0.1
 	at(pd, func(): player.press_action("dodge", pd))
 	await run_until_boss_done()
 	check(first_result() == Combat.RESULT_HIT, "dodging into a sweep fails: i-frames don't apply (%s)" % res_name(first_result()))
-	# Getting away instead of jumping: a backstep or walking backwards (locked on) from 2.5 m
-	# as the kanji shows must still get caught - the sweep is long, low and travels.
-	for how in ["backstep", "walk back"]:
-		await setup(2.5)
-		t0 = boss_attack("b_sweep")
-		var pb: float = t0 + 0.15
-		if how == "backstep":
-			at(pb, func():
-				player.bot_move = Vector2(0, 1)
-				player.press_action("dodge", pb))
-			at(pb + 0.06, func(): player.bot_move = Vector2.ZERO)
-		else:
-			at(pb, func(): player.bot_move = Vector2(0, 1))
-		await run_until_boss_done()
-		player.bot_move = Vector2.ZERO
-		check(first_result() == Combat.RESULT_HIT, "%s away from the sweep still gets hit (%s)" % [how, res_name(first_result())])
+	# Getting away instead of jumping: stepping, walking or sprinting away (locked on) as the
+	# kanji shows must still get caught - he chases you down and the sweep is long and low.
+	for how in ["backstep", "side step", "backstep x2", "backstep + sprint", "walk back"]:
+		for d in [1.5, 2.5, 3.4]:
+			await setup(d)
+			t0 = boss_attack("b_sweep")
+			await _run_escape(how, t0 + 0.1)
+			check(first_result() == Combat.RESULT_HIT, "%s away from the sweep at %.1f m still gets hit (%s)" % [how, d, res_name(first_result())])
 	# Jump windows.
 	var row := PackedStringArray()
 	var cleared := 0
