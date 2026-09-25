@@ -5,7 +5,7 @@ extends Node3D
 ##
 ## Run (from the project folder):
 ##   godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--verbose]
-## Suites: reach, tells, deflect, flurry, punish, loop, phases, spam, mikiri, dodge, sweep, shuriken, attack, cancel, soak (default: all).
+## Suites: reach, tells, deflect, flurry, punish, loop, phases, menu, spam, mikiri, dodge, sweep, shuriken, attack, cancel, soak (default: all).
 ## Exit code 0 when every check passes, including "no engine or script errors during the run".
 
 const DT := 1.0 / 120.0
@@ -55,7 +55,7 @@ func _ready() -> void:
 		if not a.begins_with("--"):
 			suites.append(a)
 	if suites.is_empty():
-		suites = ["reach", "tells", "deflect", "flurry", "punish", "loop", "phases", "spam", "mikiri", "dodge", "sweep", "shuriken", "attack", "cancel", "soak"]
+		suites = ["reach", "tells", "deflect", "flurry", "punish", "loop", "phases", "menu", "spam", "mikiri", "dodge", "sweep", "shuriken", "attack", "cancel", "soak"]
 	await get_tree().physics_frame
 	for s in suites:
 		print("\n=== suite: %s ===" % s)
@@ -620,6 +620,115 @@ func suite_shuriken() -> void:
 		got = _results.map(func(r): return res_name(int(r["res"])))
 		check(got.count("BLOCK") == n_throws, "%s: holding guard blocks every throw (%s)" % [clip, str(got)])
 		player.release_guard(Game.clock)
+
+
+## The menus with a gamepad only (simulated pad events through the real input pipeline): the
+## title menu boots with an item highlighted, the D-pad and the left stick move one row per
+## press, A presses, left / right change an option, B goes back, Start pauses the fight and A on
+## Resume carries on. Closing a menu lets go of the highlight so A in the fight can't press it.
+func suite_menu() -> void:
+	var saved := [Game.start_phase, Game.debug, Game.save_enabled]
+	Game.save_enabled = false
+	Game.skip_title = false
+	Game.start_phase = 1
+	Game.debug = false
+	if world != null:
+		world.queue_free()
+		world = null
+	var main: Node = (load("res://scenes/main.tscn") as PackedScene).instantiate()
+	add_child(main)
+	await ticks(10)
+	var menu: GameMenu = main.get("menu")
+	var focus := func() -> String:
+		var f := get_viewport().gui_get_focus_owner()
+		return (f as Button).text if f is Button else "(none)"
+	check(menu.is_open() and str(focus.call()) == "Start fight", "title menu opens with Start fight highlighted (%s)" % focus.call())
+	await _pad_button(JOY_BUTTON_DPAD_DOWN)
+	check(str(focus.call()) == "Options", "D-pad down highlights Options (%s)" % focus.call())
+	await _pad_stick(JOY_AXIS_LEFT_Y, [0.3, 0.7, 0.9, 1.0, 0.8, 0.2, 0.0])
+	check(str(focus.call()) == "Controls", "one push of the stick moves one row (%s)" % focus.call())
+	await _pad_stick(JOY_AXIS_LEFT_Y, [-0.5, -0.9, -1.0, -0.4, 0.0])
+	check(str(focus.call()) == "Options", "a push up moves one row back (%s)" % focus.call())
+	await _pad_button(JOY_BUTTON_A)
+	check(menu._page == "options", "A on Options opens the Options page (%s)" % menu._page)
+	check(str(focus.call()).begins_with("Starting phase"), "Options opens on Starting phase (%s)" % focus.call())
+	await _pad_button(JOY_BUTTON_DPAD_RIGHT)
+	check(Game.start_phase == 2, "D-pad right steps the starting phase to 2 (%d)" % Game.start_phase)
+	await _pad_stick(JOY_AXIS_LEFT_X, [0.8, 1.0, 0.0])
+	check(Game.start_phase == 3, "stick right steps it to 3 (%d)" % Game.start_phase)
+	await _pad_button(JOY_BUTTON_A)
+	check(Game.start_phase == 1, "A on the option steps it round to 1 (%d)" % Game.start_phase)
+	await _pad_button(JOY_BUTTON_DPAD_DOWN)
+	await _pad_button(JOY_BUTTON_DPAD_RIGHT)
+	check(Game.debug, "D-pad right on Diagnostics turns it on")
+	await _pad_button(JOY_BUTTON_DPAD_LEFT)
+	check(not Game.debug, "D-pad left turns it off again")
+	await _pad_button(JOY_BUTTON_B)
+	check(menu._page == "title" and str(focus.call()) == "Options", "B goes back to the title menu, on Options (%s, %s)" % [
+		menu._page, focus.call()])
+	await _pad_button(JOY_BUTTON_DPAD_UP)
+	await _pad_button(JOY_BUTTON_DPAD_UP)
+	check(str(focus.call()) == "Quit", "D-pad up wraps round from the top to Quit (%s)" % focus.call())
+	await _pad_button(JOY_BUTTON_DPAD_DOWN)
+	check(str(focus.call()) == "Start fight", "and down wraps back to Start fight (%s)" % focus.call())
+	await _pad_button(JOY_BUTTON_A)
+	await ticks(4)
+	check(not menu.is_open() and int(main.get("flow")) != 4, "A on Start fight starts the fight (flow %d)" % int(main.get("flow")))
+	check(str(focus.call()) == "(none)", "the menu lets go of the highlight once closed (%s)" % focus.call())
+	await _pad_button(JOY_BUTTON_START)
+	check(get_tree().paused and menu.is_open() and menu._page == "pause", "Start pauses the fight into the pause menu")
+	check(str(focus.call()) == "Resume", "the pause menu opens on Resume (%s)" % focus.call())
+	await _pad_button(JOY_BUTTON_DPAD_DOWN)
+	await _pad_button(JOY_BUTTON_DPAD_DOWN)
+	await _pad_button(JOY_BUTTON_A)
+	check(menu._page == "options", "A on Options (pause menu) opens Options (%s)" % menu._page)
+	await _pad_button(JOY_BUTTON_B)
+	check(menu._page == "pause" and str(focus.call()) == "Options", "B goes back to the pause menu, on Options (%s, %s)" % [
+		menu._page, focus.call()])
+	await _pad_button(JOY_BUTTON_DPAD_UP)
+	await _pad_button(JOY_BUTTON_DPAD_UP)
+	check(str(focus.call()) == "Resume", "up twice reaches Resume (%s)" % focus.call())
+	await _pad_button(JOY_BUTTON_A)
+	await ticks(4)
+	check(not get_tree().paused and not menu.is_open(), "A on Resume carries on with the fight")
+	await _pad_button(JOY_BUTTON_START)
+	await _pad_button(JOY_BUTTON_B)
+	check(not get_tree().paused and not menu.is_open(), "B on the pause menu resumes too")
+	get_tree().paused = false
+	main.queue_free()
+	await ticks(2)
+	Game.camera = null
+	Game.hud = null
+	Game.player = null
+	Game.boss = null
+	Game.clear_time_effects()
+	Game.start_phase = int(saved[0])
+	Game.debug = bool(saved[1])
+	Game.save_enabled = bool(saved[2])
+
+
+## A pad button press and release, as a pad sends them (device 0), a few frames apart.
+func _pad_button(button: JoyButton) -> void:
+	for pressed in [true, false]:
+		var ev := InputEventJoypadButton.new()
+		ev.device = 0
+		ev.button_index = button
+		ev.pressed = pressed
+		ev.pressure = 1.0 if pressed else 0.0
+		Input.parse_input_event(ev)
+		await get_tree().process_frame
+		await get_tree().process_frame
+
+
+## A stick movement: the axis passes through `values`, one event per frame.
+func _pad_stick(axis: JoyAxis, values: Array) -> void:
+	for v in values:
+		var ev := InputEventJoypadMotion.new()
+		ev.device = 0
+		ev.axis = axis
+		ev.axis_value = float(v)
+		Input.parse_input_event(ev)
+		await get_tree().process_frame
 
 
 ## Three lives, one per phase. The starting-phase option starts a fight in a later phase with

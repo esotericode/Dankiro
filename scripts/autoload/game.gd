@@ -38,6 +38,8 @@ var start_phase := 1
 ## Set before reloading the scene to go straight back into the fight (retry, restart)
 ## instead of the title menu.
 var skip_title := false
+## Tests switch this off so they never overwrite the player's saved options.
+var save_enabled := true
 
 
 func _ready() -> void:
@@ -58,6 +60,8 @@ func load_settings() -> void:
 
 
 func save_settings() -> void:
+	if not save_enabled:
+		return
 	var cfg := ConfigFile.new()
 	cfg.set_value("fight", "start_phase", start_phase)
 	cfg.set_value("fight", "diagnostics", debug)

@@ -2,8 +2,10 @@ class_name GameMenu
 extends CanvasLayer
 ## Title menu (on boot) and pause menu, with Options and Controls pages. Built in code like the
 ## HUD, for the same 1920x1080 canvas. Mouse, keyboard (arrows + Enter, Esc to go back) and
-## gamepad (D-pad / stick + A, B to go back) all work: the buttons use Godot's focus navigation.
-## Options are saved by `Game` (user://settings.cfg).
+## gamepad (D-pad or left stick + A, B to go back) all work. Keyboard and gamepad navigation is
+## handled here (not left to Godot's focus system) so a stick push moves exactly one row, left /
+## right change an option, and A presses the highlighted item. Options are saved by `Game`
+## (user://settings.cfg).
 
 signal start_pressed
 signal resume_pressed
@@ -29,6 +31,7 @@ var _controls: PanelContainer
 var _page := ""
 var _root_page := "title"           ## where Back leads from Options / Controls
 var _quiet := false                 ## no focus sound while a page is being built
+var _stick := {JOY_AXIS_LEFT_X: 0, JOY_AXIS_LEFT_Y: 0}   ## left stick direction held past the threshold
 
 
 func _ready() -> void:
@@ -98,13 +101,14 @@ func _build() -> void:
 	_note.custom_minimum_size = Vector2(760, 0)
 	_column.add_child(_note)
 
-	_hint = _label("Mouse, arrow keys or D-pad    Enter / (A) select    Esc / (B) back", 20, C_DIM)
+	_hint = _label("Move: arrows, D-pad or stick     Change: left / right     Select: Enter / (A)     Back: Esc / (B)",
+		20, C_DIM)
 	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_hint.anchor_left = 1.0
 	_hint.anchor_right = 1.0
 	_hint.anchor_top = 1.0
 	_hint.anchor_bottom = 1.0
-	_hint.offset_left = -1000
+	_hint.offset_left = -1400
 	_hint.offset_right = -48
 	_hint.offset_top = -64
 	_hint.offset_bottom = -30
@@ -211,17 +215,86 @@ func _option(name: String, values: Array, get_index: Callable, set_index: Callab
 	var b := _button("", func(): step.call(1), 34)
 	box["b"] = b
 	refresh.call()
-	b.gui_input.connect(func(ev: InputEvent):
-		if ev.is_action_pressed("ui_left"):
-			step.call(-1)
-			Sfx.play_ui("lockon", -8.0)
-			b.accept_event()
-		elif ev.is_action_pressed("ui_right"):
-			step.call(1)
-			Sfx.play_ui("lockon", -8.0)
-			b.accept_event())
+	b.set_meta("step", step)           # left / right (see _input)
 	b.focus_entered.connect(func(): _note.text = note)
 	return b
+
+
+# ------------------------------------------------------------------------------ keyboard + gamepad
+func _input(event: InputEvent) -> void:
+	if not visible or _page == "":
+		return
+	# Every direction and accept event is ours while a menu is open, even the ones that don't
+	# move anything (a stick still held over, a release): Godot's own focus navigation must
+	# not see them, or a stick push moves two rows.
+	var ours := event.is_action("ui_up") or event.is_action("ui_down") or event.is_action("ui_left") \
+		or event.is_action("ui_right") or event.is_action("ui_accept") \
+		or (event is InputEventJoypadMotion and _stick.has((event as InputEventJoypadMotion).axis))
+	var nav := _nav(event)
+	if nav.y != 0:
+		_move_focus(nav.y)
+	elif nav.x != 0:
+		var f := _focused()
+		if f != null and f.has_meta("step"):
+			(f.get_meta("step") as Callable).call(nav.x)
+			Sfx.play_ui("lockon", -8.0)
+	elif event.is_action_pressed("ui_accept"):
+		var f := _focused()
+		if f == null:
+			_move_focus(0)              # nothing highlighted (a stray click): highlight first
+		else:
+			f.pressed.emit()
+	if ours:
+		get_viewport().set_input_as_handled()
+
+
+## One step per press: arrow keys (with key repeat), the D-pad, and the left stick, which is
+## latched so a push moves one row instead of one per stick event.
+func _nav(event: InputEvent) -> Vector2i:
+	if event is InputEventJoypadMotion:
+		var jm := event as InputEventJoypadMotion
+		if not _stick.has(jm.axis):
+			return Vector2i.ZERO
+		var d := 0
+		if jm.axis_value > 0.6:
+			d = 1
+		elif jm.axis_value < -0.6:
+			d = -1
+		elif absf(jm.axis_value) > 0.35:
+			return Vector2i.ZERO            # between the thresholds: stay as we were
+		if d == int(_stick[jm.axis]):
+			return Vector2i.ZERO
+		_stick[jm.axis] = d
+		if d == 0:
+			return Vector2i.ZERO
+		return Vector2i(d, 0) if jm.axis == JOY_AXIS_LEFT_X else Vector2i(0, d)
+	if event.is_action_pressed("ui_up", true):
+		return Vector2i(0, -1)
+	if event.is_action_pressed("ui_down", true):
+		return Vector2i(0, 1)
+	if event.is_action_pressed("ui_left", true):
+		return Vector2i(-1, 0)
+	if event.is_action_pressed("ui_right", true):
+		return Vector2i(1, 0)
+	return Vector2i.ZERO
+
+
+## The highlighted menu item, if any.
+func _focused() -> Button:
+	var f := get_viewport().gui_get_focus_owner()
+	if f is Button and _buttons.is_ancestor_of(f):
+		return f as Button
+	return null
+
+
+## Highlights the item `dir` rows away (wrapping around); 0 = the first item.
+func _move_focus(dir: int) -> void:
+	var items := _buttons.get_children().filter(func(c): return c is Button and not c.is_queued_for_deletion())
+	if items.is_empty():
+		return
+	var i := items.find(_focused())
+	i = 0 if i < 0 or dir == 0 else posmod(i + dir, items.size())
+	(items[i] as Button).grab_focus()
 
 
 # ------------------------------------------------------------------------------ pages
@@ -236,6 +309,9 @@ func open_pause() -> void:
 
 
 func close() -> void:
+	# Let go of the highlight, or the buttons (hidden, still focused) would take A presses.
+	if _focused() != null:
+		get_viewport().gui_release_focus()
 	visible = false
 	_page = ""
 
@@ -248,12 +324,14 @@ func is_open() -> bool:
 ## root page (the caller decides what that means: resume, or nothing on the title).
 func back() -> bool:
 	if _page == "options" or _page == "controls":
-		_show(_root_page)
+		_show(_root_page, "Options" if _page == "options" else "Controls")
 		return true
 	return false
 
 
-func _show(page: String) -> void:
+## Builds `page`; `focus_on` highlights the item with that text (the one you came back from),
+## otherwise the first.
+func _show(page: String, focus_on := "") -> void:
 	_page = page
 	visible = true
 	_quiet = true
@@ -305,5 +383,8 @@ func _show(page: String) -> void:
 			_subheading.text = ""
 			first = _button("Back", func(): back())
 	_column.offset_top = 170 if page == "title" else 150
+	for c in _buttons.get_children():
+		if focus_on != "" and c is Button and (c as Button).text == focus_on:
+			first = c
 	first.grab_focus()
 	_quiet = false

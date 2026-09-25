@@ -11,6 +11,7 @@ const STICK_SENSITIVITY := 3.2
 func _enter_tree() -> void:
 	_movement()
 	_actions()
+	_menus()
 
 
 func _movement() -> void:
@@ -63,6 +64,13 @@ func _actions() -> void:
 	_keys("debug", [KEY_F3])
 
 
+## Godot's built-in menu actions have the D-pad and left stick for moving around, but only keys
+## for accepting and going back: add A (accept) and B (back) so the menus work on a gamepad.
+func _menus() -> void:
+	_button("ui_accept", JOY_BUTTON_A)
+	_button("ui_cancel", JOY_BUTTON_B)
+
+
 func _ensure(action: String, deadzone := 0.2) -> void:
 	if not InputMap.has_action(action):
 		InputMap.add_action(action, deadzone)
@@ -83,16 +91,21 @@ func _mouse(action: String, button: MouseButton) -> void:
 	InputMap.action_add_event(action, ev)
 
 
+## Gamepad bindings are for every connected pad (device -1, "all devices"), not just the first.
 func _button(action: String, button: JoyButton) -> void:
 	_ensure(action)
 	var ev := InputEventJoypadButton.new()
+	ev.device = -1
 	ev.button_index = button
-	InputMap.action_add_event(action, ev)
+	if not InputMap.action_has_event(action, ev):
+		InputMap.action_add_event(action, ev)
 
 
 func _axis(action: String, axis: JoyAxis, value: float) -> void:
 	_ensure(action, 0.22)
 	var ev := InputEventJoypadMotion.new()
+	ev.device = -1
 	ev.axis = axis
 	ev.axis_value = value
-	InputMap.action_add_event(action, ev)
+	if not InputMap.action_has_event(action, ev):
+		InputMap.action_add_event(action, ev)

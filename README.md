@@ -19,7 +19,8 @@ The boss up close: [docs/boss_model.png](docs/boss_model.png), and
 1. Install Godot **4.7** (standard build, no C# needed; 4.7.2 is what it's tested on).
 2. Open `project.godot` in the editor. The first open imports the audio, textures and font.
 3. Press **F5**. The game opens on the title menu: **Start fight**, **Options**, **Controls**
-   and **Quit** (mouse, keyboard or gamepad).
+   and **Quit**. Use the mouse, or the arrows and Enter, or a gamepad (D-pad or left stick,
+   A to select, B to go back).
 
 Everything is generated from code: the arena, effects, HUD and the player are built at
 runtime, and the boss is a skinned model that a script builds with Blender (see
@@ -50,6 +51,9 @@ The input map is registered in code (`scripts/autoload/game_input.gd`); actions 
 
 - **Title menu** (on launch): Start fight, Options, Controls, Quit. He waits in the arena
   behind it.
+- **Navigating:** mouse, keyboard (arrows, Enter, Esc) or gamepad (D-pad or left stick, A to
+  select, B to go back). Left / right change an option's value; the list wraps round. Going
+  back from Options or Controls returns to the item you came from.
 - **Pause menu** (Esc / Start): Resume, Restart fight, Options, Controls, Quit to title.
   After a death or a victory, Enter / (A) goes straight back into the fight and Esc / (Start)
   goes to the title.
@@ -199,6 +203,8 @@ godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--v
 | `deflect` | Presses 0–200 ms before contact deflect; earlier ones block (held, or a tap still up); late ones get hit; perilous thrusts can't be blocked; a deflect never guard-breaks you; a deflect that breaks his posture partway through a multi-hit attack staggers him cleanly |
 | `flurry` | After a blow of the whirl, the jabs or a shuriken volley lands, holding guard blocks the rest; mashing guard through them never lets a blow through |
 | `punish` | Deflect an attack, then mash attack: he reels from at most a few hits, then stops it (guards, parries or hits back) |
+| `phases` | Three lives, one per phase: the starting-phase option starts a fight in phase 2 or 3 with the earlier lives taken, each deathblow raises him into the next phase, the last one ends the fight |
+| `menu` | The menus with a gamepad only (simulated pad input through Godot's input pipeline): D-pad and stick move one row per push, A selects, left / right change options, B goes back, Start pauses and A on Resume carries on; a closed menu lets go of its highlight |
 | `loop` | Two 90 s fights against bots that deflect everything, one hitting him only when he's open and one hitting whenever he's in reach: no more than 3 hits leave him reeling between his attacks, and he rarely reopens with the attack he was just punished for |
 | `spam` | The window shrinks 200/133/100/67/0 ms when mashing, clears after 0.5 s and on a deflect |
 | `mikiri` | Only a neutral step from the release on counters the thrust; during the pull-back is too early; forward-held and side steps never counter. Backstepping (once or twice), an early side step, or a backstep into a sprint all still get stabbed, from 2.4 to 4.4 m |
