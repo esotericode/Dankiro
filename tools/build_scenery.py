@@ -1097,11 +1097,7 @@ def ridge_band(seed, dist, dist_var, crest, crest_var, front, back, base_y, peak
     Z = np.cos(A) * Rr
     P = np.stack([X, Y, Z], 2)
     U = A * float(dist)
-    m = grid(P, U, np.broadcast_to(s, Y.shape) * 100.0, None)
-    # faces toward the plaza on the front slopes
-    fn, fc = G.face_normals(m)
-    if np.sum(np.einsum("ij,ij->i", fn, -fc * np.array([1.0, 0.0, 1.0]))) < 0:
-        m.flip()
+    m = grid(P, U, np.broadcast_to(s, Y.shape) * 100.0, (0, 1, 0))     # a height field: normals up
     return Part(m, material, layer)
 
 

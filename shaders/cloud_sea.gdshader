@@ -6,9 +6,9 @@ render_mode diffuse_burley, specular_disabled, depth_draw_never, cull_disabled;
 
 uniform sampler2D noise_tex : hint_default_white, filter_linear_mipmap, repeat_enable;
 uniform sampler2D depth_tex : hint_depth_texture, filter_linear_mipmap;
-uniform vec3 top_color : source_color = vec3(0.4, 0.42, 0.52);
+uniform vec3 top_color : source_color = vec3(0.34, 0.36, 0.45);
 uniform vec3 trough_color : source_color = vec3(0.13, 0.14, 0.2);
-uniform float scale = 90.0;
+uniform float scale = 150.0;
 uniform float drift = 1.2;          // m/s
 uniform float soft = 10.0;          // metres of soft contact
 uniform float edge = 2300.0;        // fades out before the plane ends
@@ -41,5 +41,6 @@ void fragment() {
 	vec4 v = INV_PROJECTION_MATRIX * vec4(SCREEN_UV * 2.0 - 1.0, scene, 1.0);
 	float scene_z = -v.z / v.w;
 	float thick = clamp((scene_z + VERTEX.z) / soft, 0.0, 1.0);
-	ALPHA = thick * (1.0 - smoothstep(edge * 0.6, edge, length(wpos.xz))) * smoothstep(0.05, 0.4, h0 + 0.25);
+	// thin in the troughs, so the valley shows through between the billows
+	ALPHA = thick * (1.0 - smoothstep(edge * 0.6, edge, length(wpos.xz))) * smoothstep(0.2, 0.7, h0) * 0.85;
 }
