@@ -38,8 +38,9 @@ the script backs off and retries, so let it run. For another version, set
   VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json xvfb-run -a -s "-screen 0 1280x720x24" \
     godot --write-movie /tmp/cap/f.png --fixed-fps 30 res://tests/capture.tscn -- deflect
   ```
-  Rendering takes 2-4 s per frame at 960x540 (the flagstone shader is most of it; it was about
-  0.7 s before the floor model) and about 2.4 s at 640x360. Adding
+  Rendering takes about 3.5 s per frame at 640x360 (about 2.4 s before the forest and the
+  mountains; 0.7 s before the floor model) and roughly twice that at 960x540, plus 20-30 s to
+  start. Adding
   `[rendering]` `textures/default_filters/anisotropic_filtering_level=0` to `override.cfg` cuts a
   third while iterating. `override.cfg` is git-ignored. The shots are
   the `shot_*` functions in `tests/capture.gd`; `-- attack <clip> [distance]` films any boss

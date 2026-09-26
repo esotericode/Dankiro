@@ -30,12 +30,13 @@ void fragment() {
 	float n2 = texture(noise_tex, wpos.xz / 120.0 + vec2(wpos.y / 300.0)).g;
 	float n3 = texture(noise_tex, wpos.xz / 45.0 + vec2(0.0, wpos.y / 60.0)).b;
 	vec3 n = normalize(wnrm);
-	vec3 col = rock_color * (0.75 + 0.5 * n2);
+	float strata = texture(noise_tex, vec2(wpos.x / 700.0 + wpos.z / 900.0, wpos.y / 38.0)).g;
+	vec3 col = rock_color * (0.7 + 0.45 * n2) * (0.8 + 0.4 * strata);     // ledges and bands in the rock
 	float forest = smoothstep(tree_line + 60.0 * n1, tree_line - 30.0 + 60.0 * n1, wpos.y)
 			* smoothstep(0.35, 0.6, n.y + 0.15 * n3);
 	col = mix(col, forest_color * (0.8 + 0.4 * n2), forest);
 	float snow = smoothstep(snow_line + 80.0 * (n1 - 0.5), snow_line + 30.0 + 80.0 * (n1 - 0.5), wpos.y)
-			* smoothstep(0.25, 0.55, n.y + 0.3 * (n3 - 0.5));
+			* smoothstep(0.05, 0.3, n.y + 0.25 * (strata - 0.5));   // it clings even to steep faces up there
 	col = mix(col, snow_color * (0.85 + 0.2 * n2), snow);
 	float h = haze * mix(1.0, 0.8, smoothstep(0.0, 350.0, wpos.y));      // clearer air up high
 	float mist = smoothstep(mist_bottom, mist_top, wpos.y + 10.0 * (n2 - 0.5));
