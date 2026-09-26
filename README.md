@@ -245,7 +245,7 @@ godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--v
 | `inferno` | Phase 2 opens with the Inferno (starting there, or rising into it); he lands in the middle of the arena; the blast misses you outside its radius, knocks you down and throws you out of it inside, and walking away locked on from right beside him gets clear in time (stepping through it doesn't); jumping each arm clears all four from 4 to 14 m out, the beat holds (1.5, 1.5, 1.0 s) wherever you stand and while you walk round him; standing, guarding and dodging get burned by every arm and by the eruption; jumping on the beat gets caught by the fourth; one jump timed to the eruption clears it, earlier or later burns (it prints the window); after a burn the next arm, or the eruption, waits until you can jump it; the ring stops you and burns; your sword glances off him; he's open afterwards; he uses it again once it's off cooldown |
 | `soak` | A full fight against the real AI (charges, repositioning, volleys) with a bot player that reacts to the blade and to incoming shuriken: deflects, blocks, posture breaks, deathblows, the next phase and the Inferno it opens with |
 
-The run exits with code 0 when every check passes (681 checks, including the soak). It also
+The run exits with code 0 when every check passes (683 checks, including the soak). It also
 fails if the engine or a script reports any error during the run (it listens through a
 `Logger`), so runtime errors can't hide behind passing gameplay checks.
 
@@ -351,7 +351,7 @@ How the boss model is built (PS2-style: ~25k triangles, one 2048 px atlas with b
 
 ## Status
 
-This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (681 checks, including
+This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (683 checks, including
 a full-fight soak), the game boots and runs with no script errors, and every change to the
 visuals was checked on frames rendered with Movie Maker.
 
@@ -360,8 +360,10 @@ every so often. He leaps to the middle of the arena and channels fire into his p
 while the floor glows out to the blast radius; the blast throws you out if you're still
 inside. Then he turns with the staff level and both ends ablaze, fire reaching past the walls:
 jump each arm, three on an even beat and a faster fourth. A ring of fire keeps you off him,
-and he's open once the fire dies. New animations, fire effects and sounds, the move in the
-diagnostics overlay, and an `inferno` lab suite (see *The Inferno* above).
+and he's open once the fire dies. It ends with a finisher: he plunges the staff into the
+floor and the whole arena erupts, one jump timed to it clears it. New animations, fire effects
+and sounds, the move in the diagnostics overlay, and an `inferno` lab suite (see *The Inferno*
+above). The shuriken also lost the light streak that trailed behind them.
 
 **Before that: no more staff flourish after his attacks.** After some attacks the staff spun or
 whipped in his hands as he returned to his stance: a full circle after the sweep, one and a
