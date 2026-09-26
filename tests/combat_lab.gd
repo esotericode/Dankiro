@@ -9,6 +9,7 @@ extends Node3D
 ## Exit code 0 when every check passes, including "no engine or script errors during the run".
 
 const DT := 1.0 / 120.0
+const SHURIKEN_POSTURE := 4.0   ## the boss_posture of a thrown shuriken (Boss._throw_shuriken)
 
 var world: Node3D
 var player: Player
@@ -599,18 +600,46 @@ func suite_shuriken() -> void:
 			for g in gaps:
 				check(float(g) < 0.22, "b_shuriken_5 throws come fast (gap %.2f)" % float(g))
 		check(float(arrivals[0]) > 0.6, "the first shuriken arrives after a readable tell (%.2f s)" % float(arrivals[0]))
-		# Deflect each one 80 ms before it lands (tap).
+		# Deflect each one 80 ms before it lands (tap): each costs him a little posture, and he
+		# doesn't flinch.
 		await setup(3.0)
 		t0 = boss_attack(clip)
-		for a in arrivals:
-			var pt: float = t0 + float(a) - 0.08
-			at(pt, func(): player.press_guard(pt))
-			at(pt + 0.04, func(): player.release_guard(pt + 0.04))
-		await run_until_boss_done(3.0)
-		await ticks(60)
+		_deflect_arrivals(t0, arrivals)
+		var peak := 0.0
+		var reacted := false
+		var t_end := Game.clock + 3.0
+		while Game.clock < t_end:
+			await ticks(1)
+			peak = maxf(peak, boss.posture)
+			reacted = reacted or boss.state == Boss.S.REACT or boss.state == Boss.S.STAGGER
 		var got := _results.map(func(r): return res_name(int(r["res"])))
 		check(got.count("DEFLECT") == n_throws, "%s: every throw deflected on time (%s)" % [clip, str(got)])
-		check(boss.posture <= 0.01, "%s: deflecting shuriken costs him no posture (%.1f)" % [clip, boss.posture])
+		var want := SHURIKEN_POSTURE * n_throws
+		check(absf(peak - want) < 0.01 and not reacted,
+			"%s: each deflected shuriken costs him %.0f posture, no flinch (%.1f of %.0f, reacted %s)" % [clip,
+				SHURIKEN_POSTURE, peak, want, reacted])
+		if clip == "b_shuriken_5":
+			# One that fills his posture while he's in the air breaks him as he lands.
+			await setup(3.0)
+			boss.add_posture(boss.max_posture - 2.0, false)
+			t0 = boss_attack(clip)
+			_deflect_arrivals(t0, arrivals)
+			var in_air_at_first := false
+			var broke_at := -1.0
+			var grounded_at_break := false
+			t_end = Game.clock + 3.0
+			while Game.clock < t_end and broke_at < 0.0:
+				var n_before := _results.size()
+				await ticks(1)
+				if n_before == 0 and _results.size() > 0:
+					in_air_at_first = boss._airborne()
+				if boss.state == Boss.S.STAGGER:
+					broke_at = Game.clock - t0
+					grounded_at_break = not boss._airborne()
+			var first_at := float(_results[0]["t"]) - t0 if _results.size() > 0 else -1.0
+			check(in_air_at_first and broke_at > first_at and grounded_at_break,
+				"a shuriken deflected in the air that fills his posture breaks him as he lands (deflected at %.2f s in the air %s, broke at %.2f s on the ground %s)" % [
+					first_at, in_air_at_first, broke_at, grounded_at_break])
 		# Holding guard blocks them all.
 		await setup(3.0)
 		t0 = boss_attack(clip)
@@ -620,6 +649,14 @@ func suite_shuriken() -> void:
 		got = _results.map(func(r): return res_name(int(r["res"])))
 		check(got.count("BLOCK") == n_throws, "%s: holding guard blocks every throw (%s)" % [clip, str(got)])
 		player.release_guard(Game.clock)
+
+
+## Taps guard 80 ms before each shuriken lands (`arrivals` from the throw at `t0`).
+func _deflect_arrivals(t0: float, arrivals: Array) -> void:
+	for a in arrivals:
+		var pt: float = t0 + float(a) - 0.08
+		at(pt, func(): player.press_guard(pt))
+		at(pt + 0.04, func(): player.release_guard(pt + 0.04))
 
 
 ## The menus with a gamepad only (simulated pad events through the real input pipeline): the

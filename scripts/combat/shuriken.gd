@@ -2,9 +2,10 @@ class_name Shuriken
 extends Node3D
 ## A thrown shuriken. It flies straight at where the target will be, spinning, and is resolved
 ## against the player exactly like a blade (deflect / block / hit, with the contact time found
-## by a swept test so the deflect window is measured precisely). Deflected ones glance off,
-## blocked ones drop, and ones that miss stick into the flagstones. Big, glinting and glowing,
-## so you can track each one in the dark and time it as it lands.
+## by a swept test so the deflect window is measured precisely). Deflected ones glance off
+## (costing the thrower a little posture), blocked ones drop, and ones that miss stick into the
+## flagstones. Big, glinting and glowing, so you can track each one in the dark and time it as
+## it lands.
 
 const SPEED := 16.0
 const GRAVITY := 16.0
@@ -136,6 +137,8 @@ func _sweep_against_target(prev: Vector3, now: Vector3) -> void:
 		match res:
 			Combat.RESULT_DEFLECT:
 				_glance(p, 8.0)
+				if is_instance_valid(thrower) and thrower is Boss:
+					(thrower as Boss).projectile_deflected(hit)
 			Combat.RESULT_BLOCK:
 				_glance(p, 3.0)
 			Combat.RESULT_HIT:

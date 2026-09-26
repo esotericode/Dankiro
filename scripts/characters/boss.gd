@@ -114,6 +114,7 @@ var staff_fire: StaffFire
 var inferno_uses := 0
 var _inferno_at := INF              ## Game.clock from when he may use the Inferno again
 var _opener := false                ## open with the Inferno as soon as the fight starts
+var _break_on_landing := false      ## a deflected shuriken filled his posture while he was in the air
 
 
 func _ready() -> void:
@@ -241,6 +242,10 @@ func _physics_process(delta: float) -> void:
 	if _since_blocked > 1.6:
 		_guard_count = 0
 	var planar := Vector3.ZERO
+	if _break_on_landing and not _airborne():
+		_break_on_landing = false
+		if state == S.NEUTRAL or state == S.ATTACK or state == S.GUARD or state == S.REACT:
+			_posture_break()
 	match state:
 		S.INTRO:
 			if opponent:
@@ -879,6 +884,7 @@ func receive_kick(p: Player, foot: Vector3) -> void:
 
 # ---------------------------------------------------------------------------- posture break / deathblow
 func _posture_break() -> void:
+	_break_on_landing = false
 	state = S.STAGGER
 	state_time = 0.0
 	_seq.clear()
@@ -1059,7 +1065,8 @@ func _on_anim_event(_clip: String, ev: Dictionary) -> void:
 
 
 ## Shuriken from the left hand at where the player will be (a little lead on their movement).
-## Resolved by the player like any strike; deflecting them costs him no posture (as in Sekiro).
+## Resolved by the player like any strike. Deflecting one costs him a little posture
+## (`boss_posture`, see projectile_deflected); in Sekiro it costs none.
 func _throw_shuriken(index: int) -> void:
 	if not (opponent is Player):
 		return
@@ -1068,9 +1075,27 @@ func _throw_shuriken(index: int) -> void:
 	var flight := from.distance_to(aim) / Shuriken.SPEED
 	aim += Combat.flat(opponent.velocity) * flight * 0.6
 	var info := {"kind": "projectile", "dir": "mid", "dmg": 8, "posture_block": 12, "posture_deflect": 3,
-		"boss_posture": 0, "clip": anim.clip.name if anim.clip != null else "", "index": index}
+		"boss_posture": 4, "clip": anim.clip.name if anim.clip != null else "", "index": index}
 	Shuriken.throw(get_parent(), from, aim, self, opponent as Player, info)
 	Sfx.play("throw", from, 0.0, 1.0, 0.06)
+
+
+## The player deflected one of his shuriken: a little posture, no recoil (he's out of reach) and
+## no deflect-chain bonus. It can fill his posture like anything else; if he's in the air then,
+## he breaks as he lands.
+func projectile_deflected(info: Dictionary) -> void:
+	if state != S.NEUTRAL and state != S.ATTACK and state != S.GUARD and state != S.REACT:
+		return
+	if add_posture(float(info.get("boss_posture", 0.0))):
+		if _airborne():
+			_break_on_landing = true
+		else:
+			_posture_break()
+
+
+## Both feet off the ground (in a leap, or hanging in the air to throw shuriken).
+func _airborne() -> bool:
+	return minf(rig.joint_world("foot_l").y, rig.joint_world("foot_r").y) - global_position.y > 0.22
 
 
 func _begin_perilous(kind: String) -> void:

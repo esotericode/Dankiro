@@ -62,9 +62,11 @@ the ones the game already teaches:
 ### Projectiles
 
 In Sekiro, thrown weapons such as shuriken and kunai are deflected or blocked like blades, and
-deflecting them doesn't damage the thrower's posture. Dankiro's shuriken volleys work the
-same way: every throw can be deflected (sparks, clang) or blocked, and hits if ignored.
-**[tested]**
+deflecting them doesn't damage the thrower's posture. Dankiro's shuriken are deflected (sparks,
+clang), blocked or hit like blades too, but on posture it departs from Sekiro by design: each
+deflected shuriken costs him a little (4 of his 300, against 7 to 16 for a deflected blade),
+with no flinch and no deflect-chain bonus. Like any posture damage it can break him; if he's
+still in the air then, he breaks as he lands. **[tested]**
 
 ### Mikiri Counter
 
