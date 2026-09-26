@@ -46,7 +46,7 @@ func _ready() -> void:
 	cam = Camera3D.new()
 	cam.fov = 60.0
 	cam.near = 0.05
-	cam.far = 500.0
+	cam.far = 3000.0     # the far mountains stand 1-1.5 km off
 	holder.add_child(cam)
 	cam.current = true
 	Game.camera = self

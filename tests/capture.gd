@@ -4,7 +4,8 @@ extends Node
 ## Shots: overview, deflect, deflect_offcenter, block, mikiri, thrust_backstep, sweep, sweep_flee, whirl, shuriken,
 ## shuriken5, charge, slashes, parried, inferno [stand|wide|spin|plunge|plunge_stand], attack <clip> [distance], recovery <clip>, diagnostics, the menus
 ## (menu_title, menu_options, menu_start, menu_pause), and art checks: model (orbit), model_head, model_face, model_face_p2, model_combo,
-## model_flourish, fire_staff [level], fire_combo, floor [overview|centre|medallion|puddle|moss|broken|rim|low|sweep].
+## model_flourish, fire_staff [level], fire_combo, floor [overview|centre|medallion|puddle|moss|broken|rim|low|sweep],
+## scenery [torii|gate|south|east|west|high|lantern].
 ## Loads the real game scene (arena, lighting, HUD, lock-on camera), skips the intro, stages
 ## the fighters and drives the player with a bot that reacts to the boss's hit windows.
 
@@ -338,6 +339,39 @@ func shot_floor() -> void:
 		tw.tween_method(func(k: float):
 			cam.global_position = from + Vector3(9.0 * k, 0.0, -2.0 * k)
 			cam.look_at(look + Vector3(9.0 * k, 0.0, 0.0), Vector3.UP), 0.0, 1.0, 6.0)
+
+
+## The world round the plaza from fixed cameras, the fighters out of the way:
+## `-- scenery [torii|gate|south|east|west|high|lantern]`.
+func shot_scenery() -> void:
+	var args := OS.get_cmdline_user_args()
+	var view: String = args[1] if args.size() > 1 else "torii"
+	_stage(3.0, Vector3(3.0, 0, 11.0))
+	var views := {
+		"torii": [Vector3(0, 1.8, 9.0), Vector3(0, 4.5, -30.0), 60.0],
+		"gate": [Vector3(1.5, 2.2, -11.5), Vector3(0, 4.5, -30.0), 60.0],
+		"south": [Vector3(0, 1.8, -9.0), Vector3(0, 5.0, 40.0), 60.0],
+		"east": [Vector3(-8.0, 1.8, 0.0), Vector3(40.0, 6.0, 0.0), 60.0],
+		"west": [Vector3(8.0, 1.8, 0.0), Vector3(-40.0, 6.0, 0.0), 60.0],
+		"high": [Vector3(0, 30.0, 36.0), Vector3(0, 0, -12.0), 55.0],
+		"lantern": [Vector3(4.2, 1.5, -10.4), Vector3(5.55, 0.8, -13.4), 50.0],
+		"vista": [Vector3(12.5, 2.4, -2.0), Vector3(80.0, -4.0, 8.0), 60.0],
+		"north": [Vector3(-3.0, 2.0, 12.0), Vector3(2.0, 9.0, -60.0), 60.0],
+		"cliff": [Vector3(13.0, 4.5, -14.0), Vector3(24.0, -6.0, 6.0), 60.0],
+	}
+	var v: Array = views.get(view, views["torii"])
+	var cc := Game.camera as Camera3D
+	if cc != null:
+		cc.set_process(false)
+		cc.set_physics_process(false)
+	Game.hud.visible = false
+	var cam := Camera3D.new()
+	cam.fov = float(v[2])
+	add_child(cam)
+	cam.current = true
+	cam.global_position = v[0]
+	cam.look_at(v[1], Vector3.UP)
+	_end_at = 0.4
 
 
 ## The boss idling while the camera circles him (4 s = one turn).
