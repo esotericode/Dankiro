@@ -598,7 +598,7 @@ func shot_sizzle() -> void:
 		"look_from": Vector3(0, 1.15, -1.5), "look_to": Vector3(0, 1.42, -1.5), "fov": Vector2(40, 34), "hold": t0})
 	# 2. a combo, the camera racing round him
 	at(t0 + 2.0, func(): boss_string(["b_combo_1", "b_combo_2", "b_combo_3"]))
-	_cine.append({"t0": t0 + 2.0, "t1": t0 + 3.9, "orbit": true, "a": Vector2(72, -48), "r": Vector2(3.4, 2.9),
+	_cine.append({"t0": t0 + 2.0, "t1": t0 + 3.9, "orbit": true, "a": Vector2(47, -73), "r": Vector2(3.4, 2.9),
 		"h": Vector2(1.55, 1.2), "look_y": 1.22, "fov": Vector2(44, 44)})
 	# 3. his leaping strike, from the ground where he lands
 	at(t0 + 3.9, func():
@@ -607,8 +607,8 @@ func shot_sizzle() -> void:
 		boss.face_now(player.global_position)
 		boss._seq.clear()
 		boss._play_attack("b_leap", 0.0))
-	_cine.append({"t0": t0 + 3.9, "t1": t0 + 5.7, "from": Vector3(1.35, 0.28, 5.4), "to": Vector3(1.9, 0.4, 6.6),
-		"look_boss": 1.15, "fov": Vector2(56, 52)})
+	_cine.append({"t0": t0 + 3.9, "t1": t0 + 5.7, "from": Vector3(1.2, 0.3, 6.9), "to": Vector3(1.75, 0.42, 7.7),
+		"look_boss": 1.1, "fov": Vector2(34, 44)})
 	_shakes.append([t0 + 3.9 + 0.97, 0.09, 0.3])
 	# 4. the Inferno: arms of fire sweeping round him, seen from high up with the moon beyond
 	at(t0 + 5.7, func():
