@@ -77,8 +77,8 @@ void fragment() {
 	if (loop_x < 0.5) {
 		ends = smoothstep(0.0, 0.012, UV.x) * (1.0 - smoothstep(reveal - 0.025, reveal, UV.x));
 	}
-	ALBEDO = c * heat * 2.4;
-	ALPHA = clamp(a * alpha_mult * ends, 0.0, 1.0);
+	ALBEDO = c * heat * 1.25;
+	ALPHA = clamp(a * alpha_mult * ends * 0.85, 0.0, 1.0);
 }
 """
 
@@ -114,7 +114,7 @@ void fragment() {
 	float n = vnoise(vec2(x * 2.2 - TIME * 3.0, UV.y * 4.0)) * 0.6 + vnoise(vec2(x * 5.0 + TIME * 1.3, UV.y * 9.0)) * 0.4;
 	float f = (1.0 - d) * (0.55 + 0.7 * n);
 	float ends = smoothstep(0.0, 0.012, UV.x) * (1.0 - smoothstep(reveal - 0.025, reveal, UV.x));
-	ALBEDO = mix(body, core, smoothstep(0.55, 0.95, f)) * heat * 2.2;
+	ALBEDO = mix(body, core, smoothstep(0.55, 0.95, f)) * heat * 1.05;
 	ALPHA = clamp(smoothstep(0.15, 0.6, f) * alpha_mult * ends, 0.0, 1.0);
 }
 """
@@ -132,11 +132,12 @@ static func flame_texture() -> Texture2D:
 			var u := (float(px) + 0.5) / n * 2.0 - 1.0          # -1..1 across
 			var v := (float(py) + 0.5) / n                       # 0 top .. 1 bottom
 			var h := 1.0 - v                                     # 0 bottom .. 1 top
-			var half := 0.72 * pow(maxf(0.0, 1.0 - h), 0.55) * (0.55 + 0.45 * sin(PI * minf(1.0, h * 2.4 + 0.1)))
-			var edge := 1.0 - smoothstep(half * 0.35, half + 0.02, absf(u))
-			var vert := smoothstep(0.0, 0.18, v) * smoothstep(1.0, 0.72, v)
+			# a soft tongue of flame: round and broad low down, rounding off (not a spike) at the top
+			var half := 0.78 * pow(maxf(0.0, 1.0 - h), 0.35) * (0.6 + 0.4 * sin(PI * minf(1.0, h * 2.0 + 0.15)))
+			var edge := 1.0 - smoothstep(half * 0.05, half + 0.14, absf(u))
+			var vert := smoothstep(0.0, 0.3, v) * smoothstep(1.0, 0.62, v)
 			var a := clampf(edge * vert, 0.0, 1.0)
-			img.set_pixel(px, py, Color(1, 1, 1, a * a))
+			img.set_pixel(px, py, Color(1, 1, 1, a * a * (3.0 - 2.0 * a)))
 	_flame_tex = ImageTexture.create_from_image(img)
 	return _flame_tex
 
@@ -150,7 +151,7 @@ static func flame_material() -> StandardMaterial3D:
 		_flame_mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 		_flame_mat.vertex_color_use_as_albedo = true
 		_flame_mat.albedo_texture = flame_texture()
-		_flame_mat.albedo_color = Color(2.3, 2.0, 1.7)
+		_flame_mat.albedo_color = Color(1.3, 1.1, 1.0)
 		_flame_mat.disable_receive_shadows = true
 	return _flame_mat
 
@@ -164,7 +165,7 @@ static func ember_material() -> StandardMaterial3D:
 		_ember_mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 		_ember_mat.vertex_color_use_as_albedo = true
 		_ember_mat.albedo_texture = Fx.radial_texture("ember", Color(1, 1, 1, 1), Color(1, 0.6, 0.2, 0), 32)
-		_ember_mat.albedo_color = Color(2.6, 1.8, 1.2)
+		_ember_mat.albedo_color = Color(2.0, 1.5, 1.1)
 	return _ember_mat
 
 
@@ -309,8 +310,8 @@ static func flames(amount: int, lifetime: float, size: float) -> CPUParticles3D:
 	q.size = Vector2(size * 0.74, size)
 	p.mesh = q
 	p.material_override = flame_material()
-	p.color_ramp = Fx._ramp([Color(1.0, 0.95, 0.78, 1.0), Color(1.0, 0.62, 0.2, 0.95), Color(0.9, 0.24, 0.04, 0.6),
-		Color(0.3, 0.04, 0.01, 0.0)], [0.0, 0.2, 0.55, 1.0])
+	p.color_ramp = Fx._ramp([Color(1.0, 0.85, 0.55, 0.85), Color(1.0, 0.5, 0.12, 0.8), Color(0.8, 0.18, 0.03, 0.45),
+		Color(0.25, 0.03, 0.01, 0.0)], [0.0, 0.2, 0.55, 1.0])
 	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return p
 
@@ -361,7 +362,7 @@ static func burst(parent: Node, pos: Vector3, scale := 1.0) -> void:
 	e.gravity = Vector3(0, -2.0, 0)
 	Fx._emit_at(parent, e, pos)
 	Fx._free_later(e, 1.3)
-	Fx.light_pulse(parent, pos + Vector3(0, 0.2, 0), Color(1.0, 0.5, 0.15), 3.0 * scale, 4.0 * scale, 0.35)
+	Fx.light_pulse(parent, pos + Vector3(0, 0.2, 0), Color(1.0, 0.5, 0.15), 1.8 * scale, 4.0 * scale, 0.35)
 
 
 static func smoke(parent: Node, pos: Vector3, amount := 10, size := 0.6) -> void:

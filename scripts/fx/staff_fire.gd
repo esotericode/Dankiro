@@ -29,9 +29,9 @@ func setup(r: HumanoidRig) -> void:
 		var b := pts[pts.size() - 1]
 		var mid := (a + b) * 0.5
 		var half := (b - a).length() * 0.5
-		var big := FireFx.flames(90, 0.42, 0.5)
+		var big := FireFx.flames(48, 0.4, 0.42)
 		_along_blade(big, mid, half)
-		var small := FireFx.flames(26, 0.36, 0.24)
+		var small := FireFx.flames(18, 0.34, 0.22)
 		_along_blade(small, mid + (b - a).normalized() * half * 0.3, half * 0.6)
 		var em := FireFx.embers(14, 1.1)
 		_along_blade(em, mid, half)
@@ -50,7 +50,7 @@ func setup(r: HumanoidRig) -> void:
 	var shaft_pts: PackedVector3Array = rig.blades.get("shaft", PackedVector3Array())
 	if shaft_pts.size() >= 2:
 		_shaft_len = (shaft_pts[shaft_pts.size() - 1] - shaft_pts[0]).length()
-	_shaft = FireFx.flames(60, 0.4, 0.34)
+	_shaft = FireFx.flames(36, 0.38, 0.3)
 	_along_blade(_shaft, Vector3.ZERO, 0.1)
 
 
@@ -92,7 +92,7 @@ func _process(delta: float) -> void:
 		small.emitting = lv > 0.04
 		small.color = Color(1, 1, 1, clampf(lv / SMOULDER, 0.0, 1.0))
 		em.emitting = lv > 0.04
-		(_lights[bname] as OmniLight3D).light_energy = 0.9 * clampf(lv / SMOULDER, 0.0, 1.0) + 2.6 * blaze
+		(_lights[bname] as OmniLight3D).light_energy = 0.6 * clampf(lv / SMOULDER, 0.0, 1.0) + 1.5 * blaze
 	# fire running up the planted shaft from the lower blade
 	_shaft.emitting = climb > 0.0 and climb < 1.2
 	if _shaft.emitting:

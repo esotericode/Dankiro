@@ -34,6 +34,26 @@ A red kanji flashes with a warning sound. Sekiro has three kinds; this boss uses
 | **Sweep** | Can't be blocked or deflected, and dodge i-frames don't help. **Jump** over it, then press **jump again** while above or in front of him to **kick off his head** for major posture damage, with a bonus against sweeps. | Same. The kick deals ×1.6 posture during a sweep. The sweep is low (shin height) and ~2.5 m long. He chases you through the coil at up to sprint speed, and the blade only crosses in front of him once he has closed in. Stepping back or aside, two backsteps, walking away or sprinting away as the kanji shows all get caught, from 1.5 to 3.4 m: it forces the jump. **[tested]** |
 | Grab | Can't be blocked. Dodge it. | Not used by this boss. |
 
+### Phase two's fire move (the Inferno)
+
+This one isn't taken from Sekiro. It's a set piece built on Sekiro's rules, so the answers are
+the ones the game already teaches:
+
+- **The tell** is long and unmistakable: he leaps to the middle of the arena (nothing else
+  takes him there), plants the staff and channels while the floor glows out to the blast
+  radius. The blast (`kind: "blast"`) can't be deflected or blocked and dodge i-frames don't
+  cover it; distance is the answer. The channel is long enough to walk out of the glow locked
+  on from right beside him if you go as he leaps. **[tested]**
+- **Each arm of fire is a perilous sweep** (危): no guard, no i-frames, jump it. The arms reach
+  past the walls, so there's no outrunning them. **[tested]**
+- **Rhythm, then a break in it**: three passes 1.8 s apart teach a beat, and the fourth comes
+  after 1.25 s, like Sekiro's delayed and early swings that punish rhythm-mashing instead of
+  watching the attack. The turn is steered so the beat is the same wherever you stand.
+  **[tested]**
+- **Fairness**: a burn knocks you down (like a sweep), and the next arm waits until you're up
+  with time to jump it, so one mistake costs one hit, never a chain. **[tested]**
+- **Payoff**: he's spent afterwards, open like a boss after a long string. **[tested]**
+
 ### Projectiles
 
 In Sekiro, thrown weapons such as shuriken and kunai are deflected or blocked like blades, and

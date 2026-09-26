@@ -5,7 +5,7 @@ extends Node3D
 ##
 ## Run (from the project folder):
 ##   godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--verbose]
-## Suites: reach, tells, deflect, flurry, punish, loop, phases, menu, spam, mikiri, dodge, sweep, shuriken, attack, cancel, soak (default: all).
+## Suites: reach, tells, deflect, flurry, punish, loop, phases, menu, spam, mikiri, dodge, sweep, shuriken, attack, cancel, inferno, soak (default: all).
 ## Exit code 0 when every check passes, including "no engine or script errors during the run".
 
 const DT := 1.0 / 120.0
@@ -55,7 +55,7 @@ func _ready() -> void:
 		if not a.begins_with("--"):
 			suites.append(a)
 	if suites.is_empty():
-		suites = ["reach", "tells", "deflect", "flurry", "punish", "loop", "phases", "menu", "spam", "mikiri", "dodge", "sweep", "shuriken", "attack", "cancel", "soak"]
+		suites = ["reach", "tells", "deflect", "flurry", "punish", "loop", "phases", "menu", "spam", "mikiri", "dodge", "sweep", "shuriken", "attack", "cancel", "inferno", "soak"]
 	await get_tree().physics_frame
 	for s in suites:
 		print("\n=== suite: %s ===" % s)
@@ -805,9 +805,14 @@ func _loop_fight(style: String, sd: int) -> Dictionary:
 	var next_attack := 0.0
 	var breaks := [0]
 	boss.posture_broken.connect(func(): breaks[0] += 1)
+	var ibot := {"jumped": [-1]}
 	while Game.clock < t_end:
 		await ticks(1)
 		var now := Game.clock
+		if boss.state == Boss.S.INFERNO:          # phase 2's fire move: get clear, jump the arms
+			_inferno_bot_tick("escape", ibot)
+			prev_state[0] = boss.state
+			continue
 		# A new "cycle" whenever he starts attacking again: a sequence, or his parry counter.
 		var in_counter := boss.state == Boss.S.ATTACK and boss.anim.clip != null and not boss.anim.loco_active \
 				and boss.anim.clip.name == "b_parry_counter"
@@ -1029,9 +1034,13 @@ func suite_soak() -> void:
 	var next_attack := 0.0
 	var t_end := Game.clock + SOAK_TIME
 	var last_desc := ""
+	var ibot := {"jumped": [-1]}
 	while Game.clock < t_end and over[0] == "":
 		await ticks(1)
 		var now := Game.clock
+		if boss.state == Boss.S.INFERNO:          # phase 2's fire move: get clear, jump the arms
+			_inferno_bot_tick("escape", ibot)
+			continue
 		if verbose:
 			var desc := "%s %s %s" % [Boss.S.keys()[boss.state], boss._mode,
 				boss.anim.clip.name if boss.anim.clip != null and not boss.anim.loco_active else "loco"]
@@ -1098,12 +1107,288 @@ func suite_soak() -> void:
 			next_attack = now + randf_range(0.3, 0.9)
 		if player.hp < player.max_hp * 0.35 and player.heal_charges > 0 and d > 3.0:
 			player.press_action("heal", now)
-	print("  soak: %s after %.0f s  %s  boss lives %d, player hp %.0f" % [over[0] if over[0] != "" else "time up",
-		Game.clock - (t_end - SOAK_TIME), str(counts), boss.lives_left, player.hp])
+	print("  soak: %s after %.0f s  %s  boss lives %d, infernos %d, player hp %.0f" % [over[0] if over[0] != "" else "time up",
+		Game.clock - (t_end - SOAK_TIME), str(counts), boss.lives_left, boss.inferno_uses, player.hp])
 	check(int(counts.get("DEFLECT", 0)) >= 10, "soak: deflects happen (%d)" % int(counts.get("DEFLECT", 0)))
 	check(int(counts.get("BLOCK", 0)) >= 1, "soak: early presses block")
 	check(int(counts.get("posture_break", 0)) >= 1, "soak: his posture breaks")
 	check(int(counts.get("life_lost", 0)) >= 1, "soak: a deathblow takes a life (phase two)")
+	if boss.phase >= 2:
+		check(boss.inferno_uses >= 1, "soak: he opens phase two with the Inferno (%d uses)" % boss.inferno_uses)
+
+
+# ---------------------------------------------------------------------------- the Inferno
+## Phase 2's fire move. The tell (a leap to the middle of the arena, a long channel with the
+## blast radius glowing on the floor) gives you time to walk out of the blast; inside it you're
+## knocked down and thrown out. Then each arm of fire has to be jumped: guarding, dodging and
+## standing still all get burned. Three passes on an even beat, a faster fourth that catches
+## anyone jumping on the beat; the beat holds wherever you stand; after a burn you always get
+## up in time to jump the next arm; the ring keeps you off him and his fire turns your sword;
+## afterwards he's open. He opens phase 2 with it and uses it again later.
+func suite_inferno() -> void:
+	# Opens phase 2: starting the fight there, and rising into it after a deathblow.
+	await setup(4.0)
+	boss.set_start_phase(2)
+	boss.passive = false
+	boss.start_fight()
+	await _wait_state(Boss.S.INFERNO, 2.0)
+	check(boss.state == Boss.S.INFERNO, "starting in phase 2, he opens with the Inferno (%s)" % Boss.S.keys()[boss.state])
+	await setup(3.0)
+	boss.passive = false
+	boss._posture_break()
+	boss.begin_deathblow(player)
+	await _wait_state(Boss.S.INFERNO, 12.0)
+	check(boss.state == Boss.S.INFERNO and boss.phase == 2, "rising into phase 2, he opens with the Inferno (%s, phase %d)" % [
+		Boss.S.keys()[boss.state], boss.phase])
+
+	# The leap lands him in the middle of the arena, wherever he was.
+	var r := await _inferno_run(Vector3(5.0, 0, -4.0), Vector3(0, 0, 9.0), "jump")
+	check(float(r["landed_off"]) < 0.2, "he leaps to the middle of the arena (lands %.2f m off)" % r["landed_off"])
+
+	# The blast: out of the glow you're safe; in it you're knocked down and thrown out of it;
+	# the channel is long enough to walk out of it locked on from right beside where he lands.
+	r = await _inferno_run(Vector3(0, 0, -3.0), Vector3(0, 0, 8.0), "jump")
+	check(not bool(r["blast_hit"]), "the blast doesn't reach you outside its radius")
+	r = await _inferno_run(Vector3(0, 0, -3.0), Vector3(0, 0, 2.0), "stand")
+	check(bool(r["blast_hit"]) and float(r["blast_out"]) >= Inferno.BLAST_R - 0.3,
+		"inside the blast radius it knocks you down and throws you out (%.1f m from him)" % r["blast_out"])
+	for start in [Vector3(0, 0, 1.6), Vector3(1.2, 0, -0.5), Vector3(-2.5, 0, 1.0)]:
+		r = await _inferno_run(Vector3(0, 0, -4.0), start, "escape")
+		check(not bool(r["blast_hit"]), "walking away (locked on) from %.1f m out gets clear of the blast in time" % Combat.flat(start).length())
+	r = await _inferno_run(Vector3(0, 0, -3.0), Vector3(0, 0, 2.0), "dodge_blast")
+	check(bool(r["blast_hit"]), "dodging through the blast doesn't work (i-frames don't cover it)")
+
+	# Jumping each arm as it comes clears all four, wherever you stand.
+	var worst_gap := 0.0
+	for spot in [[6.0, 0.0], [10.0, 120.0], [14.0, 240.0], [4.2, 60.0]]:
+		var pos := Combat.dir_of(deg_to_rad(float(spot[1]))) * float(spot[0])
+		r = await _inferno_run(Vector3(0, 0, -2.0), pos, "jump")
+		check(int(r["passes"]) == Inferno.PASSES and int(r["hits"]) == 0,
+			"jumping each arm at %.0f m clears all four (%d passes, %d burns)" % [spot[0], r["passes"], r["hits"]])
+		check(bool(r["spent"]), "at %.0f m: afterwards he's spent (b_fire_spent)" % spot[0])
+		var gaps: Array = r["gaps"]
+		if gaps.size() == 3:
+			worst_gap = maxf(worst_gap, maxf(absf(float(gaps[0]) - Inferno.GAP), maxf(absf(float(gaps[1]) - Inferno.GAP),
+				absf(float(gaps[2]) - Inferno.GAP_FAST))))
+		print("  inferno at %4.1f m %3.0f deg: passes %s, gaps %s" % [spot[0], spot[1], str(r["pass_rel"]), str(gaps)])
+	check(worst_gap < 0.12, "the beat holds wherever you stand: %.1f, %.1f, then %.2f s (off by at most %.2f s)" % [
+		Inferno.GAP, Inferno.GAP, Inferno.GAP_FAST, worst_gap])
+	# ...even while you walk round him (the turn is steered to keep the beat)
+	r = await _inferno_run(Vector3(0, 0, -2.0), Vector3(0, 0, 7.0), "jump_strafe")
+	var sg: Array = r["gaps"]
+	print("  inferno walking round him: gaps %s, %d burns" % [str(sg), r["hits"]])
+	check(int(r["hits"]) == 0 and sg.size() == 3 and absf(float(sg[0]) - Inferno.GAP) < 0.25 and absf(float(sg[2]) - Inferno.GAP_FAST) < 0.25,
+		"walking round him, the beat still holds and jumping still clears it (%s)" % str(sg))
+
+	# Everything else gets burned: standing still, guarding, dodging into the arm.
+	for mode in ["stand", "guard", "dodge"]:
+		r = await _inferno_run(Vector3(0, 0, -2.0), Vector3(0, 0, 8.0), mode)
+		check(int(r["hits"]) == Inferno.PASSES and int(r["guarded"]) == 0,
+			"%s: every arm burns you (%d of %d)" % [mode, r["hits"], Inferno.PASSES])
+	# Jumping on the beat of the first three instead of watching: the fast fourth catches you.
+	r = await _inferno_run(Vector3(0, 0, -2.0), Vector3(0, 0, 8.0), "beat")
+	check(int(r["hits"]) == 1 and int(r["hit_pass"]) == Inferno.PASSES - 1,
+		"jumping on the beat clears three, the faster fourth burns you (%d burns, on pass %d)" % [r["hits"], int(r["hit_pass"]) + 1])
+	# Burned once, you get up in time to jump the next arm (it waits for you).
+	r = await _inferno_run(Vector3(0, 0, -2.0), Vector3(0, 0, 8.0), "stand_first")
+	check(int(r["hits"]) == 1 and float(r["after_hit"]) >= Inferno.FAIR - 0.1,
+		"after a burn the next arm comes %.2f s later and you can jump it (%d burns)" % [r["after_hit"], r["hits"]])
+
+	# The ring of fire keeps you off him (and burns), and his fire turns your sword.
+	r = await _inferno_run(Vector3(0, 0, -2.0), Vector3(0, 0, 7.0), "rush")
+	check(float(r["closest"]) >= Inferno.RING_R - 0.5 and int(r["burns"]) >= 1,
+		"walking at him during the turn: the ring stops you %.2f m out and burns (%d)" % [r["closest"], r["burns"]])
+	r = await _inferno_run(Vector3(0, 0, 0.0), Vector3(0, 0, 1.7), "slash")
+	check(int(r["slashes"]) >= 1 and int(r["slash_hits"]) == 0 and float(r["boss_hp_lost"]) == 0.0 and float(r["boss_posture"]) == 0.0,
+		"your sword glances off him while he burns (%d contacts, %d hit, %.0f damage, %.0f posture)" % [r["slashes"],
+			r["slash_hits"], r["boss_hp_lost"], r["boss_posture"]])
+	# Spent: he's open, hits land.
+	r = await _inferno_run(Vector3(0, 0, -2.0), Vector3(0, 0, 6.0), "punish")
+	check(int(r["punished"]) >= 1, "while he's spent your hits land (%d)" % r["punished"])
+
+	# He uses it again later in phase 2, not before the cooldown.
+	await setup(4.0)
+	seed(2024)
+	boss.set_start_phase(2)
+	boss.passive = false
+	boss.start_fight()
+	var starts: Array = []
+	var ends: Array = []
+	var was := false
+	var t_end := Game.clock + 110.0
+	var bot := {"jumped": [-1]}
+	while Game.clock < t_end:
+		await ticks(1)
+		var now_on := boss.state == Boss.S.INFERNO
+		if now_on and not was:
+			starts.append(Game.clock)
+		if was and not now_on:
+			ends.append(Game.clock)
+		was = now_on
+		_inferno_bot_tick("jump", bot)
+		if player.guard_held and Game.clock - player.guard_start > 0.1:
+			player.release_guard(Game.clock)
+	var gap_ok := starts.size() >= 2 and ends.size() >= 1 and float(starts[1]) - float(ends[0]) >= Boss.INFERNO_COOLDOWN - 0.5
+	check(gap_ok, "he uses it again in phase 2 once it's off cooldown (%d uses, gap %s s)" % [starts.size(),
+		("%.1f" % (float(starts[1]) - float(ends[0]))) if starts.size() >= 2 and ends.size() >= 1 else "-"])
+
+
+func _wait_state(s: int, max_time: float) -> void:
+	var t_end := Game.clock + max_time
+	while boss.state != s and Game.clock < t_end:
+		await ticks(1)
+
+
+## Runs one Inferno with the boss starting at `boss_at` (it leaps to the middle) and the player
+## at `player_at`, the player bot doing `mode`. Returns what happened.
+func _inferno_run(boss_at: Vector3, player_at: Vector3, mode: String) -> Dictionary:
+	await setup(4.0)
+	boss.global_position = boss_at
+	player.global_position = player_at
+	await ticks(2)
+	boss.face_now(player.global_position)
+	player.face_now(boss.global_position)
+	boss._enter_phase(2, false)
+	var hp0 := boss.hp
+	var out := {"blast_hit": false, "blast_out": 0.0, "passes": 0, "hits": 0, "guarded": 0, "hit_pass": -1, "gaps": [],
+		"pass_rel": [], "spent": false, "landed_off": 99.0, "after_hit": 99.0, "closest": 99.0, "burns": 0,
+		"slashes": 0, "slash_hits": 0, "boss_hp_lost": 0.0, "boss_posture": 0.0, "punished": 0}
+	var burned := [0]
+	var hp_prev := [player.hp]
+	boss.struck.connect(func(res: int, _p: Vector3):
+		out["slashes"] = int(out["slashes"]) + 1
+		if res == Combat.RESULT_HIT and boss.state == Boss.S.INFERNO:
+			out["slash_hits"] = int(out["slash_hits"]) + 1)
+	boss.begin_inferno()
+	var inf := boss.inferno
+	var st := {"jumped": [-1], "last_hit_t": -1.0, "stood": false}
+	var t0 := Game.clock
+	var t_end := Game.clock + 24.0
+	var hit_times: Array = []
+	var seen_spent := false
+	while Game.clock < t_end:
+		await ticks(1)
+		if inf.stage == Inferno.St.IGNITE and float(out["landed_off"]) > 90.0:
+			out["landed_off"] = Combat.flat(boss.global_position - inf.center).length()
+		if inf.blast_hit and not bool(out["blast_hit"]):
+			out["blast_hit"] = true
+		if bool(out["blast_hit"]) and player.state == Player.S.KNOCKDOWN and inf.stage == Inferno.St.IGNITE:
+			out["blast_out"] = maxf(float(out["blast_out"]), Combat.flat(player.global_position - inf.center).length())
+		if inf.stage >= Inferno.St.SPIN:
+			out["closest"] = minf(float(out["closest"]), Combat.flat(player.global_position - inf.center).length())
+		if player.hp < float(hp_prev[0]) - 0.01 and inf.stage >= Inferno.St.SPIN and player.state != Player.S.KNOCKDOWN:
+			burned[0] += 1
+		hp_prev[0] = player.hp
+		if boss.state == Boss.S.ATTACK and boss.anim.is_playing("b_fire_spent"):
+			seen_spent = true
+		if mode == "punish" and seen_spent:
+			_inferno_close_in()
+		_inferno_bot_tick(mode, st)
+		if mode == "slash" and inf.stage == Inferno.St.IGNITE and boss.anim.time < 1.3 and player.state == Player.S.MOVE:
+			player.press_action("attack", Game.clock)
+		if seen_spent and boss.state == Boss.S.NEUTRAL:
+			break
+	for rr in _results:
+		var info: Dictionary = rr["info"]
+		if str(info.get("clip", "")) != "inferno" or str(info.get("kind", "")) != "sweep":
+			continue
+		if int(rr["res"]) == Combat.RESULT_HIT:
+			out["hits"] = int(out["hits"]) + 1
+			out["hit_pass"] = int(info.get("index", -1))
+			hit_times.append(float(rr["t"]))
+		elif int(rr["res"]) == Combat.RESULT_BLOCK or int(rr["res"]) == Combat.RESULT_DEFLECT:
+			out["guarded"] = int(out["guarded"]) + 1
+	out["passes"] = inf.passes
+	var pt: Array = inf.pass_times
+	var rel: Array = []
+	for p in pt:
+		rel.append(snappedf(float(p) - t0, 0.01))
+	out["pass_rel"] = rel
+	var gaps: Array = []
+	for i in range(1, pt.size()):
+		gaps.append(snappedf(float(pt[i]) - float(pt[i - 1]), 0.01))
+	out["gaps"] = gaps
+	out["spent"] = seen_spent
+	out["burns"] = burned[0]
+	if hit_times.size() == 1:
+		for p in pt:
+			if float(p) > float(hit_times[0]) + 0.3:
+				out["after_hit"] = float(p) - float(hit_times[0])
+				break
+	out["boss_hp_lost"] = hp0 - boss.hp if mode == "slash" else 0.0
+	out["boss_posture"] = boss.posture if mode == "slash" else 0.0
+	if mode == "punish":
+		out["punished"] = int(hp0 - boss.hp > 0.0)
+	if verbose:
+		print("    %s: %s" % [mode, str(out)])
+	return out
+
+
+## Keeps the player next to him and swinging (his punish window).
+func _inferno_close_in() -> void:
+	var d := player.distance_to_opponent()
+	player.camera_yaw = Combat.yaw_of(Combat.flat(boss.global_position - player.global_position))
+	player.bot_move = Vector2(0, -1) if d > 2.2 else Vector2.ZERO
+	if d <= 2.6 and player.state == Player.S.MOVE:
+		player.press_action("attack", Game.clock)
+
+
+## The player bot during the Inferno. Modes: "jump" (jump each arm 0.28 s before it arrives),
+## "escape" (walk out of the blast radius during the channel, then jump), "stand", "guard",
+## "dodge" (step into each arm), "beat" (watch the first arm, then jump on the beat),
+## "stand_first" (take the first arm, jump the rest), "jump_strafe" (jump while walking round
+## him), "rush" (walk at him during the turn), "slash" / "punish", "dodge_blast".
+func _inferno_bot_tick(mode: String, st: Dictionary) -> void:
+	var inf := boss.inferno
+	var now := Game.clock
+	player.camera_yaw = Combat.yaw_of(Combat.flat(boss.global_position - player.global_position))
+	var to_c := Combat.flat(player.global_position - inf.center)
+	var channel := boss.state == Boss.S.INFERNO and inf.stage <= Inferno.St.IGNITE and not inf.blast_hit and inf.blast_radius() < 0.0
+	var move := Vector2.ZERO
+	if mode == "escape" and channel and to_c.length() < Inferno.BLAST_R + 1.2:
+		move = Vector2(0, 1)
+	if mode == "jump_strafe" and inf.stage == Inferno.St.SPIN:
+		move = Vector2(1, 0)
+	if mode == "rush" and inf.stage == Inferno.St.SPIN:
+		move = Vector2(0, -1)
+	if mode != "punish":
+		player.bot_move = move
+	if mode == "dodge_blast" and channel and boss.anim.is_playing("b_fire_ignite") and boss.anim.time >= 1.52 \
+			and not st.get("dodged", false):
+		st["dodged"] = true
+		player.press_action("dodge", now)
+	if mode == "guard":
+		if inf.stage == Inferno.St.SPIN and not player.guard_held:
+			player.press_guard(now)
+		return
+	if inf.stage != Inferno.St.SPIN:
+		return
+	var jumped: Array = st["jumped"]
+	var n := inf.next_pass_in()
+	var free := player.state == Player.S.MOVE or player.state == Player.S.GUARD
+	match mode:
+		"jump", "escape", "jump_strafe", "punish", "rush":
+			if int(jumped[0]) != inf.passes and n <= 0.28 and free:
+				jumped[0] = inf.passes
+				player.press_action("jump", now)
+		"stand_first":
+			if inf.passes >= 1 and int(jumped[0]) != inf.passes and n <= 0.28 and free:
+				jumped[0] = inf.passes
+				player.press_action("jump", now)
+		"dodge":
+			if int(jumped[0]) != inf.passes and n <= 0.08 and free:
+				jumped[0] = inf.passes
+				player.press_action("dodge", now)
+		"beat":
+			# first arm: watch it; after that jump when the beat says the next one is due
+			var due := INF
+			if inf.passes == 0:
+				due = now + n
+			else:
+				due = float(inf.pass_times[inf.passes - 1]) + Inferno.GAP
+			if int(jumped[0]) != inf.passes and due - now <= 0.28 and free:
+				jumped[0] = inf.passes
+				player.press_action("jump", now)
 
 
 var _ttc_prev: Dictionary = {}

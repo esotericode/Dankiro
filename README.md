@@ -147,6 +147,29 @@ The kanji flashes red above him with a deep warning sound and his blades glow ho
   kick off him. That deals posture damage (×1.6 during a sweep) and staggers him out of the
   sweep. You can follow up with an air attack.
 
+### The Inferno (phase two)
+
+His fire move. He opens phase two with it, then uses it again every so often (at most once
+every 40 s; phase three has it too).
+
+- **The tell:** he leaps to the middle of the arena, which nothing else he does, and drives
+  his staff into the stones. He channels with both hands on it while fire climbs the shaft,
+  and the floor glows red out to the blast radius, brightest at its edge. **Get out of the
+  glow.** He wrenches the staff free and the fire blast bursts out. It can't be guarded, stepped
+  through or jumped: inside the glow it knocks you down and throws you out of it. From right
+  beside him you have time to walk out, locked on, if you go as he leaps.
+- **The sweeps (危):** he lifts the staff overhead with both ends ablaze, drops into a low stance
+  with it level across his hips and starts to turn. Fire runs from both blades out past the
+  walls, so there's nowhere out of reach. Each arm of fire is a sweep: guarding and dodging
+  don't help, so **jump it**. Three arms come round on an even beat (1.8 s apart), then the
+  fire flares and the **fourth comes round faster** (1.25 s), to catch you if you jump on the
+  beat instead of watching the fire. The beat is the same wherever you stand, even if you
+  walk round him. If an arm burns you, the next one waits until you're up (about 2 s).
+- A **ring of fire** round him keeps you off him (it burns and shoves you back), and while he
+  burns your sword glances off him.
+- **The payoff:** the fire gutters out and he's spent, leaning on his staff and panting. Hit
+  him. His staff keeps smouldering for the rest of the fight.
+
 ### Posture and the deathblow
 
 - Deflects, mikiri counters, kicks and hits all build his posture. So do attacks he blocks.
@@ -155,8 +178,9 @@ The kanji flashes red above him with a deep warning sound and his blades glow ho
 - When his posture breaks (or his vitality empties), he drops to one knee under a red mark.
   Press **Attack** close to him to perform a **deathblow**.
 - He has **three lives**, one per phase. After each deathblow he rises into the next phase.
-  Phase two is faster, more aggressive, and parries more. Phase three is the same as phase
-  two for now; its own moves come later.
+  Phase two is faster, more aggressive and parries more, and he opens it with the Inferno.
+  Phase three is the same as phase two for now (the Inferno included, but not as its opener);
+  its own moves come later.
 
 ### His behaviour
 
@@ -178,6 +202,7 @@ The kanji flashes red above him with a deep warning sound and his blades glow ho
 | Perilous Thrust 危 | Turns side-on, draws the staff back and holds at full coil | Mikiri (neutral dodge on the release) or deflect |
 | Perilous Sweep 危 | Slides his grip to the staff's end, sinks low and coils to his left | Jump, then kick |
 | Whirling Fangs | Raises the staff level overhead with a whoosh, then cocks it at his side and the windmill spins up | Deflect each blade as it comes down on you (4 chops, one every 0.375 s, each with a whoosh that peaks on contact), then the finishing cut after a pause |
+| Inferno 危 (phase two) | Leaps to the middle of the arena and drives his staff into the stones; the floor glows out to the blast radius | Get out of the glow before the blast. Then jump each arm of fire: three on an even beat, a faster fourth. Hit him while he's spent |
 | Shuriken volley | Quick crouch, hand to his belt with a glint of steel, leaps back and hangs for a beat at the top, throwing hand glinting | Deflect each glowing star as it reaches you: **3 in the air + 1 delayed**, or **5 in the air** |
 | Running Cut | Runs at you, staff swinging up behind his shoulder | Deflect (it tracks hard) |
 | Falling Crescent | Crouches at range, leaps with the staff overhead | Deflect on landing (high) |
@@ -213,15 +238,17 @@ godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--v
 | `shuriken` | Volley rhythms (3 in the air + 1 delayed, 5 in the air), a readable tell before the first, every throw deflectable (no posture to him) or blockable |
 | `attack` | Slash reach, and that mashing is rate-limited (no two hits within 0.38 s) |
 | `cancel` | Guard cancels a slash only in the early wind-up and in the recovery |
-| `soak` | A full fight against the real AI (charges, repositioning, volleys) with a bot player that reacts to the blade and to incoming shuriken: deflects, blocks, posture breaks, deathblows, the next phase |
+| `inferno` | Phase 2 opens with the Inferno (starting there, or rising into it); he lands in the middle of the arena; the blast misses you outside its radius, knocks you down and throws you out of it inside, and walking away locked on from right beside him gets clear in time (stepping through it doesn't); jumping each arm clears all four from 4 to 14 m out, the beat holds (1.8, 1.8, 1.25 s) wherever you stand and while you walk round him; standing, guarding and dodging get burned by every arm; jumping on the beat gets caught by the fourth; after a burn the next arm waits until you can jump it; the ring stops you and burns; your sword glances off him; he's open afterwards; he uses it again once it's off cooldown |
+| `soak` | A full fight against the real AI (charges, repositioning, volleys) with a bot player that reacts to the blade and to incoming shuriken: deflects, blocks, posture breaks, deathblows, the next phase and the Inferno it opens with |
 
-The run exits with code 0 when every check passes (652 checks, including the soak). It also
+The run exits with code 0 when every check passes (681 checks, including the soak). It also
 fails if the engine or a script reports any error during the run (it listens through a
 `Logger`), so runtime errors can't hide behind passing gameplay checks.
 
 **Captures**: `tests/capture.tscn` stages shots (`overview`, `deflect`, `deflect_offcenter`,
 `block`, `mikiri`, `thrust_backstep`, `sweep`, `sweep_flee`, `whirl`, `shuriken`, `shuriken5`,
-`charge`, `slashes`, `parried`, `attack <clip> [distance]` for any single boss attack from
+`charge`, `slashes`, `parried`, `inferno` for his fire move (`inferno stand` to take the
+arms, `inferno wide` from high above the arena), `attack <clip> [distance]` for any single boss attack from
 the lock-on camera, `recovery <clip>` for one attack played to the end from a fixed 3/4 view,
 `diagnostics` for the overlay, the menus `menu_title`, `menu_options` and `menu_start` (boot,
 then press Start), and the model close-ups `model`, `model_head`, `model_face`,
@@ -320,11 +347,19 @@ How the boss model is built (PS2-style: ~25k triangles, one 2048 px atlas with b
 
 ## Status
 
-This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (652 checks, including
+This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (681 checks, including
 a full-fight soak), the game boots and runs with no script errors, and every change to the
 visuals was checked on frames rendered with Movie Maker.
 
-**Latest: no more staff flourish after his attacks.** After some attacks the staff spun or
+**Latest: the Inferno, phase two's fire move.** He opens phase two with it and uses it again
+every so often. He leaps to the middle of the arena and channels fire into his planted staff
+while the floor glows out to the blast radius; the blast throws you out if you're still
+inside. Then he turns with the staff level and both ends ablaze, fire reaching past the walls:
+jump each arm, three on an even beat and a faster fourth. A ring of fire keeps you off him,
+and he's open once the fire dies. New animations, fire effects and sounds, the move in the
+diagnostics overlay, and an `inferno` lab suite (see *The Inferno* above).
+
+**Before that: no more staff flourish after his attacks.** After some attacks the staff spun or
 whipped in his hands as he returned to his stance: a full circle after the sweep, one and a
 half turns after the whirl, a long swing after Rising Fang, a twist after the backhand,
 Turning Fang, the running cut and the parry counter. Rotations are interpolated as Euler

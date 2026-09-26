@@ -42,7 +42,7 @@ const PASSES := 4
 const DMG_ARM := 25.0
 const DMG_BLAST := 18.0
 const DMG_RING := 6.0
-const WALL_H := 1.2                ## height of the arms' flame quads (the fire itself is lower)
+const WALL_H := 1.0                ## height of the arms' flame quads (the fire itself is lower)
 const ARM_OFFSET := 0.3            ## the staff is this far in front of him: the arms run along it
 
 var boss: Boss
@@ -62,6 +62,7 @@ var _lead_prev := 90.0
 var _contact := false
 var _contact_hit := false
 var _fair_until := -1.0
+var _burned_at := -99.0
 var _ring_burn_at := -1.0
 var _wind_t := 0.0
 var _wind_from := 0.0
@@ -121,6 +122,7 @@ func begin() -> void:
 	_tau = 0.0
 	_omega = 0.0
 	_fair_until = -1.0
+	_burned_at = -99.0
 	_blast_t = -1.0
 	_charge_t = -1.0
 	_arm_target = 0.0
@@ -218,9 +220,9 @@ func _blast() -> void:
 	Sfx.play("fire_blast", center + Vector3(0, 1.0, 0), 5.0, 1.0, 0.0)
 	Game.shake(0.6, 0.5)
 	Game.rumble(0.6, 0.9, 0.35)
-	Fx.light_pulse(p, center + Vector3(0, 1.4, 0), Color(1.0, 0.5, 0.15), 14.0, 16.0, 0.7)
+	Fx.light_pulse(p, center + Vector3(0, 1.4, 0), Color(1.0, 0.5, 0.15), 6.0, 16.0, 0.7)
 	Fx.dust(p, center, 40, 2.5)
-	var burst := FireFx.flames(160, 0.6, 1.0)
+	var burst := FireFx.flames(110, 0.55, 0.9)
 	burst.one_shot = true
 	burst.explosiveness = 0.95
 	burst.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
@@ -311,11 +313,12 @@ func _tau_pass(k: int) -> float:
 
 
 func _spin(delta: float) -> void:
-	# Knocked down by the fire: the next pass waits until you're up (the turn slows).
+	# Knocked down by the fire: the next pass waits until you're up (the turn slows). While
+	# an arm is on you it hasn't passed yet, but the one to wait for is the one after it.
 	var rho := 1.0
-	var next_tau := _tau_pass(passes + 1)
-	if Game.clock < _fair_until:
-		var left_tau := next_tau - _tau
+	var upcoming := passes + (2 if _contact else 1)
+	if Game.clock < _fair_until and upcoming <= PASSES:
+		var left_tau := _tau_pass(upcoming) - _tau
 		var left_real := _fair_until - Game.clock
 		if left_tau > 0.0 and left_tau < left_real:
 			rho = left_tau / left_real
@@ -363,7 +366,9 @@ func _arm_hits() -> void:
 		_contact_hit = false
 	elif not near:
 		_contact = false
-	if _contact and not _contact_hit and r >= ARM_FROM - 0.3 and r <= REACH and player.can_be_hit():
+	# (one burn per arm: none again until you've had time to get up)
+	if _contact and not _contact_hit and r >= ARM_FROM - 0.3 and r <= REACH and player.can_be_hit() \
+			and Game.clock - _burned_at > 1.0:
 		var feet := player.global_position.y - center.y
 		if feet < fire_top + 0.01:
 			_contact_hit = true
@@ -372,6 +377,7 @@ func _arm_hits() -> void:
 				"point": player.global_position + Vector3(0, 0.35, 0), "time": Game.clock}
 			if player.receive_attack(info, boss) == Combat.RESULT_HIT:
 				hits += 1
+				_burned_at = Game.clock
 				_fair_until = Game.clock + FAIR
 	# the whoosh peaks as the arm reaches you
 	if _whoosh_armed and _omega > 1.0 and lead / _omega < 0.3 and lead < 90.0:
@@ -398,7 +404,7 @@ func _flare() -> void:
 	fire_top = FIRE_TOP_FAST
 	_heat_target = 1.6
 	Sfx.play("fire_flare", center + Vector3(0, 1.2, 0), 4.0)
-	Fx.light_pulse(boss.get_parent(), center + Vector3(0, 1.5, 0), Color(1.0, 0.45, 0.1), 9.0, 12.0, 0.5)
+	Fx.light_pulse(boss.get_parent(), center + Vector3(0, 1.5, 0), Color(1.0, 0.45, 0.1), 5.0, 12.0, 0.5)
 
 
 func _wind_down(delta: float) -> void:
@@ -506,7 +512,7 @@ func _build_visuals() -> void:
 		strip.material_override = FireFx.strip_material(REACH - ARM_FROM)
 		strip.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		pivot.add_child(strip)
-		var fl := FireFx.flames(240, 0.3, 0.85)
+		var fl := FireFx.flames(120, 0.3, 0.7)
 		fl.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
 		fl.emitting = false
 		fl.gravity = Vector3(0, 3.0, 0)
@@ -546,7 +552,7 @@ func _build_visuals() -> void:
 	_ring.add_child(_ring_flames)
 	_ring_glow = FireFx.floor_quad((RING_R + 1.2) * 2.0)
 	_ring_glow.material_override = FireFx.glow_material("fire_ring",
-		[Color(1.0, 0.3, 0.05, 0.0), Color(1.0, 0.3, 0.05, 0.08), Color(1.0, 0.5, 0.12, 0.6), Color(1.0, 0.3, 0.05, 0.0)],
+		[Color(1.0, 0.3, 0.05, 0.0), Color(1.0, 0.3, 0.05, 0.05), Color(1.0, 0.45, 0.1, 0.35), Color(1.0, 0.3, 0.05, 0.0)],
 		[0.0, 0.55, RING_R / (RING_R + 1.2), 1.0])
 	_ring.add_child(_ring_glow)
 	var ring_light := OmniLight3D.new()
@@ -641,7 +647,7 @@ func _update_charge(delta: float) -> void:
 	_charge_glow.visible = on
 	_vortex.emitting = on
 	var u := clampf(_charge_t / CHARGE_TIME, 0.0, 1.0) if on else 0.0
-	_heat_light.light_energy = move_toward(_heat_light.light_energy, 6.0 * u if on else 0.0, delta * 20.0)
+	_heat_light.light_energy = move_toward(_heat_light.light_energy, 3.5 * u if on else 0.0, delta * 20.0)
 	_heat_light.global_position = center + Vector3(0, 1.2, 0)
 	if on:
 		_charge_glow.global_position = center + Vector3(0, 0.03, 0)
@@ -662,7 +668,7 @@ func _update_blast(real_dt: float) -> void:
 	_blast_band.global_position = center
 	_blast_band.scale = Vector3(r, 1.9 - 1.2 * grow, r)
 	_blast_mat.set_shader_parameter("scale_x", TAU * r)
-	_blast_mat.set_shader_parameter("heat", 1.8)
+	_blast_mat.set_shader_parameter("heat", 1.3)
 	_blast_mat.set_shader_parameter("alpha_mult", 1.0 - u * u)
 	if u >= 1.0:
 		_blast_vis = -1.0
@@ -678,9 +684,9 @@ func _update_ring(delta: float) -> void:
 	_ring.global_position = center
 	_ring_mat.set_shader_parameter("alpha_mult", _ring_level)
 	_ring_mat.set_shader_parameter("height", 0.55 + 0.45 * _ring_level)
-	_ring_mat.set_shader_parameter("heat", 0.9 + 0.3 * _heat)
-	(_ring_glow.material_override as StandardMaterial3D).albedo_color = Color(1.5, 1.3, 1.1, _ring_level)
-	(_ring.get_node("RingLight") as OmniLight3D).light_energy = 3.0 * _ring_level
+	_ring_mat.set_shader_parameter("heat", 0.72 + 0.25 * _heat)
+	(_ring_glow.material_override as StandardMaterial3D).albedo_color = Color(1.1, 0.95, 0.85, _ring_level)
+	(_ring.get_node("RingLight") as OmniLight3D).light_energy = 2.0 * _ring_level
 
 
 func _update_arms(delta: float) -> void:
@@ -701,8 +707,8 @@ func _update_arms(delta: float) -> void:
 		var heat := clampf(_heat, 0.0, 2.0)
 		var wall: ShaderMaterial = (a["wall"] as MeshInstance3D).material_override
 		wall.set_shader_parameter("reveal", _arm_len)
-		wall.set_shader_parameter("heat", 0.35 + 0.75 * heat)
-		wall.set_shader_parameter("height", 0.62 + 0.22 * maxf(0.0, heat - 1.0) + 0.1 * minf(heat, 1.0))
+		wall.set_shader_parameter("heat", 0.35 + 0.65 * heat)
+		wall.set_shader_parameter("height", 0.6 + 0.1 * minf(heat, 1.0) + 0.25 * maxf(0.0, heat - 1.0))
 		wall.set_shader_parameter("alpha_mult", clampf(heat * 1.4, 0.0, 1.0))
 		var strip: ShaderMaterial = (a["strip"] as MeshInstance3D).material_override
 		strip.set_shader_parameter("reveal", _arm_len)
@@ -715,7 +721,7 @@ func _update_arms(delta: float) -> void:
 		fl.color = Color(1, 1, 1, clampf(heat, 0.0, 1.0))
 		for l in a["lights"]:
 			var light: OmniLight3D = l
-			light.light_energy = 2.4 * minf(heat, 1.3) * clampf((_arm_len * REACH - light.position.x) / 2.0, 0.0, 1.0)
+			light.light_energy = 1.4 * minf(heat, 1.3) * clampf((_arm_len * REACH - light.position.x) / 2.0, 0.0, 1.0)
 
 
 func _update_roar(delta: float) -> void:
