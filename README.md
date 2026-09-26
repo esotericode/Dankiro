@@ -381,7 +381,8 @@ hall on a walled court: lacquered posts, lattice doors glowing from within, a st
 paper streamers, and a curved copper roof with crossed finials. Stone lanterns stand round the
 plaza and along the approach, and a granite and lacquer fence rings the plaza. To the east the
 wood stops at a cliff a few metres past the fence, and the view opens over mist in the valley to
-three ranges of mountains, the farthest snow-capped, fading into the night sky.
+three ranges of mountains, the farthest snow-capped, fading into the night sky
+([before and after](docs/scenery_before_after.png)).
 
 **Before that: new fire.** Every flame is now drawn by a shader instead of a painted sprite: tongues
 of fire that lick and flicker as noise scrolls up through them, white-yellow at the root, orange,
