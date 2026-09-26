@@ -169,6 +169,17 @@ func _build_aura() -> void:
 	aura.position = Vector3(0, 0.12, 0)
 
 
+## Weapon trails mark strikes: they show during an attack up to just after its last hit window,
+## not while he brings the staff back to his stance (a fast return would look like another swing).
+func _striking() -> bool:
+	if state != S.ATTACK or anim.clip == null or anim.loco_active or anim.clip.hits.is_empty():
+		return false
+	var last := 0.0
+	for h in anim.clip.hits:
+		last = maxf(last, float(h["to"]))
+	return anim.time <= last + 0.06
+
+
 ## False while he's hopping out of your reach (the clip's "iframes" window, e.g. his backstep).
 func can_be_hit() -> bool:
 	if state == S.ATTACK and anim.clip != null and not anim.loco_active and anim.clip.raw.has("iframes"):
@@ -245,6 +256,9 @@ func _physics_process(delta: float) -> void:
 	process_weapon_hits()
 	if state == S.ATTACK:
 		_check_mikiri()
+	var striking := _striking()
+	for t in trails:
+		(t as WeaponTrail).active = striking
 	planar += root_motion_velocity(delta)
 	apply_motion(delta, planar)
 	_update_glow(delta)

@@ -544,6 +544,12 @@ def windmill_rot(ang_deg, prev, lean_deg=32.0):
     return weapon_rot(R @ np.array([0.0, 1.0, 0.0]), R @ np.array([0.0, 0.0, -1.0]), prev)
 
 
+# Extra time for the return to his stance after a wide swing (Rising Fang, Turning Fang, the
+# backhand, the running cut, the parry counter): without it the staff whipped back as fast as a
+# strike. His recovery opening (`vuln`) lasts the whole return.
+SETTLE = 0.28
+
+
 def build_boss():
     # NOTE: hit "dir" is the side the blade arrives from *as the player sees it* (it picks the
     # player's deflect pose). The boss's right side is the player's left.
@@ -640,8 +646,8 @@ def build_boss():
     fol = {"chest": [-12, 46, 0], "hips": [0, 20, 0], "root": [0, 0, -0.9], "neck": [0, -16, 0],
            "weapon_pos": r3(np.array(sw[-1][1]) + np.array([-0.04, 0.04, 0.02]))}
     keys.append(key(0.72, fol, ease="out_quad"))
-    keys.append({"t": 1.12, "pose": "b_stance", "set": {"root": [0, 0, -0.95]}, "ease": "inout_sine"})
-    clip("b_combo_1", "boss", keys, chain=0.68, close=[0.08, 0.44, 1.9, 4.4], chain_in=0.10, vuln=[0.80, 1.10],
+    keys.append({"t": round(1.22 + SETTLE, 3), "pose": "b_stance", "set": {"root": [0, 0, -0.95]}, "ease": "inout_sine"})
+    clip("b_combo_1", "boss", keys, chain=0.68, close=[0.08, 0.44, 1.9, 4.4], chain_in=0.10, vuln=[0.80, round(1.20 + SETTLE, 3)],
          track=[[0.0, 0.38, 480], [0.38, 0.47, 240]],
          hits=[{"from": 0.45, "to": 0.58, "blade": "lower", "kind": "normal", "dmg": 26, "posture_block": 22,
                 "posture_deflect": 7, "boss_posture": 11, "dir": "left"}],
@@ -669,8 +675,8 @@ def build_boss():
         "foot_r": lerp3([0.24, 0.08, 0.28], [0.26, 0.08, 0.02], smooth(u)),
         "elbow_l": [-0.7, -0.7, 0.3], "elbow_r": [0.5, -0.9, 0.4]})
     keys.append(key(0.62, {"chest": [-10, 62, 0], "hips": [0, 34, 0], "root": [0, 0, -0.88]}, ease="out_quad"))
-    keys.append({"t": 1.0, "pose": "b_stance", "set": {"root": [0, 0, -0.92]}, "ease": "inout_sine"})
-    clip("b_combo_2", "boss", keys, chain=0.62, close=[0.06, 0.32, 1.9, 4.4], chain_in=0.10, vuln=[0.72, 1.0],
+    keys.append({"t": round(1.0 + SETTLE, 3), "pose": "b_stance", "set": {"root": [0, 0, -0.92]}, "ease": "inout_sine"})
+    clip("b_combo_2", "boss", keys, chain=0.62, close=[0.06, 0.32, 1.9, 4.4], chain_in=0.10, vuln=[0.72, round(1.0 + SETTLE, 3)],
          track=[[0.0, 0.28, 440], [0.28, 0.35, 220]],
          hits=[{"from": 0.33, "to": 0.46, "blade": "upper", "kind": "normal", "dmg": 26, "posture_block": 22,
                 "posture_deflect": 7, "boss_posture": 11, "dir": "left"}],
@@ -791,14 +797,14 @@ def build_boss():
     keys.append(key(1.26, dict(spin_pose, yaw=-384.0, root=[0, 0, -1.58], hips_pos=[0, 0.62, 0.0]), ease="out_quad"))
     keys.append(key(1.46, dict(spin_pose, yaw=-360.0, root=[0, 0, -1.6], hips_pos=[0, 0.70, 0.0], chest=[-12, 0, 0]),
                     ease="inout_sine"))
-    keys.append(key(1.66, dict(place(S.copy(), [0.12, 1.00, -0.10], [-0.35, 0.50, -0.80], [0, -0.9, -0.45], -0.30, 0.24,
+    # Rising out of it: he swept holding the staff by its end, so it has to turn end for end
+    # back into his guard. It used to whip round in 0.2 s (as fast as a strike); now it turns
+    # over 0.7 s while he straightens up, then settles into his stance.
+    keys.append(key(2.16, dict(place(S.copy(), [0.12, 1.00, -0.10], [-0.35, 0.50, -0.80], [0, -0.9, -0.45], -0.30, 0.24,
                                      spin_pose["weapon_rot"]), yaw=-360.0, root=[0, 0, -1.62], hips_pos=[0, 0.90, 0.02],
                                chest=[-8, 5, 0]), ease="inout_sine"))
-    # Back to his stance with the staff's angle unwound to the spin's (the same orientation):
-    # otherwise the staff whipped a full circle around him as he stood up.
-    keys.append({"t": 1.95, "pose": "b_stance", "set": {"root": [0, 0, -1.63], "yaw": -360.0,
-                 "weapon_rot": r3(closest_euler(keys[-1]["set"]["weapon_rot"], S["weapon_rot"]))}, "ease": "inout_sine"})
-    clip("b_sweep", "boss", keys, chain=1.75, close=[0.12, 1.02, 2.0, 7.0], vuln=[1.24, 1.9], perilous="sweep",
+    keys.append({"t": 2.46, "pose": "b_stance", "set": {"root": [0, 0, -1.63], "yaw": -360.0}, "ease": "inout_sine"})
+    clip("b_sweep", "boss", keys, chain=1.75, close=[0.12, 1.02, 2.0, 7.0], vuln=[1.24, 2.4], perilous="sweep",
          track=[[0.0, 0.62, 480], [0.62, SP0, 140]],
          hits=[{"from": SP0 - 0.02, "to": SP1 + 0.02, "blade": "lower", "kind": "sweep", "dmg": 40, "posture_block": 0,
                 "posture_deflect": 0, "boss_posture": 0, "dir": "low", "final": True}],
@@ -998,8 +1004,9 @@ def build_boss():
         "hips": [0, -38 + 68 * u, 0], "chest": [-4 - 6 * u, -34 + 92 * u, 0], "neck": [4, 38 - 55 * u, 0],
         "root": [0, 0, -0.78 * u], "elbow_r": [0.5, -0.9, 0.4], "elbow_l": [-0.7, -0.7, 0.3]})
     keys.append(key(0.74, {"chest": [-10, 60, 0], "root": [0, 0, -0.84]}, ease="out_quad"))
-    keys.append({"t": 1.12, "pose": "b_stance", "set": {"root": [0, 0, -0.86]}, "ease": "inout_sine"})
-    clip("b_parry_counter", "boss", keys, chain=0.8, close=[0.16, 0.44, 1.9, 4.4], vuln=[0.8, 1.1], track=[[0.0, 0.38, 460], [0.38, 0.47, 220]],
+    keys.append({"t": round(1.12 + SETTLE, 3), "pose": "b_stance", "set": {"root": [0, 0, -0.86]}, "ease": "inout_sine"})
+    clip("b_parry_counter", "boss", keys, chain=0.8, close=[0.16, 0.44, 1.9, 4.4], vuln=[0.8, round(1.1 + SETTLE, 3)],
+         track=[[0.0, 0.38, 460], [0.38, 0.47, 220]],
          hits=[{"from": 0.46, "to": 0.58, "blade": "upper", "kind": "normal", "dmg": 26, "posture_block": 22,
                 "posture_deflect": 7, "boss_posture": 12, "dir": "left"}],
          events=[{"t": 0.0, "type": "boss_parry"}, {"t": 0.42, "type": "sfx", "name": "swing_heavy"}])
@@ -1038,8 +1045,8 @@ def build_boss():
         "foot_r": lerp3([0.22, 0.08, 0.30], [0.24, 0.08, 0.02], smooth(u)),
         "elbow_l": [-0.7, -0.7, 0.3], "elbow_r": [0.6, -0.8, 0.4]})
     keys.append(key(0.68, {"chest": [-10, -56, 0], "hips": [0, -30, 0], "root": [0, 0, -0.92]}, ease="out_quad"))
-    keys.append({"t": 1.05, "pose": "b_stance", "set": {"root": [0, 0, -0.95]}, "ease": "inout_sine"})
-    clip("b_backhand", "boss", keys, chain=0.66, close=[0.08, 0.38, 1.9, 4.4], chain_in=0.12, vuln=[0.76, 1.05],
+    keys.append({"t": round(1.05 + SETTLE, 3), "pose": "b_stance", "set": {"root": [0, 0, -0.95]}, "ease": "inout_sine"})
+    clip("b_backhand", "boss", keys, chain=0.66, close=[0.08, 0.38, 1.9, 4.4], chain_in=0.12, vuln=[0.76, round(1.05 + SETTLE, 3)],
          track=[[0.0, 0.32, 440], [0.32, 0.41, 220]],
          hits=[{"from": 0.39, "to": 0.52, "blade": "upper", "kind": "normal", "dmg": 26, "posture_block": 22,
                 "posture_deflect": 7, "boss_posture": 12, "dir": "right", "final": True}],
@@ -1065,8 +1072,8 @@ def build_boss():
         "foot_r": lerp3([0.24, 0.08, 0.28], [0.26, 0.08, 0.0], smooth(u)),
         "elbow_l": [-0.7, -0.7, 0.3], "elbow_r": [0.5, -0.9, 0.4]})
     keys.append(key(0.70, {"chest": [-12, 62, 0], "hips": [0, 34, 0], "root": [0, 0, -2.35]}, ease="out_quad"))
-    keys.append({"t": 1.13, "pose": "b_stance", "set": {"root": [0, 0, -2.45]}, "ease": "inout_sine"})
-    clip("b_dash_cut", "boss", keys, chain=0.78, vuln=[0.80, 1.13], close=[0.0, 0.36, 2.0, 3.0],
+    keys.append({"t": round(1.13 + SETTLE, 3), "pose": "b_stance", "set": {"root": [0, 0, -2.45]}, "ease": "inout_sine"})
+    clip("b_dash_cut", "boss", keys, chain=0.78, vuln=[0.80, round(1.13 + SETTLE, 3)], close=[0.0, 0.36, 2.0, 3.0],
          track=[[0.0, 0.38, 520], [0.38, 0.46, 220]],
          hits=[{"from": 0.38, "to": 0.53, "blade": "upper", "kind": "normal", "dmg": 28, "posture_block": 24,
                 "posture_deflect": 8, "boss_posture": 12, "dir": "left"}],
@@ -1348,6 +1355,48 @@ def _bake_key(clip_, key_, i):
     return out
 
 
+def unwrap_rotations(rig_name="boss"):
+    """Makes every rotation take the shortest way from one key to the next.
+
+    Rotations are interpolated as Euler angles. After a spin (the whirl's windmill, the sweep,
+    a big swing) a key's angles carry the turns the weapon made, while the next key, often his
+    stance, is given in plain angles: interpolating between the two, the staff spun those
+    turns back in his hands on the way to the stance. Each key's angles are re-expressed as the
+    equivalent set nearest the previous key's (same orientation). Spins that are meant to
+    happen are built from many small steps, so they stay as they are."""
+    rig = rm.Rig(rig_name, rm.load_json("data/rigs.json"))
+    lib = {"poses": POSES}
+    changed = 0
+    for data in CLIPS.values():
+        if data["rig"] != rig_name:
+            continue
+        prev = None
+        for k in data["keys"]:
+            # resolve the key the way the game does (rigmath.Clip / ClipData.build)
+            if "pose" in k:
+                base = dict(rig.defaults())
+                base.update(rm.resolve_pose(lib, k["pose"]))
+            elif prev is not None:
+                base = dict(prev)
+            else:
+                base = dict(rig.defaults())
+            for ch, v in k.get("set", {}).items():
+                base[ch] = v
+            for ch, v in k.get("add", {}).items():
+                base[ch] = base[ch] + v if rm.DIM[ch] == 1 else [a + b for a, b in zip(base[ch], v)]
+            if prev is not None:
+                for ch in rm.ROT:
+                    cur = [float(x) for x in base[ch]]
+                    near = closest_euler([float(x) for x in prev[ch]], cur)
+                    if max(abs(a - b) for a, b in zip(near, cur)) > 1e-3:
+                        add = k.get("add", {}).get(ch, [0.0, 0.0, 0.0])
+                        k.setdefault("set", {})[ch] = r3([a - b for a, b in zip(near, add)])
+                        base[ch] = near
+                        changed += 1
+            prev = base
+    return changed
+
+
 def clamp_blades_to_floor(rig_name="boss", passes=24, step=1.0 / 120.0):
     """Keeps the long staff above the floor.
 
@@ -1402,7 +1451,10 @@ def clamp_blades_to_floor(rig_name="boss", passes=24, step=1.0 / 120.0):
 def main():
     build_player()
     build_boss()
+    # Unwrap first, so the floor clamp samples the short way round, then again for its keys.
+    print("rotations unwound at", unwrap_rotations(), "boss key channels")
     print("floor clamp: tilted the staff off the floor at", clamp_blades_to_floor(), "boss keys")
+    unwrap_rotations()
     out = {"_doc": "GENERATED by tools/build_animations.py - edit that script and re-run it.",
            "poses": POSES, "clips": CLIPS}
     path = os.path.join(rm.ROOT, "data", "animations.json")

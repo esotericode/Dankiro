@@ -13,6 +13,7 @@ var life := 0.15              ## seconds a sample lives
 var inner := 0.3              ## where the arc starts along the blade (0 = base, 1 = tip)
 var base_color := Color(0.85, 0.9, 1.0, 0.75)
 var force_color := Color(0, 0, 0, 0)
+var active := true            ## false: no new samples (the owner decides when a trail means a strike)
 var brightness := 1.25        ## HDR multiplier (the glow pass blooms it)
 
 var _bases := PackedVector3Array()
@@ -78,7 +79,7 @@ func _physics_process(delta: float) -> void:
 		spd = (tip - _last_tip).length() / delta
 	_last_tip = tip
 	_has_last = true
-	if spd > min_speed:
+	if active and spd > min_speed:
 		_bases.append(base.lerp(tip, inner))
 		_tips.append(tip)
 		_ages.append(0.0)

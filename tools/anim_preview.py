@@ -2,7 +2,7 @@
 
 Usage:
   python3 tools/anim_preview.py b_thrust p_attack_1 [--frames 8] [--out DIR]
-  python3 tools/anim_preview.py --all --check      # only print IK / reach warnings
+  python3 tools/anim_preview.py --all --check      # only print IK / reach / spin warnings
 
 Each sheet shows the clip at evenly spaced times in three orthographic views
 (side, front, top). Blades are drawn red while a hit window is active. For boss
@@ -194,6 +194,60 @@ def check(clip_name, lib, rigs_data, steps=60):
     return bad
 
 
+def _angle(Ra, Rb):
+    c = (np.trace(Ra.T @ Rb) - 1) / 2
+    return math.degrees(math.acos(max(-1.0, min(1.0, c))))
+
+
+def spin_report(clip_name, lib, rigs_data, waste_deg=25.0, whip_speed=18.0):
+    """Wasted turns and whips, for boss clips.
+
+    - Between two keys, a rotation interpolated as Euler angles can take the long way round
+      (a key whose angles carry the turns of a spin, then his stance in plain angles): the
+      weapon then spins in his hands. Reports segments that turn > `waste_deg` more than the
+      direct rotation between their keys.
+    - After the last hit window (the recovery), a blade tip faster than `whip_speed` m/s
+      whips back like another strike."""
+    cdata = lib["clips"][clip_name]
+    rig = rm.Rig(cdata["rig"], rigs_data)
+    clip = rm.Clip(clip_name, cdata, lib, rig)
+    out = []
+    T = clip.times
+    for ch in rm.ROT:
+        for k in range(len(T) - 1):
+            t0, t1 = T[k], T[k + 1]
+            if t1 - t0 < 1e-6:
+                continue
+            n = max(8, int((t1 - t0) * 480))
+            prev, trav = None, 0.0
+            for i in range(n + 1):
+                R = rm.euler_deg(clip.eval(t0 + (t1 - t0) * i / n)[ch])
+                if prev is not None:
+                    trav += _angle(prev, R)
+                prev = R
+            direct = _angle(rm.euler_deg(clip.eval(t0)[ch]), rm.euler_deg(clip.eval(t1)[ch]))
+            if trav - direct > waste_deg:
+                out.append(f"{ch} turns {trav:.0f} deg at {t0:.2f}-{t1:.2f}s where {direct:.0f} would do")
+    hits = cdata.get("hits", [])
+    if hits and rig.name == "boss":
+        last = max(h["to"] for h in hits)
+        prev, fastest = None, (0.0, 0.0)
+        dt = 1.0 / 240.0
+        for t in np.arange(last, clip.length, dt):
+            ch = clip.eval(t)
+            _, _, WP, WB, _ = rm.solve(rig, {k: (float(v[0]) if rm.DIM[k] == 1 else v) for k, v in ch.items()})
+            pts = rm.blade_points(rig, WP, WB)
+            tips = np.array([pts[b][-1] for b in pts])
+            if prev is not None:
+                v = float(np.max(np.linalg.norm(tips - prev, axis=1))) / dt
+                if v > fastest[0]:
+                    fastest = (v, float(t))
+            prev = tips
+        if fastest[0] > whip_speed:
+            out.append(f"recovery whip: blade tip {fastest[0]:.1f} m/s at {fastest[1]:.2f}s (after the last hit at {last:.2f}s)")
+    return out
+
+
 def reach_report(clip_name, lib, rigs_data, target_dist):
     """For boss clips: min distance from blade to a player hurtbox placed at target_dist."""
     ROOT_CLAMP["target"] = target_dist
@@ -250,6 +304,9 @@ def main():
         bad = check(n, lib, rigs_data)
         if bad:
             print(f"[{n}] IK error: " + ", ".join(f"{k}={v[0]:.3f}m@{v[1]:.2f}s" for k, v in bad.items()))
+        if lib["clips"][n]["rig"] == "boss":
+            for w in spin_report(n, lib, rigs_data):
+                print(f"[{n}] {w}")
         if lib["clips"][n].get("hits") and lib["clips"][n]["hits"][0].get("blade") != "kick":
             tdist = args.target if lib["clips"][n]["rig"] == "boss" else args.ptarget
             for h, (d, t) in reach_report(n, lib, rigs_data, tdist):

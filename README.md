@@ -268,7 +268,7 @@ also needs Blender as a Python module: `pip install bpy==4.5.9` (Blender 4.5 LTS
 
 | What | Edit | Rebuild | Check |
 | --- | --- | --- | --- |
-| Animations + hit windows | `tools/build_animations.py` | `python3 tools/build_animations.py` | `python3 tools/anim_preview.py b_thrust` renders contact sheets, and `--all --check` reports IK reach and blade reach. The build keeps the long staff above the floor: at any dip it inserts a key that tilts the staff about the hands |
+| Animations + hit windows | `tools/build_animations.py` | `python3 tools/build_animations.py` | `python3 tools/anim_preview.py b_thrust` renders contact sheets, and `--all --check` reports IK reach, blade reach, rotations that take the long way between keys and recoveries where his blade whips back faster than 18 m/s. The build keeps the long staff above the floor (at any dip it inserts a key that tilts the staff about the hands) and unwinds his rotations so each takes the shortest way to the next key |
 | Boss model (skinned, textured) | `tools/build_boss_model.py`, `tools/model3d/` | `python3 tools/build_boss_model.py` (~3 min with the bake), then `godot --headless --editor --quit` to import | `--preview` renders `tools/preview_out/boss_*.png`; in the engine, the capture shots `model`, `model_head`, `model_face`, `model_combo` |
 | Player look, boss materials and ribbons | `tools/build_models.py` | `python3 tools/build_models.py` | `python3 tools/model_preview.py player` |
 | Sound effects | `tools/gen_audio.py` | `python3 tools/gen_audio.py [name]` | |
@@ -280,7 +280,10 @@ How the animation system works:
 - Each pose is a set of channels: hips position/rotation, spine and chest, foot targets, and the
   **weapon transform**. Legs use two-bone IK and hands grip the animated weapon with IK, which
   keeps two-handed staff swings coherent.
-- Keys are interpolated with monotone cubic curves. Clips carry the gameplay metadata: hit
+- Keys are interpolated with monotone cubic curves; rotations are interpolated as Euler angles,
+  so the build re-expresses each of his keys' angles as the equivalent nearest the previous
+  key's (otherwise the turns of a spin would unwind as a spin in his hands on the way back to
+  his stance). Clips carry the gameplay metadata: hit
   windows (`hits`), boss tracking rates (`track`), gap-closing (`close`), recovery openings
   (`vuln`), combo timing (`combo_at`), guard-cancel windows (`guard_cancel`), i-frames and the
   mikiri window.
@@ -321,7 +324,17 @@ This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (6
 a full-fight soak), the game boots and runs with no script errors, and every change to the
 visuals was checked on frames rendered with Movie Maker.
 
-**Latest: menus, options, diagnostics and a third phase.** The game now opens on a title
+**Latest: no more staff flourish after his attacks.** After some attacks the staff spun or
+whipped in his hands as he returned to his stance: a full circle after the sweep, one and a
+half turns after the whirl, a long swing after Rising Fang, a twist after the backhand,
+Turning Fang, the running cut and the parry counter. Rotations are interpolated as Euler
+angles, and the angles carried the turns of each spin, so going back to his stance unwound
+them. The build now unwinds every rotation to the shortest way, the returns that were as fast
+as a strike take a little longer (he stays punishable throughout), the staff turns end for end
+calmly as he rises from the sweep, and his weapon trail only shows on strikes, not while he
+recovers.
+
+**Before that: menus, options, diagnostics and a third phase.** The game now opens on a title
 menu, with a pause menu in the fight. Options can start the fight in phase 2 or 3 for
 testing, and turn on a diagnostics overlay that shows hitboxes, hit windows and your
 guard window, with a live readout of both fighters. He has a third life and phase, which is a
