@@ -8,7 +8,7 @@ render_mode diffuse_burley, specular_schlick_ggx;
 
 uniform sampler2D stone_albedo : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D stone_normal : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
-uniform sampler2D stone_data : hint_default_white, filter_linear_mipmap_anisotropic, repeat_enable; // roughness, cavity, layering
+uniform sampler2D stone_data : hint_default_white, filter_linear_mipmap, repeat_enable; // roughness, cavity, layering
 uniform sampler2D moss_albedo : source_color, filter_linear_mipmap_anisotropic, repeat_enable;       // alpha = cushion height
 uniform sampler2D moss_normal : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D cracks : hint_default_black, filter_linear_mipmap_anisotropic, repeat_disable;     // 2x2 decals: crack, halo
@@ -173,17 +173,20 @@ void fragment() {
 	rough = mix(rough, 0.95, lich);
 
 	// moss roots in the joints, cracks and pits; a heavy mask covers the stone
-	vec2 mv = wpos.xz / moss_period;
-	vec4 ms = texture(moss_albedo, mv);
-	vec2 mn = texture(moss_normal, mv).rg * 2.0 - 1.0;
-	float site = max(max(smoothstep(0.55, 1.0, edge), halo), cav * 0.7);
-	float amount = max(moss_m * mix(0.3, 1.7, site), smoothstep(0.55, 1.0, moss_m) * 0.95);
-	float mcov = smoothstep(1.0 - amount, 1.0 - amount + 0.3, ms.a + 0.1) * step(0.02, moss_m);
-	vec3 moss_col = mix(vec3(dot(ms.rgb, vec3(0.3, 0.55, 0.15))), ms.rgb, 0.85) * 0.9;
-	moss_col *= mix(0.55, 1.0, smoothstep(0.25, 0.9, amount));     // thin moss is dark and young
-	alb = mix(alb, moss_col, mcov);
-	rough = mix(rough, 0.96, mcov);
-	nd = mix(nd, mn, mcov);
+	float mcov = 0.0;
+	if (moss_m > 0.02) {
+		vec2 mv = wpos.xz / moss_period;
+		vec4 ms = texture(moss_albedo, mv);
+		vec2 mn = texture(moss_normal, mv).rg * 2.0 - 1.0;
+		float site = max(max(smoothstep(0.55, 1.0, edge), halo), cav * 0.7);
+		float amount = max(moss_m * mix(0.3, 1.7, site), smoothstep(0.55, 1.0, moss_m) * 0.95);
+		mcov = smoothstep(1.0 - amount, 1.0 - amount + 0.3, ms.a + 0.1);
+		vec3 moss_col = mix(vec3(dot(ms.rgb, vec3(0.3, 0.55, 0.15))), ms.rgb, 0.85) * 0.9;
+		moss_col *= mix(0.55, 1.0, smoothstep(0.25, 0.9, amount));     // thin moss is dark and young
+		alb = mix(alb, moss_col, mcov);
+		rough = mix(rough, 0.96, mcov);
+		nd = mix(nd, mn, mcov);
+	}
 
 	// wet stone: darker, glossy, the surface detail drowned
 	float wet_amt = wet * (1.0 - 0.5 * mcov);

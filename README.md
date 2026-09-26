@@ -369,7 +369,7 @@ through, one by the lanterns is broken with its rubble lying in the hole, and a 
 stones hold a puddle that catches the lantern light. Moss grows along the joints near the
 fence, round the lantern bases and over one old stone; dirt gathers at the edges, old soot
 darkens the medallion and the middle is worn smooth. Cycles bakes the occlusion of the joints,
-curb, lanterns and fence posts into the textures.
+curb, lanterns and fence posts into the textures ([before and after](docs/floor_before_after.png)).
 
 **Before that: the Inferno, phase two's fire move.** He opens phase two with it and uses it again
 every so often. He leaps to the middle of the arena and channels fire into his planted staff

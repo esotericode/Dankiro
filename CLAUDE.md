@@ -38,7 +38,10 @@ the script backs off and retries, so let it run. For another version, set
   VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json xvfb-run -a -s "-screen 0 1280x720x24" \
     godot --write-movie /tmp/cap/f.png --fixed-fps 30 res://tests/capture.tscn -- deflect
   ```
-  Rendering takes about 0.7 s per frame at 960x540. `override.cfg` is git-ignored. The shots are
+  Rendering takes 2-4 s per frame at 960x540 (the flagstone shader is most of it; it was about
+  0.7 s before the floor model) and about 2.4 s at 640x360. Adding
+  `[rendering]` `textures/default_filters/anisotropic_filtering_level=0` to `override.cfg` cuts a
+  third while iterating. `override.cfg` is git-ignored. The shots are
   the `shot_*` functions in `tests/capture.gd`; `-- attack <clip> [distance]` films any boss
   attack from the lock-on camera, `diagnostics` shows the hitbox overlay, and `inferno`
   (`stand`, `wide`) films phase 2's fire move (about 16 s: render it at 640x360 to iterate). Contact-sheet the

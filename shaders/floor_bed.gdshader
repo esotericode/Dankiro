@@ -5,7 +5,7 @@ render_mode diffuse_burley, specular_schlick_ggx;
 // direct light.
 
 uniform sampler2D stone_albedo : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
-uniform sampler2D stone_data : hint_default_white, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D stone_data : hint_default_white, filter_linear_mipmap, repeat_enable;
 uniform sampler2D moss_albedo : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D plaza_a : hint_default_white, filter_linear_mipmap, repeat_disable;  // AO, bed AO, dirt, moss
 uniform sampler2D plaza_b : hint_default_black, filter_linear_mipmap, repeat_disable;  // wet, soot, polish, lichen
