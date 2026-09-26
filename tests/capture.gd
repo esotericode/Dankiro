@@ -5,7 +5,7 @@ extends Node
 ## shuriken5, charge, slashes, parried, inferno [stand|wide|spin|plunge|plunge_stand], attack <clip> [distance], recovery <clip>, diagnostics, the menus
 ## (menu_title, menu_options, menu_start, menu_pause), and art checks: model (orbit), model_head, model_face, model_face_p2, model_combo,
 ## model_flourish, fire_staff [level], fire_combo, floor [overview|centre|medallion|puddle|moss|broken|rim|low|sweep],
-## scenery [torii|gate|north|south|east|west|vista|cliff|grove|shrine|lantern|high], and sizzle (a 10 s showreel).
+## scenery [torii|gate|north|south|east|west|vista|cliff|grove|shrine|lantern|high], and sizzle [from [to]] (a 10 s showreel).
 ## Loads the real game scene (arena, lighting, HUD, lock-on camera), skips the intro, stages
 ## the fighters and drives the player with a bot that reacts to the boss's hit windows.
 
@@ -22,6 +22,7 @@ var _steps: Array = []          ## [time, Callable]
 var _end_at := 4.0
 var _orbit_cam: Camera3D        ## art-check camera orbiting the boss
 var _orbit := {"radius": 2.8, "height": 1.45, "look_y": 1.3, "speed": 90.0, "start": 0.0}
+var _render_from := 0.0         ## no 3D drawn before this time (the frames come out blank): iterate on a late beat
 
 
 func _ready() -> void:
@@ -83,6 +84,8 @@ func _physics_process(delta: float) -> void:
 		(s[1] as Callable).call()
 	if has_meta("inferno_bot") and boss != null:
 		_inferno_bot_tick()
+	if _render_from > 0.0:
+		get_viewport().disable_3d = t < _render_from
 	if t >= _end_at:
 		get_tree().quit()
 
@@ -573,6 +576,9 @@ var _shakes: Array = []    ## [time, metres, decay seconds]
 ##   ffmpeg -framerate 30 -start_number 15 -i out/f%08d.png -ss 0.5 -i out/f.wav -frames:v 300 ...
 func shot_sizzle() -> void:
 	var t0 := 0.5
+	var args := OS.get_cmdline_user_args()
+	if args.size() > 1:
+		_render_from = float(args[1])       # `sizzle 7.9` draws only the last shot, `sizzle 2.4 6.3` shots 2-3
 	_stage(8.5, Vector3(0, 0, -1.5))
 	boss._enter_phase(3, false)
 	player.bot_enabled = false
@@ -599,7 +605,7 @@ func shot_sizzle() -> void:
 	# 2. a combo, the camera racing round him
 	at(t0 + 2.0, func(): boss_string(["b_combo_1", "b_combo_2", "b_combo_3"]))
 	_cine.append({"t0": t0 + 2.0, "t1": t0 + 3.9, "orbit": true, "a": Vector2(47, -73), "r": Vector2(3.4, 2.9),
-		"h": Vector2(1.55, 1.2), "look_y": 1.22, "fov": Vector2(44, 44)})
+		"h": Vector2(1.55, 1.2), "look_y": 1.3, "fov": Vector2(47, 47)})
 	# 3. his leaping strike, from the ground where he lands
 	at(t0 + 3.9, func():
 		boss.global_position = Vector3(0, 0, -1.5)
@@ -608,7 +614,7 @@ func shot_sizzle() -> void:
 		boss._seq.clear()
 		boss._play_attack("b_leap", 0.0))
 	_cine.append({"t0": t0 + 3.9, "t1": t0 + 5.7, "from": Vector3(1.2, 0.3, 6.9), "to": Vector3(1.75, 0.42, 7.7),
-		"look_boss": 1.1, "fov": Vector2(34, 44)})
+		"look_boss": 1.1, "fov": Vector2(29, 44)})
 	_shakes.append([t0 + 3.9 + 0.97, 0.09, 0.3])
 	# 4. the Inferno: arms of fire sweeping round him, seen from high up with the moon beyond
 	at(t0 + 5.7, func():
@@ -628,12 +634,16 @@ func shot_sizzle() -> void:
 		boss.inferno._ring_target = 1.0
 		boss.inferno._ring_level = 1.0
 		boss.inferno._begin_plunge())
-	_cine.append({"t0": t0 + 7.7, "t1": t0 + 9.95, "from": Vector3(2.9, 1.15, 4.8), "to": Vector3(5.0, 12.5, 20.5),
-		"look_from": chest + Vector3(0, 0.3, 0), "look_to": Vector3(0, 0.2, -6.0), "fov": Vector2(40, 56),
+	# (from above his ring of fire, so its flames frame him instead of hiding him)
+	_cine.append({"t0": t0 + 7.7, "t1": t0 + 9.95, "from": Vector3(3.3, 2.7, 6.6), "to": Vector3(5.0, 12.5, 20.5),
+		"look_from": chest + Vector3(0, 0.35, 0), "look_to": Vector3(0, 0.2, -6.0), "fov": Vector2(36, 56),
 		"hold": t0 + 8.6})
 	_shakes.append([t0 + 7.7 + 0.82, 0.12, 0.25])
 	_shakes.append([t0 + 7.7 + 1.12, 0.22, 0.6])
-	_end_at = t0 + 10.2
+	at(t0 + 7.7 + 1.16, func(): Game.slowmo(2.0, 0.4))   # the eruption, held in slow motion to the end
+	_end_at = t0 + 9.45                                    # (frame 325: the slow motion stretches it)
+	if args.size() > 2:
+		_end_at = minf(_end_at, float(args[2]))
 	_cine_update()
 
 
