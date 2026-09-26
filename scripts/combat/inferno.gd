@@ -762,7 +762,9 @@ func _build_visuals() -> void:
 	_cracks.material_override = _cracks_mat
 	_cracks.visible = false
 	add_child(_cracks)
-	for r in [3.6, 7.2, 10.8, 14.6]:
+	# (no band out where the blast's ring of flame stood: in the finisher only the floor burns,
+	# and a ring there would read as the blast again)
+	for r in [3.6, 10.8, 14.6]:
 		var band2 := MeshInstance3D.new()
 		band2.mesh = FireFx.band_mesh(1.0, 96)
 		var m2 := FireFx.wall_material(TAU * r, true)

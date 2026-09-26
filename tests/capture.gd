@@ -439,6 +439,8 @@ func shot_inferno() -> void:
 			player.global_position = Vector3(0, 0, 7.0)
 			boss.begin_inferno()
 			boss.staff_fire.set_level(1.0, 10.0)
+			boss.inferno._ring_target = 1.0         # his ring of fire, still up from the spin
+			boss.inferno._ring_level = 1.0
 			boss.inferno._begin_plunge())
 		set_meta("inferno_bot", "stand" if mode == "plunge_stand" else "jump")
 		_end_at = 3.5
