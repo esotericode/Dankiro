@@ -489,7 +489,7 @@ func _erupt() -> void:
 		Sfx.play("fire_whoosh", player.global_position + Vector3(0, 0.4, 0), 4.0, 0.8, 0.0)
 	Game.shake(0.8, 0.6)
 	Game.rumble(0.8, 1.0, 0.4)
-	var burst := FireFx.flames(700, 0.75, 1.3)
+	var burst := FireFx.flames(420, 0.75, 1.2)
 	burst.one_shot = true
 	burst.explosiveness = 0.8
 	burst.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
@@ -836,7 +836,7 @@ func _update_eruption(delta: float) -> void:
 		var reveal := clampf(_fuse_vis / maxf(fuse * 0.8, 0.05), 0.0, 1.0)
 		var glow := 0.55 + 0.45 * clampf(_fuse_vis / maxf(fuse, 0.05), 0.0, 1.0)
 		if _erupt_vis >= 0.0:
-			glow = 1.0 - clampf((_erupt_vis - 0.15) / 1.1, 0.0, 1.0)
+			glow = 0.7 * (1.0 - clampf((_erupt_vis - 0.15) / 1.1, 0.0, 1.0))
 			if glow <= 0.0:
 				_fuse_vis = -1.0
 		_cracks_mat.set_shader_parameter("reveal", reveal * 1.02)
@@ -849,7 +849,7 @@ func _update_eruption(delta: float) -> void:
 		return
 	_erupt_vis += delta
 	_erupt_light.global_position = center + Vector3(0, 3.0, 0)
-	_erupt_light.light_energy = 7.0 * maxf(0.0, 1.0 - _erupt_vis / 0.9)
+	_erupt_light.light_energy = 4.5 * maxf(0.0, 1.0 - _erupt_vis / 0.9)
 	for b in _erupt_bands:
 		var mi: MeshInstance3D = b[0]
 		var mat: ShaderMaterial = b[1]
@@ -861,8 +861,8 @@ func _update_eruption(delta: float) -> void:
 		mi.global_position = center
 		var rise := sin(PI * minf(1.0, u * 1.6)) if u < 0.625 else 0.0
 		mi.scale = Vector3(r, 0.3 + 1.3 * rise, r)
-		mat.set_shader_parameter("heat", 1.1)
-		mat.set_shader_parameter("alpha_mult", (1.0 - u) * 1.2)
+		mat.set_shader_parameter("heat", 0.85)
+		mat.set_shader_parameter("alpha_mult", (1.0 - u) * 0.9)
 	if _erupt_vis > 1.3:
 		_erupt_vis = -1.0
 

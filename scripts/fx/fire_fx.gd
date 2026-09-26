@@ -165,7 +165,9 @@ void fragment() {
 	float r = length(p);
 	float crack = 1.0 - smoothstep(0.015, 0.07, voronoi_edge(p * scale));
 	float a = atan(p.y, p.x);
-	float spoke = pow(abs(sin(a * 9.0 + 1.7 * sin(r * 11.0))), 24.0) * smoothstep(0.05, 0.25, r);
+	// jagged spokes: the angle zig-zags with distance so they split the stone like cracks
+	float zig = 0.35 * sin(r * 31.0 + a * 5.0) + 0.2 * sin(r * 67.0 - a * 3.0);
+	float spoke = pow(abs(sin(a * 9.0 + zig)), 40.0) * smoothstep(0.05, 0.25, r);
 	float lines = max(crack * 0.85, spoke);
 	float inside = 1.0 - smoothstep(reveal - 0.03, reveal, r);
 	float front = exp(-pow((r - reveal) / 0.025, 2.0)) * (1.0 - step(1.0, reveal));
