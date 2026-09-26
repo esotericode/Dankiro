@@ -1478,46 +1478,70 @@ def build_boss_fire():
          events=[{"t": 0.02, "type": "fire_charge"}, {"t": 1.60, "type": "fire_blast"},
                  {"t": 1.96, "type": "perilous", "kind": "sweep"}, {"t": 2.48, "type": "fire_whips"}])
 
-    # ---- spent: the turn peters out, he drops the left end into the stones and leans on it,
-    # heaving for breath (open to punishment), then pulls it free and takes his stance
-    slump = landed.copy()
+    # ---- the finisher: out of the turn he stands tall and lifts the staff upright over his
+    # head (its lower blade pointing down at the stones), holds it there, then drives it down
+    # into the floor with both hands: the whole arena erupts (inferno.gd), one jump to clear.
+    slump = landed.copy()               # after the plunge: hanging on the planted staff, head down
     slump.update({"hips_pos": [0, 0.72, 0.10], "spine": [-22, -4, 0], "chest": [-26, -6, 0], "neck": [24, 4, 0],
                   "head": [14, 2, 0]})
     place_c(slump, FIRE_PLANT_C, UP, EDGE_V, 0.22, -0.14, landed["weapon_rot"])
-    # level (upper blade right) -> upright: roll back about the forward axis, the left end dropping
-    stag = dict(spin0, hips=[0, -14, 0], chest=[-14, -18, 0], spine=[-10, -8, 0], hips_pos=[0, 0.78, 0.04],
-                foot_r=[0.40, 0.08, 0.20])
-    keys = [key(0.0, spin0), key(0.30, stag, ease="out_quad")]
-    turn = staff_turn(0.30, 0.62, 5, FIRE_SPIN_C, FIRE_PLANT_C, [1, 0, 0], [0, 0, -1], [0, 0, 1], 90.0, None,
-                      ease=smooth)
+    tall = S.copy()
+    tall.update({"hips_pos": [0, 1.07, 0.02], "hips": [0, 0, 0], "spine": [6, 0, 0], "chest": [10, 0, 0],
+                 "neck": [-14, 0, 0], "head": [-8, 0, 0],
+                 "foot_l": [-0.30, 0.08, -0.04], "foot_l_rot": [0, 10, 0], "foot_r": [0.30, 0.08, 0.06],
+                 "foot_r_rot": [0, -10, 0], "knee_l": [-0.5, 0, -1], "knee_r": [0.5, 0, -1],
+                 "elbow_l": [-0.8, 0.3, 0.3], "elbow_r": [0.8, 0.3, 0.3]})
+    PL_TOP = [0.06, 2.02, -0.34]         # staff centre at the top: lower tip ~0.4 m off the stones
+    PL_HIT = 0.82                        # the blade bites into the stones
+    # level (upper blade to his right) -> upright: a roll about the forward axis, the right end rising
+    turn = staff_turn(0.06, 0.42, 6, FIRE_SPIN_C, PL_TOP, [1, 0, 0], [0, 0, -1], [0, 0, 1], 90.0, None, ease=smooth)
+    keys = [key(0.0, spin0)]
     prev = spin0["weapon_rot"]
     for i, (t, c, sh, ed) in enumerate(turn):
         u = (i + 1) / len(turn)
-        k_ = dict(slump)
-        for ch in ("hips_pos", "spine", "chest", "neck", "head", "foot_l", "foot_r"):
-            k_[ch] = lerp3(stag[ch], slump[ch], smooth(u))
-        place_c(k_, c, sh, ed, round(0.30 + (0.22 - 0.30) * u, 3), round(-0.30 + (-0.14 + 0.30) * u, 3), prev)
+        k_ = dict(tall)
+        for ch in ("hips_pos", "spine", "chest", "neck", "head", "foot_l", "foot_r", "elbow_l", "elbow_r"):
+            k_[ch] = lerp3(spin0[ch], tall[ch], smooth(u))
+        place_c(k_, c, sh, ed, round(0.30 + (0.10 - 0.30) * u, 3), round(-0.30 + (-0.25 + 0.30) * u, 3), prev)
         prev = k_["weapon_rot"]
         keys.append(key(t, k_, ease="linear" if i else "in_sine"))
-    t = 0.62
-    for i in range(7):                  # heaving breaths
+    top = place_c(dict(tall), PL_TOP, UP, EDGE_V, 0.10, -0.25, prev)
+    strain = place_c(dict(tall, chest=[13, 0, 0], hips_pos=[0, 1.09, 0.02], neck=[-17, 0, 0]),
+                     [PL_TOP[0], PL_TOP[1] + 0.05, PL_TOP[2] + 0.02], UP, EDGE_V, 0.10, -0.25, prev)
+    drive = dict(slump, hips_pos=[0, 0.66, 0.10], chest=[-30, -6, 0], spine=[-24, -4, 0], neck=[12, 4, 0],
+                 head=[8, 2, 0], foot_l=[-0.40, 0.08, -0.14], foot_r=[0.40, 0.08, 0.16])
+    drive = place_c(drive, FIRE_PLANT_C, UP, EDGE_V, 0.22, -0.14, prev)
+    keys += [key(0.56, strain, ease="out_quad"),              # the hold: straining at the top
+             key(0.70, top, ease="inout_sine"),
+             key(PL_HIT, drive, ease="in_cubic"),             # the plunge
+             key(1.02, dict(drive, chest=[-28, -6, 0], hips_pos=[0, 0.67, 0.10]), ease="out_quad"),
+             key(1.50, slump, ease="inout_sine")]
+    clip("b_fire_plunge", "boss", keys, track=[[0.0, 0.5, 90]],
+         events=[{"t": 0.02, "type": "perilous", "kind": "sweep"}, {"t": PL_HIT, "type": "fire_plunge"},
+                 {"t": round(PL_HIT + 0.30, 3), "type": "fire_erupt"}])
+
+    # ---- spent: he hangs on the planted staff heaving for breath (open to punishment), then
+    # pulls it free and takes his stance
+    keys = [key(0.0, slump)]
+    t = 0.0
+    for i in range(11):                 # heaving breaths
         t += 0.22
         up_ = i % 2 == 0
         keys.append(key(t, dict(slump, chest=[-22 if up_ else -28, -6, 0], hips_pos=[0, 0.73 if up_ else 0.71, 0.10],
                                 neck=[20 if up_ else 26, 4, 0]), ease="inout_sine"))
     rise_ = dict(chan, neck=[4, 2, 0], head=[0, 0, 0])
-    keys.append(key(2.30, rise_, ease="inout_sine"))
+    keys.append(key(2.62, rise_, ease="inout_sine"))
     pull = place_c(dict(rise_, hips_pos=[0, 0.92, 0.04]), [FIRE_PLANT_C[0], 1.66, FIRE_PLANT_C[2]], UP, EDGE_V, 0.20,
                    -0.16, landed["weapon_rot"])
-    keys.append(key(2.52, pull, ease="out_quad"))
-    keys.append({"t": 3.0, "pose": "b_stance", "ease": "inout_sine"})
-    clip("b_fire_spent", "boss", keys, vuln=[0.20, 2.55], track=[[2.3, 3.0, 160]],
-         events=[{"t": 0.04, "type": "fire_gutter"}, {"t": 0.62, "type": "ground_impact", "blade": "lower"}])
+    keys.append(key(2.84, pull, ease="out_quad"))
+    keys.append({"t": 3.3, "pose": "b_stance", "ease": "inout_sine"})
+    clip("b_fire_spent", "boss", keys, vuln=[0.0, 2.85], track=[[2.62, 3.3, 160]],
+         events=[{"t": 0.04, "type": "fire_gutter"}])
 
 
 # Clips where the staff is meant to rest on / dig into the ground.
 FLOOR_EXEMPT = {"b_posture_break", "b_death", "b_deathblow_react", "b_revive", "b_fire_leap", "b_fire_ignite",
-                "b_fire_spent"}
+                "b_fire_plunge", "b_fire_spent"}
 FLOOR_CLEARANCE = 0.035
 
 

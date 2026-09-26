@@ -13,8 +13,9 @@ extends Node3D
 ##  * shuriken in flight (with where they'll be in 0.1 s) and a marker where each blow landed:
 ##    gold deflect, blue block, red hit, magenta mikiri, cyan dodged.
 ##  * his Inferno: the blast radius while he channels (and the blast front), each arm of fire
-##    as a line at the height you have to clear (orange while it can hit you), and the ring
-##    round him. His hurtbox is orange while the fire turns your sword.
+##    as a line at the height you have to clear (orange while it can hit you), the ring round
+##    him, and the eruption (rings across the arena at the height to clear; dim while the
+##    cracks spread, bright while it burns). His hurtbox is orange while the fire turns your sword.
 ## The HUD adds the live readout (Hud._update_debug). Keeps drawing while paused.
 
 const C_HURT := Color(0.3, 1.0, 0.45, 0.9)
@@ -194,7 +195,11 @@ func _inferno() -> void:
 		_ring(c, br, C_FIRE, 64)
 	if inf.ring_live():
 		_ring(c, Inferno.RING_R, C_FIRE, 48)
-	if inf.stage >= Inferno.St.SPIN:
+	if inf.fusing() or inf.erupting():
+		var ec := C_FIRE if inf.erupting() else Color(C_FIRE, 0.35)
+		for r in [2.0, 5.0, 8.0, 11.0, 14.0]:
+			_ring(c + Vector3(0, Inferno.ERUPT_TOP, 0), r, ec, 64)
+	if inf.stage == Inferno.St.SPIN or inf.stage == Inferno.St.WIND_DOWN:
 		var col := C_FIRE if inf.arms_live() else Color(C_FIRE, 0.35)
 		for yaw in inf.arm_yaws():
 			var d := Combat.dir_of(float(yaw))

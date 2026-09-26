@@ -18,9 +18,14 @@ extends Node3D
 ##     The beat is kept wherever you stand (the turn is steered by where you are); after the
 ##     fire knocks you down, the next pass waits until you're up with time to jump it. A ring
 ##     of fire round him keeps you out, and his burning body turns your sword.
-##  5. The fire dies down and he's spent: hit him (Boss._inferno_spent -> b_fire_spent).
+##  5. The finisher (b_fire_plunge, 危): the arms die away, he stands tall with the staff upright
+##     over his head, holds it, and drives it down into the stones. Cracks of fire race out
+##     across the floor and the whole arena erupts: one jump, timed to the eruption, clears it
+##     (it lasts ERUPT_DANGER; too early and you land in it, too late and you're still on the
+##     ground). After a burn from the last arm it waits until you're up, like the arms do.
+##  6. The fire dies down and he's spent: hit him (Boss.inferno_spent -> b_fire_spent).
 
-enum St { IDLE, LEAP, IGNITE, SPIN, WIND_DOWN }
+enum St { IDLE, LEAP, IGNITE, SPIN, WIND_DOWN, PLUNGE }
 
 const REACH := 16.6                ## the arms reach this far from him (the wall is 15.4 m from the middle)
 const ARM_FROM := 1.9              ## ...starting this far out (inside the ring anyway)
@@ -36,12 +41,16 @@ const GAP_FAST := 1.0              ## ...and before the fourth: 0.5 s early catc
 const OMEGA := 180.0 / GAP         ## deg/s at full speed (two arms: one reaches you every half turn)
 const FIRST := GAP                 ## start of the turn -> first pass (spinning up from standstill)
 const RAMP_FAST := 0.3             ## the flare: speeding up to the fourth pass's pace
-const WIND_DOWN := 0.9
-const FAIR := 2.0                  ## after the fire knocks you down, the next pass waits this long
+const WIND_DOWN := 0.55            ## after the last pass: the turn stops and the arms die away
+const FAIR := 2.0                  ## after the fire knocks you down, the next thing to jump waits this long
+const ERUPT_TOP := 0.6             ## the eruption burns this high...
+const ERUPT_DANGER := 0.25         ## ...for this long: a jump has to carry you over all of it
+const ARENA_R := 15.6              ## the eruption fills the arena out to its wall
 const PASSES := 4
 const DMG_ARM := 25.0
 const DMG_BLAST := 18.0
 const DMG_RING := 6.0
+const DMG_ERUPT := 22.0
 const WALL_H := 1.0                ## height of the arms' flame quads (the fire itself is lower)
 const ARM_OFFSET := 0.3            ## the staff is this far in front of him: the arms run along it
 
@@ -54,6 +63,8 @@ var hits := 0                      ## ...and how many of them burned you
 var pass_times: Array = []         ## Game.clock of each pass
 var fire_top := FIRE_TOP
 var blast_hit := false
+var erupt_time := -1.0             ## Game.clock when the arena erupted (-1: not yet)
+var erupt_hit := false
 
 var _tau := 0.0                    ## time along the planned turn (slowed after you're knocked down)
 var _omega := 0.0                  ## deg/s he's turning (clockwise from above)
@@ -68,6 +79,8 @@ var _wind_t := 0.0
 var _wind_from := 0.0
 var _blast_t := -1.0
 var _whoosh_armed := true
+var _plunge_at := -1.0             ## the plunge can't start before this (after a burn, you get up first)
+var _erupt_t := -1.0               ## seconds since the eruption (while it can burn you)
 
 # visuals
 var _arms: Array = []              ## per arm: {pivot, wall, strip, flames, lights}
@@ -90,6 +103,12 @@ var _blast_mat: ShaderMaterial
 var _blast_vis := -1.0
 var _roar: AudioStreamPlayer3D
 var _roar_level := 0.0
+var _cracks: MeshInstance3D
+var _cracks_mat: ShaderMaterial
+var _fuse_vis := -1.0              ## seconds since the plunge hit (drives the cracks)
+var _erupt_vis := -1.0             ## seconds since the eruption (drives its fire)
+var _erupt_bands: Array = []       ## [MeshInstance3D, ShaderMaterial, radius]
+var _erupt_light: OmniLight3D
 
 
 func setup(b: Boss) -> void:
@@ -104,7 +123,7 @@ func is_active() -> bool:
 
 
 func stage_name() -> String:
-	return ["idle", "leap", "ignite", "spin", "wind down"][stage]
+	return ["idle", "leap", "ignite", "spin", "wind down", "plunge"][stage]
 
 
 # ============================================================================== flow
@@ -128,6 +147,10 @@ func begin() -> void:
 	_arm_target = 0.0
 	_ring_target = 0.0
 	_contact = false
+	_plunge_at = -1.0
+	_erupt_t = -1.0
+	erupt_time = -1.0
+	erupt_hit = false
 	# He leaps over or onto you: the two of you mustn't collide until the fire is out.
 	if player != null:
 		boss.add_collision_exception_with(player)
@@ -153,7 +176,14 @@ func update(delta: float) -> Vector3:
 		St.WIND_DOWN:
 			_wind_down(delta)
 			_ring_check(delta)
+		St.PLUNGE:
+			_track(delta)
+			if erupt_time < 0.0:
+				_ring_check(delta)
+			if boss.anim.finished:
+				_finish()
 	_tick_blast(delta)
+	_tick_eruption(delta)
 	return planar
 
 
@@ -180,6 +210,20 @@ func on_event(type: String, _ev: Dictionary) -> void:
 			_ring_target = 1.0
 			Sfx.play("fire_ignite", center + Vector3(0, 1.0, 0), 3.0)
 			_roar_start()
+		"fire_plunge":
+			var pts2 := boss.rig.blade_world("lower")
+			var tip2 := pts2[pts2.size() - 1] if pts2.size() > 0 else boss.global_position
+			var ground2 := Vector3(tip2.x, center.y, tip2.z)
+			Fx.dust(boss.get_parent(), ground2, 36, 1.4)
+			Fx.sparks(boss.get_parent(), ground2 + Vector3(0, 0.05, 0), Vector3.UP, Fx.SPARK_GROUND)
+			FireFx.burst(boss.get_parent(), ground2 + Vector3(0, 0.2, 0), 1.4)
+			Sfx.play("ground_impact", ground2, 5.0)
+			Sfx.play("fire_fuse", center + Vector3(0, 0.5, 0), 4.0, 1.0, 0.0)
+			Game.shake(0.45, 0.3)
+			Game.rumble(0.5, 0.8, 0.25)
+			_fuse_vis = 0.0
+		"fire_erupt":
+			_erupt()
 
 
 func _leap(delta: float) -> Vector3:
@@ -395,7 +439,6 @@ func _arm_hits() -> void:
 			_wind_from = _omega
 			_arm_target = 0.0
 			_heat_target = 0.0
-			Sfx.play("fire_gutter", center + Vector3(0, 1.0, 0), 2.0)
 	_lead_prev = lead
 
 
@@ -411,8 +454,75 @@ func _wind_down(delta: float) -> void:
 	_wind_t += delta
 	var u := clampf(_wind_t / WIND_DOWN, 0.0, 1.0)
 	_turn(_wind_from * (1.0 - smoothstep(0.0, 1.0, u)), delta)
-	if u >= 1.0:
-		_finish()
+	# burned by the last arm: the eruption waits until you've had time to get up
+	_plunge_at = maxf(_plunge_at, _burned_at + FAIR - _erupt_offset())
+	if u >= 1.0 and Game.clock >= _plunge_at:
+		_begin_plunge()
+
+
+## Clip time of the eruption in b_fire_plunge (from its "fire_erupt" event).
+func _erupt_offset() -> float:
+	var c := AnimLibrary.get_clip("b_fire_plunge")
+	if c != null:
+		for ev in c.events:
+			if str(ev.get("type", "")) == "fire_erupt":
+				return float(ev["t"])
+	return 1.12
+
+
+func _begin_plunge() -> void:
+	stage = St.PLUNGE
+	boss.anim.speed = 1.0
+	boss.anim.play("b_fire_plunge", 0.16)
+
+
+## The whole arena erupts: anyone on the ground in the next ERUPT_DANGER seconds is burned.
+func _erupt() -> void:
+	_erupt_t = 0.0
+	erupt_time = Game.clock
+	erupt_hit = false
+	_erupt_vis = 0.0
+	_ring_target = 0.0
+	boss.staff_fire.set_level(0.6, 2.0)
+	Sfx.play("fire_eruption", center + Vector3(0, 1.0, 0), 6.0, 1.0, 0.0)
+	if player != null:
+		Sfx.play("fire_whoosh", player.global_position + Vector3(0, 0.4, 0), 4.0, 0.8, 0.0)
+	Game.shake(0.8, 0.6)
+	Game.rumble(0.8, 1.0, 0.4)
+	var burst := FireFx.flames(700, 0.75, 1.3)
+	burst.one_shot = true
+	burst.explosiveness = 0.8
+	burst.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
+	burst.emission_ring_axis = Vector3.UP
+	burst.emission_ring_radius = ARENA_R - 0.3
+	burst.emission_ring_inner_radius = 0.0
+	burst.emission_ring_height = 0.05
+	burst.spread = 12.0
+	burst.initial_velocity_min = 2.0
+	burst.initial_velocity_max = 4.5
+	burst.gravity = Vector3(0, 1.5, 0)
+	Fx._emit_at(boss.get_parent(), burst, center + Vector3(0, 0.1, 0))
+	Fx._free_later(burst, 1.4)
+
+
+func _tick_eruption(delta: float) -> void:
+	if _erupt_t < 0.0:
+		return
+	_erupt_t += delta
+	if _erupt_t > ERUPT_DANGER:
+		_erupt_t = -1.0
+		return
+	if erupt_hit or player == null or not player.can_be_hit():
+		return
+	var feet := player.global_position.y - center.y
+	if feet >= ERUPT_TOP + 0.01:
+		return
+	var info := {"kind": "sweep", "element": "fire", "part": "eruption", "dmg": DMG_ERUPT, "posture_block": 0,
+		"posture_deflect": 0, "boss_posture": 0, "dir": "low", "final": true, "clip": "inferno", "index": PASSES,
+		"point": player.global_position + Vector3(0, 0.35, 0), "time": Game.clock}
+	if player.receive_attack(info, boss) == Combat.RESULT_HIT:
+		erupt_hit = true
+		_burned_at = Game.clock
 
 
 ## The ring round him: walking into it burns and throws you back out.
@@ -433,6 +543,8 @@ func _ring_check(delta: float) -> void:
 
 func _finish() -> void:
 	stage = St.IDLE
+	_erupt_t = -1.0
+	Sfx.play("fire_gutter", center + Vector3(0, 1.0, 0), 2.0)
 	_end_common()
 	boss.staff_fire.set_level(StaffFire.SMOULDER, 0.5)
 	boss.inferno_spent()
@@ -445,6 +557,8 @@ func abort() -> void:
 	stage = St.IDLE
 	_charge_t = -1.0
 	_blast_t = -1.0
+	_erupt_t = -1.0
+	_fuse_vis = -1.0
 	boss.staff_fire.climb = -1.0
 	_end_common()
 	boss.staff_fire.set_level(StaffFire.SMOULDER, 1.0)
@@ -470,7 +584,17 @@ func arms_live() -> bool:
 
 
 func ring_live() -> bool:
-	return (stage == St.SPIN or stage == St.WIND_DOWN) and _ring_level >= 0.3
+	return (stage == St.SPIN or stage == St.WIND_DOWN or (stage == St.PLUNGE and erupt_time < 0.0)) and _ring_level >= 0.3
+
+
+## True while the eruption can burn you.
+func erupting() -> bool:
+	return _erupt_t >= 0.0
+
+
+## True between the plunge hitting the stones and the eruption (the cracks racing out).
+func fusing() -> bool:
+	return stage == St.PLUNGE and _fuse_vis >= 0.0 and erupt_time < 0.0
 
 
 ## World yaw of each arm (Combat.dir_of convention); the first is the upper blade's.
@@ -489,11 +613,14 @@ func charging() -> bool:
 	return _charge_t >= 0.0
 
 
-## Seconds until the next arm reaches you at the current turn rate (INF if he isn't turning).
-func next_pass_in() -> float:
-	if stage != St.SPIN or _omega < 1.0:
-		return INF
-	return _lead_deg() / _omega
+## Seconds until the next thing you have to jump: the next arm at the current turn rate, or
+## the eruption once he's started the plunge (INF when neither is coming).
+func next_jump_in() -> float:
+	if stage == St.SPIN and _omega >= 1.0:
+		return _lead_deg() / _omega
+	if stage == St.PLUNGE and erupt_time < 0.0 and boss.anim.is_playing("b_fire_plunge"):
+		return maxf(0.0, (_erupt_offset() - boss.anim.time) / maxf(boss.anim.speed, 0.01))
+	return INF
 
 
 # ============================================================================== visuals
@@ -605,6 +732,28 @@ func _build_visuals() -> void:
 	_blast_band.visible = false
 	add_child(_blast_band)
 
+	_cracks = FireFx.floor_quad(ARENA_R * 2.0, 0.035)
+	_cracks_mat = FireFx.cracks_material()
+	_cracks.material_override = _cracks_mat
+	_cracks.visible = false
+	add_child(_cracks)
+	for r in [3.6, 7.2, 10.8, 14.6]:
+		var band2 := MeshInstance3D.new()
+		band2.mesh = FireFx.band_mesh(1.0, 96)
+		var m2 := FireFx.wall_material(TAU * r, true)
+		band2.material_override = m2
+		band2.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		band2.visible = false
+		add_child(band2)
+		_erupt_bands.append([band2, m2, r])
+	_erupt_light = OmniLight3D.new()
+	_erupt_light.light_color = Color(1.0, 0.45, 0.12)
+	_erupt_light.omni_range = 34.0
+	_erupt_light.omni_attenuation = 0.9
+	_erupt_light.light_energy = 0.0
+	_erupt_light.shadow_enabled = false
+	add_child(_erupt_light)
+
 	_roar = AudioStreamPlayer3D.new()
 	_roar.bus = "SFX"
 	_roar.unit_size = 7.0
@@ -632,6 +781,7 @@ func _process(delta: float) -> void:
 	var real_dt := minf(delta / maxf(Engine.time_scale, 0.001), 0.1)
 	_update_charge(delta)
 	_update_blast(real_dt)
+	_update_eruption(delta)
 	_update_ring(delta)
 	_update_arms(delta)
 	_update_roar(delta)
@@ -672,6 +822,49 @@ func _update_blast(real_dt: float) -> void:
 	_blast_mat.set_shader_parameter("alpha_mult", 1.0 - u * u)
 	if u >= 1.0:
 		_blast_vis = -1.0
+
+
+## The plunge: cracks of fire race out across the floor from his staff (the fuse), then the
+## floor erupts: bands of flame burst up across the arena and a flash lights everything.
+func _update_eruption(delta: float) -> void:
+	var on := _fuse_vis >= 0.0
+	_cracks.visible = on
+	if on:
+		_fuse_vis += delta
+		_cracks.global_position = center + Vector3(0, 0.035, 0)
+		var fuse := _erupt_offset() - 0.82          # plunge hit -> eruption (b_fire_plunge)
+		var reveal := clampf(_fuse_vis / maxf(fuse * 0.8, 0.05), 0.0, 1.0)
+		var glow := 0.55 + 0.45 * clampf(_fuse_vis / maxf(fuse, 0.05), 0.0, 1.0)
+		if _erupt_vis >= 0.0:
+			glow = 1.0 - clampf((_erupt_vis - 0.15) / 1.1, 0.0, 1.0)
+			if glow <= 0.0:
+				_fuse_vis = -1.0
+		_cracks_mat.set_shader_parameter("reveal", reveal * 1.02)
+		_cracks_mat.set_shader_parameter("glow", glow)
+	var e_on := _erupt_vis >= 0.0
+	_erupt_light.light_energy = 0.0
+	for b in _erupt_bands:
+		(b[0] as MeshInstance3D).visible = false
+	if not e_on:
+		return
+	_erupt_vis += delta
+	_erupt_light.global_position = center + Vector3(0, 3.0, 0)
+	_erupt_light.light_energy = 7.0 * maxf(0.0, 1.0 - _erupt_vis / 0.9)
+	for b in _erupt_bands:
+		var mi: MeshInstance3D = b[0]
+		var mat: ShaderMaterial = b[1]
+		var r := float(b[2])
+		var u := clampf((_erupt_vis - r / 90.0) / 0.8, 0.0, 1.0)     # a hair later further out
+		if u <= 0.0 or u >= 1.0:
+			continue
+		mi.visible = true
+		mi.global_position = center
+		var rise := sin(PI * minf(1.0, u * 1.6)) if u < 0.625 else 0.0
+		mi.scale = Vector3(r, 0.3 + 1.3 * rise, r)
+		mat.set_shader_parameter("heat", 1.1)
+		mat.set_shader_parameter("alpha_mult", (1.0 - u) * 1.2)
+	if _erupt_vis > 1.3:
+		_erupt_vis = -1.0
 
 
 func _update_ring(delta: float) -> void:

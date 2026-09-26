@@ -384,8 +384,8 @@ func shot_recovery() -> void:
 
 
 ## Phase 2's fire move (the Inferno) from the lock-on camera: he leaps to the middle, you back
-## out of the blast radius while he channels, then jump each arm of fire (the bot jumps 0.3 s
-## before an arm reaches it). `-- inferno stand` stands still and gets burned instead;
+## out of the blast radius while he channels, then jump each arm of fire and the eruption at
+## the end (the bot jumps 0.28 s before each). `-- inferno stand` stands still and gets burned instead;
 ## `-- inferno wide` films it (jumping) from high above the arena.
 func shot_inferno() -> void:
 	var args := OS.get_cmdline_user_args()
@@ -417,9 +417,11 @@ func _inferno_bot_tick() -> void:
 	var to := Combat.flat(player.global_position - inf.center)
 	var escaping := boss.state == Boss.S.INFERNO and inf.stage <= Inferno.St.IGNITE and not inf.blast_hit
 	player.bot_move = Vector2(0, 1) if escaping and to.length() < Inferno.BLAST_R + 1.5 else Vector2.ZERO
-	if str(get_meta("inferno_bot")) == "jump" and inf.stage == Inferno.St.SPIN and inf.passes != _jumped_for:
-		if inf.next_pass_in() <= 0.30 and player.state != Player.S.AIR and player.state != Player.S.KNOCKDOWN:
-			_jumped_for = inf.passes
+	# one jump per arm, and one for the eruption (keyed past the last pass)
+	var key := inf.passes if inf.stage == Inferno.St.SPIN else Inferno.PASSES + 1
+	if str(get_meta("inferno_bot")) == "jump" and key != _jumped_for and inf.next_jump_in() <= 0.28:
+		if player.state != Player.S.AIR and player.state != Player.S.KNOCKDOWN:
+			_jumped_for = key
 			player.press_action("jump", Game.clock)
 
 

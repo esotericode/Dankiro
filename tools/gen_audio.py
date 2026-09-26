@@ -452,6 +452,19 @@ def build(only=None):
     t = t_axis(dur)
     gt = swept_bandpass(noise(dur, 670), 1600 * np.exp(-t * 2.2) + 150, q=1.3) * env_exp(dur, 0.55, 0.01)
     out("fire_gutter", reverb(mix(gt, crackle(dur, 70, 671, rate_end=6) * 0.6), 1.0, 0.2), peak_db=-2.0, st=False)
+    dur = 0.45                      # the plunge's fuse: cracks racing out, a deep swell into the eruption
+    t = t_axis(dur)
+    u = t / dur
+    sw = swept_bandpass(noise(dur, 690), 90 + 900 * u ** 1.5, q=1.3) * (0.2 + 0.8 * u ** 1.8)
+    rum = sine_sweep(dur, 34, 60, 1.0) * (0.3 + 0.7 * u) * 0.7
+    out("fire_fuse", mix(sw * 1.1, rum, crackle(dur, 60, 691, rate_end=260) * (0.2 + 0.8 * u)), peak_db=-2.0, st=False)
+    dur = 2.6                       # the arena erupting: a huge whoomph, the roar of the floor burning
+    t = t_axis(dur)
+    whoomph = swept_bandpass(noise(dur, 695), 1800 * np.exp(-t * 3.0) + 160, q=1.1) * env_exp(dur, 0.55, 0.006)
+    body = lowpass(noise(dur, 696), 900) * env_exp(dur, 0.9, 0.02)
+    out("fire_eruption", reverb(mix(whoomph * 1.2, body * 0.9, thud(dur, 58, 24, 0.5, 1.0, 400, 697) * 1.3,
+                                    crackle(dur, 220, 698, rate_end=20) * 0.6), 2.2, 0.3, bright=4000),
+        peak_db=-0.5, st=False)
     # the roar while the arms are out: a seamless 3 s loop
     dur = 3.0
     t = t_axis(dur + 0.6)

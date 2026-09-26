@@ -12,6 +12,7 @@ static var _ember_mat: StandardMaterial3D
 static var _smoke_mat: StandardMaterial3D
 static var _wall_shader: Shader
 static var _strip_shader: Shader
+static var _cracks_shader: Shader
 static var _glow_mats: Dictionary = {}
 
 const WALL_SHADER := """
@@ -120,6 +121,62 @@ void fragment() {
 """
 
 
+## The floor cracking open before the arena erupts: a network of glowing cracks (the edges of
+## Voronoi cells) and jagged spokes out from the middle, revealed out to `reveal` (0..1 of the
+## disc) with a bright front racing ahead, over a warm glow.
+const CRACKS_SHADER := """
+shader_type spatial;
+render_mode unshaded, blend_add, cull_disabled, depth_draw_never, shadows_disabled, fog_disabled;
+
+uniform float reveal = 1.0;
+uniform float glow = 1.0;
+uniform float scale = 11.0;
+uniform vec3 hot : source_color = vec3(1.0, 0.72, 0.32);
+uniform vec3 deep : source_color = vec3(1.0, 0.24, 0.04);
+
+vec2 hash2(vec2 p) {
+	p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
+	return fract(sin(p) * 43758.5453);
+}
+
+float voronoi_edge(vec2 x) {
+	vec2 n = floor(x);
+	vec2 f = fract(x);
+	float f1 = 8.0;
+	float f2 = 8.0;
+	for (int j = -1; j <= 1; j++) {
+		for (int i = -1; i <= 1; i++) {
+			vec2 g = vec2(float(i), float(j));
+			vec2 r = g + hash2(n + g) - f;
+			float d = dot(r, r);
+			if (d < f1) {
+				f2 = f1;
+				f1 = d;
+			} else if (d < f2) {
+				f2 = d;
+			}
+		}
+	}
+	return sqrt(f2) - sqrt(f1);
+}
+
+void fragment() {
+	vec2 p = UV * 2.0 - 1.0;
+	float r = length(p);
+	float crack = 1.0 - smoothstep(0.015, 0.07, voronoi_edge(p * scale));
+	float a = atan(p.y, p.x);
+	float spoke = pow(abs(sin(a * 9.0 + 1.7 * sin(r * 11.0))), 24.0) * smoothstep(0.05, 0.25, r);
+	float lines = max(crack * 0.85, spoke);
+	float inside = 1.0 - smoothstep(reveal - 0.03, reveal, r);
+	float front = exp(-pow((r - reveal) / 0.025, 2.0)) * (1.0 - step(1.0, reveal));
+	float edge = 1.0 - smoothstep(0.97, 1.0, r);
+	float v = (lines * inside + front * 0.9 + 0.14 * inside) * edge;
+	ALBEDO = mix(deep, hot, clamp(lines + front, 0.0, 1.0)) * v * glow * 1.3;
+	ALPHA = clamp(v * glow, 0.0, 1.0);
+}
+"""
+
+
 # ------------------------------------------------------------------------------ resources
 ## A flame-shaped sprite: a soft teardrop, broad at the bottom, licked into a point at the top.
 static func flame_texture() -> Texture2D:
@@ -200,6 +257,16 @@ static func strip_material(scale_x: float) -> ShaderMaterial:
 	var m := ShaderMaterial.new()
 	m.shader = _strip_shader
 	m.set_shader_parameter("scale_x", scale_x)
+	m.render_priority = 1
+	return m
+
+
+static func cracks_material() -> ShaderMaterial:
+	if _cracks_shader == null:
+		_cracks_shader = Shader.new()
+		_cracks_shader.code = CRACKS_SHADER
+	var m := ShaderMaterial.new()
+	m.shader = _cracks_shader
 	m.render_priority = 1
 	return m
 

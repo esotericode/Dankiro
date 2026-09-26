@@ -1163,8 +1163,9 @@ func suite_inferno() -> void:
 	for spot in [[6.0, 0.0], [10.0, 120.0], [14.0, 240.0], [4.2, 60.0]]:
 		var pos := Combat.dir_of(deg_to_rad(float(spot[1]))) * float(spot[0])
 		r = await _inferno_run(Vector3(0, 0, -2.0), pos, "jump")
-		check(int(r["passes"]) == Inferno.PASSES and int(r["hits"]) == 0,
-			"jumping each arm at %.0f m clears all four (%d passes, %d burns)" % [spot[0], r["passes"], r["hits"]])
+		check(int(r["passes"]) == Inferno.PASSES and int(r["hits"]) == 0 and int(r["erupt_hits"]) == 0,
+			"jumping each arm and the eruption at %.0f m clears them all (%d passes, %d burns, eruption %d)" % [spot[0],
+				r["passes"], r["hits"], r["erupt_hits"]])
 		check(bool(r["spent"]), "at %.0f m: afterwards he's spent (b_fire_spent)" % spot[0])
 		var gaps: Array = r["gaps"]
 		if gaps.size() == 3:
@@ -1183,8 +1184,26 @@ func suite_inferno() -> void:
 	# Everything else gets burned: standing still, guarding, dodging into the arm.
 	for mode in ["stand", "guard", "dodge"]:
 		r = await _inferno_run(Vector3(0, 0, -2.0), Vector3(0, 0, 8.0), mode)
-		check(int(r["hits"]) == Inferno.PASSES and int(r["guarded"]) == 0,
-			"%s: every arm burns you (%d of %d)" % [mode, r["hits"], Inferno.PASSES])
+		check(int(r["hits"]) == Inferno.PASSES and int(r["guarded"]) == 0 and int(r["erupt_hits"]) == 1,
+			"%s: every arm burns you, and so does the eruption (%d of %d, eruption %d)" % [mode, r["hits"], Inferno.PASSES,
+				r["erupt_hits"]])
+		if mode == "stand":
+			check(float(r["erupt_after_burn"]) >= Inferno.FAIR - 0.1,
+				"burned by the last arm, the eruption waits until you're up (%.2f s after)" % r["erupt_after_burn"])
+	# The eruption: one jump, timed to it. Too early and you land in it, too late and you're
+	# still on the ground.
+	var clear: Array = []
+	var row := PackedStringArray()
+	for lead in [0.04, 0.08, 0.12, 0.16, 0.2, 0.24, 0.28, 0.32, 0.36, 0.42, 0.5, 0.65]:
+		r = await _inferno_run(Vector3(0, 0, -2.0), Vector3(0, 0, 8.0), "erupt_lead", {"erupt_lead": lead})
+		var ok := int(r["erupt_hits"]) == 0
+		if ok:
+			clear.append(lead)
+		row.append("%.2f:%s" % [lead, "clear" if ok else "burned"])
+	print("  eruption, jumping this long before it: " + " ".join(row))
+	check(clear.size() >= 4 and not clear.has(0.04) and not clear.has(0.5) and not clear.has(0.65),
+		"one jump timed to the eruption clears it (%.2f-%.2f s before); earlier or later burns" % [
+			float(clear.min()) if not clear.is_empty() else -1.0, float(clear.max()) if not clear.is_empty() else -1.0])
 	# Jumping on the beat of the first three instead of watching: the fast fourth catches you.
 	r = await _inferno_run(Vector3(0, 0, -2.0), Vector3(0, 0, 8.0), "beat")
 	check(int(r["hits"]) == 1 and int(r["hit_pass"]) == Inferno.PASSES - 1,
@@ -1241,7 +1260,7 @@ func _wait_state(s: int, max_time: float) -> void:
 
 ## Runs one Inferno with the boss starting at `boss_at` (it leaps to the middle) and the player
 ## at `player_at`, the player bot doing `mode`. Returns what happened.
-func _inferno_run(boss_at: Vector3, player_at: Vector3, mode: String) -> Dictionary:
+func _inferno_run(boss_at: Vector3, player_at: Vector3, mode: String, opts := {}) -> Dictionary:
 	await setup(4.0)
 	boss.global_position = boss_at
 	player.global_position = player_at
@@ -1252,7 +1271,8 @@ func _inferno_run(boss_at: Vector3, player_at: Vector3, mode: String) -> Diction
 	var hp0 := boss.hp
 	var out := {"blast_hit": false, "blast_out": 0.0, "passes": 0, "hits": 0, "guarded": 0, "hit_pass": -1, "gaps": [],
 		"pass_rel": [], "spent": false, "landed_off": 99.0, "after_hit": 99.0, "closest": 99.0, "burns": 0,
-		"slashes": 0, "slash_hits": 0, "boss_hp_lost": 0.0, "boss_posture": 0.0, "punished": 0}
+		"slashes": 0, "slash_hits": 0, "boss_hp_lost": 0.0, "boss_posture": 0.0, "punished": 0,
+		"erupt_hits": 0, "erupt_after_burn": 99.0}
 	var burned := [0]
 	var hp_prev := [player.hp]
 	boss.struck.connect(func(res: int, _p: Vector3):
@@ -1262,6 +1282,7 @@ func _inferno_run(boss_at: Vector3, player_at: Vector3, mode: String) -> Diction
 	boss.begin_inferno()
 	var inf := boss.inferno
 	var st := {"jumped": [-1], "last_hit_t": -1.0, "stood": false}
+	st.merge(opts, true)
 	var t0 := Game.clock
 	var t_end := Game.clock + 24.0
 	var hit_times: Array = []
@@ -1281,7 +1302,8 @@ func _inferno_run(boss_at: Vector3, player_at: Vector3, mode: String) -> Diction
 		hp_prev[0] = player.hp
 		if boss.state == Boss.S.ATTACK and boss.anim.is_playing("b_fire_spent"):
 			seen_spent = true
-		if mode == "punish" and seen_spent:
+		# (closing in as soon as you've landed from the eruption, like a player going for the opening)
+		if mode == "punish" and (seen_spent or inf.erupt_time > 0.0 and Game.clock > inf.erupt_time + 0.45):
 			_inferno_close_in()
 		_inferno_bot_tick(mode, st)
 		if mode == "slash" and inf.stage == Inferno.St.IGNITE and boss.anim.time < 1.3 and player.state == Player.S.MOVE:
@@ -1291,6 +1313,10 @@ func _inferno_run(boss_at: Vector3, player_at: Vector3, mode: String) -> Diction
 	for rr in _results:
 		var info: Dictionary = rr["info"]
 		if str(info.get("clip", "")) != "inferno" or str(info.get("kind", "")) != "sweep":
+			continue
+		if str(info.get("part", "")) == "eruption":
+			if int(rr["res"]) == Combat.RESULT_HIT:
+				out["erupt_hits"] = int(out["erupt_hits"]) + 1
 			continue
 		if int(rr["res"]) == Combat.RESULT_HIT:
 			out["hits"] = int(out["hits"]) + 1
@@ -1310,6 +1336,8 @@ func _inferno_run(boss_at: Vector3, player_at: Vector3, mode: String) -> Diction
 	out["gaps"] = gaps
 	out["spent"] = seen_spent
 	out["burns"] = burned[0]
+	if not hit_times.is_empty() and inf.erupt_time > 0.0:
+		out["erupt_after_burn"] = inf.erupt_time - float(hit_times[hit_times.size() - 1])
 	if hit_times.size() == 1:
 		for p in pt:
 			if float(p) > float(hit_times[0]) + 0.3:
@@ -1358,36 +1386,40 @@ func _inferno_bot_tick(mode: String, st: Dictionary) -> void:
 		st["dodged"] = true
 		player.press_action("dodge", now)
 	if mode == "guard":
-		if inf.stage == Inferno.St.SPIN and not player.guard_held:
+		if inf.stage >= Inferno.St.SPIN and not player.guard_held:
 			player.press_guard(now)
 		return
-	if inf.stage != Inferno.St.SPIN:
+	if inf.stage != Inferno.St.SPIN and inf.stage != Inferno.St.PLUNGE:
 		return
 	var jumped: Array = st["jumped"]
-	var n := inf.next_pass_in()
+	var erupt := inf.stage == Inferno.St.PLUNGE
+	var key := Inferno.PASSES + 1 if erupt else inf.passes     # one jump per arm, one for the eruption
+	var n := inf.next_jump_in()
+	var lead := float(st.get("erupt_lead", 0.28)) if erupt else 0.28
 	var free := player.state == Player.S.MOVE or player.state == Player.S.GUARD
 	match mode:
-		"jump", "escape", "jump_strafe", "punish", "rush":
-			if int(jumped[0]) != inf.passes and n <= 0.28 and free:
-				jumped[0] = inf.passes
+		"jump", "escape", "jump_strafe", "punish", "rush", "erupt_lead":
+			if int(jumped[0]) != key and n <= lead and free:
+				jumped[0] = key
 				player.press_action("jump", now)
 		"stand_first":
-			if inf.passes >= 1 and int(jumped[0]) != inf.passes and n <= 0.28 and free:
-				jumped[0] = inf.passes
+			if (inf.passes >= 1 or erupt) and int(jumped[0]) != key and n <= 0.28 and free:
+				jumped[0] = key
 				player.press_action("jump", now)
 		"dodge":
-			if int(jumped[0]) != inf.passes and n <= 0.08 and free:
-				jumped[0] = inf.passes
+			if int(jumped[0]) != key and n <= 0.08 and free:
+				jumped[0] = key
 				player.press_action("dodge", now)
 		"beat":
-			# first arm: watch it; after that jump when the beat says the next one is due
+			# first arm: watch it; after that jump when the beat says the next one is due (the
+			# eruption it watches for)
 			var due := INF
-			if inf.passes == 0:
+			if inf.passes == 0 or erupt:
 				due = now + n
 			else:
 				due = float(inf.pass_times[inf.passes - 1]) + Inferno.GAP
-			if int(jumped[0]) != inf.passes and due - now <= 0.28 and free:
-				jumped[0] = inf.passes
+			if int(jumped[0]) != key and due - now <= 0.28 and free:
+				jumped[0] = key
 				player.press_action("jump", now)
 
 

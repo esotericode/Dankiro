@@ -1052,7 +1052,7 @@ func _on_anim_event(_clip: String, ev: Dictionary) -> void:
 			Fx.flash(get_parent(), rig.joint_world("hand_l"), 0.28, Color(1.0, 0.85, 0.6), true)
 		"roar":
 			_enter_phase(phase + 1)
-		"fire_plant", "fire_charge", "fire_blast", "fire_whips":
+		"fire_plant", "fire_charge", "fire_blast", "fire_whips", "fire_plunge", "fire_erupt":
 			inferno.on_event(str(ev.get("type", "")), ev)
 		"fire_gutter":
 			FireFx.smoke(get_parent(), rig.joint_world("chest") + Vector3(0, 0.3, 0), 12, 0.7)

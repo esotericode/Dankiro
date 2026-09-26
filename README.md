@@ -167,8 +167,12 @@ every 40 s; phase three has it too).
   walk round him. If an arm burns you, the next one waits until you're up (about 2 s).
 - A **ring of fire** round him keeps you off him (it burns and shoves you back), and while he
   burns your sword glances off him.
-- **The payoff:** the fire gutters out and he's spent, leaning on his staff and panting. Hit
-  him. His staff keeps smouldering for the rest of the fight.
+- **The finisher (危):** the arms die away, he stands tall with the staff upright over his head,
+  holds it, and drives it down into the stones. Cracks of fire race out across the floor and
+  the **whole arena erupts**. One jump, timed to the eruption, clears it: jump too early and
+  you land in it, too late and you're still on the ground (about a quarter-second window).
+- **The payoff:** the fire gutters out and he's spent, leaning on his planted staff and
+  panting. Hit him. His staff keeps smouldering for the rest of the fight.
 
 ### Posture and the deathblow
 
@@ -202,7 +206,7 @@ every 40 s; phase three has it too).
 | Perilous Thrust 危 | Turns side-on, draws the staff back and holds at full coil | Mikiri (neutral dodge on the release) or deflect |
 | Perilous Sweep 危 | Slides his grip to the staff's end, sinks low and coils to his left | Jump, then kick |
 | Whirling Fangs | Raises the staff level overhead with a whoosh, then cocks it at his side and the windmill spins up | Deflect each blade as it comes down on you (4 chops, one every 0.375 s, each with a whoosh that peaks on contact), then the finishing cut after a pause |
-| Inferno 危 (phase two) | Leaps to the middle of the arena and drives his staff into the stones; the floor glows out to the blast radius | Get out of the glow before the blast. Then jump each arm of fire: three on an even beat, a faster fourth. Hit him while he's spent |
+| Inferno 危 (phase two) | Leaps to the middle of the arena and drives his staff into the stones; the floor glows out to the blast radius | Get out of the glow before the blast. Then jump each arm of fire: three on an even beat, a faster fourth. Then he raises the staff over his head and plunges it into the floor: jump as the arena erupts. Hit him while he's spent |
 | Shuriken volley | Quick crouch, hand to his belt with a glint of steel, leaps back and hangs for a beat at the top, throwing hand glinting | Deflect each glowing star as it reaches you: **3 in the air + 1 delayed**, or **5 in the air** |
 | Running Cut | Runs at you, staff swinging up behind his shoulder | Deflect (it tracks hard) |
 | Falling Crescent | Crouches at range, leaps with the staff overhead | Deflect on landing (high) |
@@ -238,7 +242,7 @@ godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--v
 | `shuriken` | Volley rhythms (3 in the air + 1 delayed, 5 in the air), a readable tell before the first, every throw deflectable (no posture to him) or blockable |
 | `attack` | Slash reach, and that mashing is rate-limited (no two hits within 0.38 s) |
 | `cancel` | Guard cancels a slash only in the early wind-up and in the recovery |
-| `inferno` | Phase 2 opens with the Inferno (starting there, or rising into it); he lands in the middle of the arena; the blast misses you outside its radius, knocks you down and throws you out of it inside, and walking away locked on from right beside him gets clear in time (stepping through it doesn't); jumping each arm clears all four from 4 to 14 m out, the beat holds (1.5, 1.5, 1.0 s) wherever you stand and while you walk round him; standing, guarding and dodging get burned by every arm; jumping on the beat gets caught by the fourth; after a burn the next arm waits until you can jump it; the ring stops you and burns; your sword glances off him; he's open afterwards; he uses it again once it's off cooldown |
+| `inferno` | Phase 2 opens with the Inferno (starting there, or rising into it); he lands in the middle of the arena; the blast misses you outside its radius, knocks you down and throws you out of it inside, and walking away locked on from right beside him gets clear in time (stepping through it doesn't); jumping each arm clears all four from 4 to 14 m out, the beat holds (1.5, 1.5, 1.0 s) wherever you stand and while you walk round him; standing, guarding and dodging get burned by every arm and by the eruption; jumping on the beat gets caught by the fourth; one jump timed to the eruption clears it, earlier or later burns (it prints the window); after a burn the next arm, or the eruption, waits until you can jump it; the ring stops you and burns; your sword glances off him; he's open afterwards; he uses it again once it's off cooldown |
 | `soak` | A full fight against the real AI (charges, repositioning, volleys) with a bot player that reacts to the blade and to incoming shuriken: deflects, blocks, posture breaks, deathblows, the next phase and the Inferno it opens with |
 
 The run exits with code 0 when every check passes (681 checks, including the soak). It also

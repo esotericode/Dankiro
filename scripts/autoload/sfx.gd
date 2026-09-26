@@ -45,6 +45,8 @@ const BANKS := {
 	"fire_hiss": ["fire_hiss"],
 	"fire_gutter": ["fire_gutter"],
 	"burn": ["burn"],
+	"fire_fuse": ["fire_fuse"],
+	"fire_eruption": ["fire_eruption"],
 }
 
 const POOL_3D := 24
