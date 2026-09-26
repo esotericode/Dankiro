@@ -161,8 +161,8 @@ every 40 s; phase three has it too).
 - **The sweeps (危):** he lifts the staff overhead with both ends ablaze, drops into a low stance
   with it level across his hips and starts to turn. Fire runs from both blades out past the
   walls, so there's nowhere out of reach. Each arm of fire is a sweep: guarding and dodging
-  don't help, so **jump it**. Three arms come round on an even beat (1.8 s apart), then the
-  fire flares and the **fourth comes round faster** (1.25 s), to catch you if you jump on the
+  don't help, so **jump it**. Three arms come round on an even beat (1.5 s apart), then the
+  fire flares and the **fourth comes round faster** (1.0 s), to catch you if you jump on the
   beat instead of watching the fire. The beat is the same wherever you stand, even if you
   walk round him. If an arm burns you, the next one waits until you're up (about 2 s).
 - A **ring of fire** round him keeps you off him (it burns and shoves you back), and while he
@@ -238,7 +238,7 @@ godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--v
 | `shuriken` | Volley rhythms (3 in the air + 1 delayed, 5 in the air), a readable tell before the first, every throw deflectable (no posture to him) or blockable |
 | `attack` | Slash reach, and that mashing is rate-limited (no two hits within 0.38 s) |
 | `cancel` | Guard cancels a slash only in the early wind-up and in the recovery |
-| `inferno` | Phase 2 opens with the Inferno (starting there, or rising into it); he lands in the middle of the arena; the blast misses you outside its radius, knocks you down and throws you out of it inside, and walking away locked on from right beside him gets clear in time (stepping through it doesn't); jumping each arm clears all four from 4 to 14 m out, the beat holds (1.8, 1.8, 1.25 s) wherever you stand and while you walk round him; standing, guarding and dodging get burned by every arm; jumping on the beat gets caught by the fourth; after a burn the next arm waits until you can jump it; the ring stops you and burns; your sword glances off him; he's open afterwards; he uses it again once it's off cooldown |
+| `inferno` | Phase 2 opens with the Inferno (starting there, or rising into it); he lands in the middle of the arena; the blast misses you outside its radius, knocks you down and throws you out of it inside, and walking away locked on from right beside him gets clear in time (stepping through it doesn't); jumping each arm clears all four from 4 to 14 m out, the beat holds (1.5, 1.5, 1.0 s) wherever you stand and while you walk round him; standing, guarding and dodging get burned by every arm; jumping on the beat gets caught by the fourth; after a burn the next arm waits until you can jump it; the ring stops you and burns; your sword glances off him; he's open afterwards; he uses it again once it's off cooldown |
 | `soak` | A full fight against the real AI (charges, repositioning, volleys) with a bot player that reacts to the blade and to incoming shuriken: deflects, blocks, posture breaks, deathblows, the next phase and the Inferno it opens with |
 
 The run exits with code 0 when every check passes (681 checks, including the soak). It also

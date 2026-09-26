@@ -46,8 +46,8 @@ the ones the game already teaches:
   on from right beside him if you go as he leaps. **[tested]**
 - **Each arm of fire is a perilous sweep** (危): no guard, no i-frames, jump it. The arms reach
   past the walls, so there's no outrunning them. **[tested]**
-- **Rhythm, then a break in it**: three passes 1.8 s apart teach a beat, and the fourth comes
-  after 1.25 s, like Sekiro's delayed and early swings that punish rhythm-mashing instead of
+- **Rhythm, then a break in it**: three passes 1.5 s apart teach a beat, and the fourth comes
+  after 1.0 s, like Sekiro's delayed and early swings that punish rhythm-mashing instead of
   watching the attack. The turn is steered so the beat is the same wherever you stand.
   **[tested]**
 - **Fairness**: a burn knocks you down (like a sweep), and the next arm waits until you're up
