@@ -20,9 +20,11 @@ extends Node3D
 ##     of fire round him keeps you out, and his burning body turns your sword.
 ##  5. The finisher (b_fire_plunge, 危): the arms die away, he stands tall with the staff upright
 ##     over his head, holds it, and drives it down into the stones. Cracks of fire race out
-##     across the floor and the whole arena erupts: one jump, timed to the eruption, clears it
-##     (it lasts ERUPT_DANGER; too early and you land in it, too late and you're still on the
-##     ground). After a burn from the last arm it waits until you're up, like the arms do.
+##     across the floor and the whole arena erupts, rolling out from his staff: one jump, timed
+##     to the eruption, clears it. In the air you're safe; on the ground while the flames are up
+##     where you stand (ERUPT_DANGER) you burn, so jump too early and you land in it, too late
+##     and you're still on the ground. After a burn from the last arm it waits until you're up,
+##     like the arms do.
 ##  6. The fire dies down and he's spent: hit him (Boss.inferno_spent -> b_fire_spent).
 
 enum St { IDLE, LEAP, IGNITE, SPIN, WIND_DOWN, PLUNGE }
@@ -43,8 +45,10 @@ const FIRST := GAP                 ## start of the turn -> first pass (spinning 
 const RAMP_FAST := 0.3             ## the flare: speeding up to the fourth pass's pace
 const WIND_DOWN := 0.55            ## after the last pass: the turn stops and the arms die away
 const FAIR := 2.0                  ## after the fire knocks you down, the next thing to jump waits this long
-const ERUPT_TOP := 0.6             ## the eruption burns this high...
-const ERUPT_DANGER := 0.25         ## ...for this long: a jump has to carry you over all of it
+const ERUPT_WAVE := 90.0           ## m/s: the eruption rolls out from his staff (the flames too)
+const ERUPT_GRACE := 0.06          ## where you stand, the flames take this long to leap up...
+const ERUPT_DANGER := 0.24         ## ...then burn anyone on the ground this long: be in the air
+const ERUPT_CLEAR := 0.05          ## in a jump with your feet this far up counts as in the air
 const ARENA_R := 15.6              ## the eruption fills the arena out to its wall
 const PASSES := 4
 const DMG_ARM := 25.0
@@ -180,7 +184,8 @@ func update(delta: float) -> Vector3:
 			_track(delta)
 			if erupt_time < 0.0:
 				_ring_check(delta)
-			if boss.anim.finished:
+			# (the flames still burning at the wall outlast the clip by a moment)
+			if boss.anim.finished and _erupt_t < 0.0:
 				_finish()
 	_tick_blast(delta)
 	_tick_eruption(delta)
@@ -476,7 +481,7 @@ func _begin_plunge() -> void:
 	boss.anim.play("b_fire_plunge", 0.16)
 
 
-## The whole arena erupts: anyone on the ground in the next ERUPT_DANGER seconds is burned.
+## The whole arena erupts, rolling out from his staff: see _tick_eruption.
 func _erupt() -> void:
 	_erupt_t = 0.0
 	erupt_time = Game.clock
@@ -505,17 +510,23 @@ func _erupt() -> void:
 	Fx._free_later(burst, 1.4)
 
 
+## The eruption reaches you a moment after it bursts from his staff (ERUPT_WAVE), leaps up
+## (ERUPT_GRACE) and burns for ERUPT_DANGER: on the ground then, you're burned. Anywhere in a
+## jump you're clear, rising or falling: jump as it erupts and you go over it, jump too early and
+## you land in it.
 func _tick_eruption(delta: float) -> void:
 	if _erupt_t < 0.0:
 		return
 	_erupt_t += delta
-	if _erupt_t > ERUPT_DANGER:
+	if _erupt_t > eruption_length():
 		_erupt_t = -1.0
 		return
 	if erupt_hit or player == null or not player.can_be_hit():
 		return
-	var feet := player.global_position.y - center.y
-	if feet >= ERUPT_TOP + 0.01:
+	var here := _erupt_t - eruption_delay(player.global_position)
+	if here < 0.0 or here > ERUPT_DANGER:
+		return
+	if player.is_airborne() and player.global_position.y - center.y > ERUPT_CLEAR:
 		return
 	var info := {"kind": "sweep", "element": "fire", "part": "eruption", "dmg": DMG_ERUPT, "posture_block": 0,
 		"posture_deflect": 0, "boss_posture": 0, "dir": "low", "final": true, "clip": "inferno", "index": PASSES,
@@ -587,9 +598,19 @@ func ring_live() -> bool:
 	return (stage == St.SPIN or stage == St.WIND_DOWN or (stage == St.PLUNGE and erupt_time < 0.0)) and _ring_level >= 0.3
 
 
-## True while the eruption can burn you.
+## True while the eruption can burn you (somewhere in the arena).
 func erupting() -> bool:
 	return _erupt_t >= 0.0
+
+
+## Seconds from the eruption bursting from his staff to its flames dying at the wall.
+static func eruption_length() -> float:
+	return ARENA_R / ERUPT_WAVE + ERUPT_GRACE + ERUPT_DANGER
+
+
+## Seconds from the eruption bursting at his staff to its flames leaping up at `pos`.
+func eruption_delay(pos: Vector3) -> float:
+	return ERUPT_GRACE + Combat.flat(pos - center).length() / ERUPT_WAVE
 
 
 ## True between the plunge hitting the stones and the eruption (the cracks racing out).
@@ -614,12 +635,16 @@ func charging() -> bool:
 
 
 ## Seconds until the next thing you have to jump: the next arm at the current turn rate, or
-## the eruption once he's started the plunge (INF when neither is coming).
+## the eruption's flames reaching you once he's started the plunge (INF when neither is coming).
 func next_jump_in() -> float:
 	if stage == St.SPIN and _omega >= 1.0:
 		return _lead_deg() / _omega
-	if stage == St.PLUNGE and erupt_time < 0.0 and boss.anim.is_playing("b_fire_plunge"):
-		return maxf(0.0, (_erupt_offset() - boss.anim.time) / maxf(boss.anim.speed, 0.01))
+	if stage == St.PLUNGE and player != null and boss.anim.is_playing("b_fire_plunge"):
+		var reach := eruption_delay(player.global_position)
+		if erupt_time < 0.0:
+			return maxf(0.0, (_erupt_offset() - boss.anim.time) / maxf(boss.anim.speed, 0.01)) + reach
+		if Game.clock <= erupt_time + reach:
+			return erupt_time + reach - Game.clock
 	return INF
 
 
@@ -854,12 +879,15 @@ func _update_eruption(delta: float) -> void:
 		var mi: MeshInstance3D = b[0]
 		var mat: ShaderMaterial = b[1]
 		var r := float(b[2])
-		var u := clampf((_erupt_vis - r / 90.0) / 0.8, 0.0, 1.0)     # a hair later further out
+		var here := _erupt_vis - r / ERUPT_WAVE                  # a hair later further out
+		var u := clampf(here / 0.8, 0.0, 1.0)
 		if u <= 0.0 or u >= 1.0:
 			continue
 		mi.visible = true
 		mi.global_position = center
-		var rise := sin(PI * minf(1.0, u * 1.6)) if u < 0.625 else 0.0
+		# up while it burns (ERUPT_GRACE .. + ERUPT_DANGER), then falling fast
+		var rise := smoothstep(0.0, ERUPT_GRACE * 2.0, here) * (1.0 - smoothstep(ERUPT_GRACE + ERUPT_DANGER - 0.04,
+			ERUPT_GRACE + ERUPT_DANGER + 0.12, here))
 		mi.scale = Vector3(r, 0.3 + 1.3 * rise, r)
 		mat.set_shader_parameter("heat", 0.85)
 		mat.set_shader_parameter("alpha_mult", (1.0 - u) * 0.9)

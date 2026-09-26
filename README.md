@@ -169,8 +169,10 @@ every 40 s; phase three has it too).
   burns your sword glances off him.
 - **The finisher (危):** the arms die away, he stands tall with the staff upright over his head,
   holds it, and drives it down into the stones. Cracks of fire race out across the floor and
-  the **whole arena erupts**. One jump, timed to the eruption, clears it: jump too early and
-  you land in it, too late and you're still on the ground (about a quarter-second window).
+  the **whole arena erupts**, rolling out from his staff. One jump, timed to the eruption,
+  clears it: anywhere in the air you're safe, rising or falling. Jump too early and you land
+  while it's still burning, too late and you're still on the ground when the flames reach you
+  (a window of about 0.4 s, ending just as they leap up where you stand).
 - **The payoff:** the fire gutters out and he's spent, leaning on his planted staff and
   panting. Hit him. His staff keeps smouldering for the rest of the fight.
 
@@ -242,17 +244,17 @@ godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--v
 | `shuriken` | Volley rhythms (3 in the air + 1 delayed, 5 in the air), a readable tell before the first, every throw deflectable (no posture to him) or blockable |
 | `attack` | Slash reach, and that mashing is rate-limited (no two hits within 0.38 s) |
 | `cancel` | Guard cancels a slash only in the early wind-up and in the recovery |
-| `inferno` | Phase 2 opens with the Inferno (starting there, or rising into it); he lands in the middle of the arena; the blast misses you outside its radius, knocks you down and throws you out of it inside, and walking away locked on from right beside him gets clear in time (stepping through it doesn't); jumping each arm clears all four from 4 to 14 m out, the beat holds (1.5, 1.5, 1.0 s) wherever you stand and while you walk round him; standing, guarding and dodging get burned by every arm and by the eruption; jumping on the beat gets caught by the fourth; one jump timed to the eruption clears it, earlier or later burns (it prints the window); after a burn the next arm, or the eruption, waits until you can jump it; the ring stops you and burns; your sword glances off him; he's open afterwards; he uses it again once it's off cooldown |
+| `inferno` | Phase 2 opens with the Inferno (starting there, or rising into it); he lands in the middle of the arena; the blast misses you outside its radius, knocks you down and throws you out of it inside, and walking away locked on from right beside him gets clear in time (stepping through it doesn't); jumping each arm clears all four from 4 to 14 m out, the beat holds (1.5, 1.5, 1.0 s) wherever you stand and while you walk round him; standing, guarding and dodging get burned by every arm and by the eruption; jumping on the beat gets caught by the fourth; one jump timed to the eruption clears it (in the air you're clear), earlier or later burns (it prints the window), and it rolls outward, reaching the wall a moment after it bursts beside him; after a burn the next arm, or the eruption, waits until you can jump it; the ring stops you and burns; your sword glances off him; he's open afterwards; he uses it again once it's off cooldown |
 | `soak` | A full fight against the real AI (charges, repositioning, volleys) with a bot player that reacts to the blade and to incoming shuriken: deflects, blocks, posture breaks, deathblows, the next phase and the Inferno it opens with |
 
-The run exits with code 0 when every check passes (683 checks, including the soak). It also
+The run exits with code 0 when every check passes (684 checks, including the soak). It also
 fails if the engine or a script reports any error during the run (it listens through a
 `Logger`), so runtime errors can't hide behind passing gameplay checks.
 
 **Captures**: `tests/capture.tscn` stages shots (`overview`, `deflect`, `deflect_offcenter`,
 `block`, `mikiri`, `thrust_backstep`, `sweep`, `sweep_flee`, `whirl`, `shuriken`, `shuriken5`,
 `charge`, `slashes`, `parried`, `inferno` for his fire move (`inferno stand` to take the
-arms, `inferno wide` from high above the arena), `attack <clip> [distance]` for any single boss attack from
+arms, `inferno wide` from high above the arena, `inferno plunge` straight to the finisher), `attack <clip> [distance]` for any single boss attack from
 the lock-on camera, `recovery <clip>` for one attack played to the end from a fixed 3/4 view,
 `diagnostics` for the overlay, the menus `menu_title`, `menu_options` and `menu_start` (boot,
 then press Start), the model close-ups `model`, `model_head`, `model_face`,
@@ -355,7 +357,7 @@ How the boss model is built (PS2-style: ~25k triangles, one 2048 px atlas with b
 
 ## Status
 
-This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (683 checks, including
+This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (684 checks, including
 a full-fight soak), the game boots and runs with no script errors, and every change to the
 visuals was checked on frames rendered with Movie Maker.
 
@@ -370,6 +372,12 @@ stones hold a puddle that catches the lantern light. Moss grows along the joints
 fence, round the lantern bases and over one old stone; dirt gathers at the edges, old soot
 darkens the medallion and the middle is worn smooth. Cycles bakes the occlusion of the joints,
 curb, lanterns and fence posts into the textures ([before and after](docs/floor_before_after.png)).
+
+**Also: the eruption no longer burns you in mid-air.** It burned anyone whose feet were below
+0.6 m at any moment of its quarter second, so jumping as it erupted, or coming down a moment
+early, burned you in the air. Now being in a jump clears it, and the burn rolls outward with
+the flames, so it reaches you when they do: jump anywhere in the 0.4 s before they leap up
+where you stand. The HUD's "jump in" readout counts down to that moment.
 
 **Before that: the Inferno, phase two's fire move.** He opens phase two with it and uses it again
 every so often. He leaps to the middle of the arena and channels fire into his planted staff

@@ -2,7 +2,7 @@ extends Node
 ## Scripted capture director for visual checks with Godot's Movie Maker:
 ##   godot --write-movie out/frame.png --fixed-fps 30 res://tests/capture.tscn -- <shot>
 ## Shots: overview, deflect, deflect_offcenter, block, mikiri, thrust_backstep, sweep, sweep_flee, whirl, shuriken,
-## shuriken5, charge, slashes, parried, inferno [stand|wide], attack <clip> [distance], recovery <clip>, diagnostics, the menus
+## shuriken5, charge, slashes, parried, inferno [stand|wide|plunge|plunge_stand], attack <clip> [distance], recovery <clip>, diagnostics, the menus
 ## (menu_title, menu_options, menu_start, menu_pause), and art checks: model (orbit), model_head, model_face, model_face_p2, model_combo,
 ## model_flourish, floor [overview|centre|medallion|puddle|moss|broken|rim|low|sweep].
 ## Loads the real game scene (arena, lighting, HUD, lock-on camera), skips the intro, stages
@@ -432,6 +432,17 @@ func shot_inferno() -> void:
 	var mode: String = args[1] if args.size() > 1 else "jump"
 	_stage(7.0, Vector3(0, 0, -4.0))
 	boss._enter_phase(2, false)
+	if mode.begins_with("plunge"):
+		# straight to the finisher, for looking at the eruption: he's already in the middle
+		at(0.3, func():
+			boss.global_position = Vector3.ZERO
+			player.global_position = Vector3(0, 0, 7.0)
+			boss.begin_inferno()
+			boss.staff_fire.set_level(1.0, 10.0)
+			boss.inferno._begin_plunge())
+		set_meta("inferno_bot", "stand" if mode == "plunge_stand" else "jump")
+		_end_at = 3.5
+		return
 	at(0.3, func(): boss.begin_inferno())
 	set_meta("inferno_bot", "stand" if mode == "stand" else "jump")
 	if mode == "wide":

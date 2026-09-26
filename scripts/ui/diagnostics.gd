@@ -198,7 +198,7 @@ func _inferno() -> void:
 	if inf.fusing() or inf.erupting():
 		var ec := C_FIRE if inf.erupting() else Color(C_FIRE, 0.35)
 		for r in [2.0, 5.0, 8.0, 11.0, 14.0]:
-			_ring(c + Vector3(0, Inferno.ERUPT_TOP, 0), r, ec, 64)
+			_ring(c + Vector3(0, 0.1, 0), r, ec, 64)
 	if inf.stage == Inferno.St.SPIN or inf.stage == Inferno.St.WIND_DOWN:
 		var col := C_FIRE if inf.arms_live() else Color(C_FIRE, 0.35)
 		for yaw in inf.arm_yaws():

@@ -1190,20 +1190,27 @@ func suite_inferno() -> void:
 		if mode == "stand":
 			check(float(r["erupt_after_burn"]) >= Inferno.FAIR - 0.1,
 				"burned by the last arm, the eruption waits until you're up (%.2f s after)" % r["erupt_after_burn"])
-	# The eruption: one jump, timed to it. Too early and you land in it, too late and you're
-	# still on the ground.
+	# The eruption: one jump, timed to it. In the air you're clear, rising or falling; too early
+	# and you land in it, too late and you're still on the ground when the flames reach you.
 	var clear: Array = []
 	var row := PackedStringArray()
-	for lead in [0.04, 0.08, 0.12, 0.16, 0.2, 0.24, 0.28, 0.32, 0.36, 0.42, 0.5, 0.65]:
+	for lead in [-0.1, -0.04, 0.02, 0.06, 0.1, 0.14, 0.18, 0.22, 0.26, 0.3, 0.34, 0.38, 0.42, 0.5, 0.65]:
 		r = await _inferno_run(Vector3(0, 0, -2.0), Vector3(0, 0, 8.0), "erupt_lead", {"erupt_lead": lead})
 		var ok := int(r["erupt_hits"]) == 0
 		if ok:
 			clear.append(lead)
 		row.append("%.2f:%s" % [lead, "clear" if ok else "burned"])
-	print("  eruption, jumping this long before it: " + " ".join(row))
-	check(clear.size() >= 4 and not clear.has(0.04) and not clear.has(0.5) and not clear.has(0.65),
-		"one jump timed to the eruption clears it (%.2f-%.2f s before); earlier or later burns" % [
+	print("  eruption 8 m out, jumping this long before its flames reach you (negative: after): " + " ".join(row))
+	check(clear.has(0.02) and clear.has(0.38) and clear.size() >= 9 and not clear.has(-0.04) and not clear.has(0.5)
+		and not clear.has(0.65),
+		"one jump timed to the eruption clears it (%.2f-%.2f s before its flames reach you); in the air you're clear, earlier or later burns" % [
 			float(clear.min()) if not clear.is_empty() else -1.0, float(clear.max()) if not clear.is_empty() else -1.0])
+	# It rolls out from his staff: the flames reach the wall a moment after they burst beside him.
+	var near := await _inferno_run(Vector3(0, 0, -2.0), Vector3(0, 0, 6.5), "erupt_lead", {"after_burst": 0.17})
+	var far := await _inferno_run(Vector3(0, 0, -2.0), Vector3(0, 0, 14.0), "erupt_lead", {"after_burst": 0.17})
+	check(int(near["erupt_hits"]) == 1 and int(far["erupt_hits"]) == 0,
+		"the eruption rolls outward: jumping 0.17 s after it bursts is too late 6.5 m out, in time 14 m out (burns %d, %d)" % [
+			near["erupt_hits"], far["erupt_hits"]])
 	# Jumping on the beat of the first three instead of watching: the fast fourth catches you.
 	r = await _inferno_run(Vector3(0, 0, -2.0), Vector3(0, 0, 8.0), "beat")
 	check(int(r["hits"]) == 1 and int(r["hit_pass"]) == Inferno.PASSES - 1,
@@ -1397,6 +1404,22 @@ func _inferno_bot_tick(mode: String, st: Dictionary) -> void:
 	var n := inf.next_jump_in()
 	var lead := float(st.get("erupt_lead", 0.28)) if erupt else 0.28
 	var free := player.state == Player.S.MOVE or player.state == Player.S.GUARD
+	if mode == "erupt_lead" and erupt:
+		# jump `erupt_lead` s before the flames reach you (negative: after), or `after_burst` s
+		# after the eruption bursts from his staff
+		if int(jumped[0]) != key and free:
+			var at := INF
+			if st.has("after_burst"):
+				if inf.erupt_time > 0.0:
+					at = inf.erupt_time + float(st["after_burst"])
+			elif inf.erupt_time > 0.0:
+				at = inf.erupt_time + inf.eruption_delay(player.global_position) - lead
+			elif n < INF:
+				at = now + n - lead
+			if now >= at:
+				jumped[0] = key
+				player.press_action("jump", now)
+		return
 	match mode:
 		"jump", "escape", "jump_strafe", "punish", "rush", "erupt_lead":
 			if int(jumped[0]) != key and n <= lead and free:

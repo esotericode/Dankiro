@@ -50,9 +50,11 @@ the ones the game already teaches:
   after 1.0 s, like Sekiro's delayed and early swings that punish rhythm-mashing instead of
   watching the attack. The turn is steered so the beat is the same wherever you stand.
   **[tested]**
-- **The finisher**: he plunges the staff into the floor and the whole arena erupts. It's a
-  perilous sweep with no escape but the jump, and a short one (0.25 s), so the jump has to be
-  timed to it: the plunge and the cracks racing out are the tell. **[tested]**
+- **The finisher**: he plunges the staff into the floor and the whole arena erupts, rolling
+  out from his staff. It's a perilous sweep with no escape but the jump, and like Sekiro's
+  sweeps being in the air is what clears it, rising or falling: you're burned only if you're
+  on the ground while the flames are up where you stand (0.24 s). So the jump has to be timed
+  to it (about a 0.4 s window): the plunge and the cracks racing out are the tell. **[tested]**
 - **Fairness**: a burn knocks you down (like a sweep), and the next arm (or the eruption) waits
   until you're up with time to jump it, so one mistake costs one hit, never a chain. **[tested]**
 - **Payoff**: he's spent afterwards, open like a boss after a long string. **[tested]**
