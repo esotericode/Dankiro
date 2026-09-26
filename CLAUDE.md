@@ -126,7 +126,9 @@ godot --headless --editor --quit               # import
   `gltf/embedded_image_handling=3`; the textures VRAM-compressed with mipmaps. Keep those settings.
 - The scene's fog would bury the mountains, so they skip it and are drawn half-transparent over
   the sky, farthest range first (`render_priority`): they fade into whatever the sky looks like.
-  The cloud sea (`cloud_sea.gdshader`, a plane at `Scenery.CLOUD_Y`) takes the normal fog.
+  Each range's haze and snow line are in `Scenery.MATERIALS`. Their faces must point up (a range
+  that faced down drew unlit and black). The cloud sea (`cloud_sea.gdshader`, a plane at
+  `Scenery.CLOUD_Y`) takes the normal fog.
 - `Scenery.edge_radius()` repeats the build's `edge_radius()` (where the summit falls away; trees
   keep back from it): change both together.
 - The fence you see is Scenery's; the wall that keeps the fight in is `Arena._build_boundary()`.
