@@ -4,7 +4,7 @@ extends Node
 ## Shots: overview, deflect, deflect_offcenter, block, mikiri, thrust_backstep, sweep, sweep_flee, whirl, shuriken,
 ## shuriken5, charge, slashes, parried, inferno [stand|wide], attack <clip> [distance], recovery <clip>, diagnostics, the menus
 ## (menu_title, menu_options, menu_start, menu_pause), and art checks: model (orbit), model_head, model_face, model_face_p2, model_combo,
-## model_flourish.
+## model_flourish, floor [overview|centre|medallion|puddle|moss|broken|rim|low|sweep].
 ## Loads the real game scene (arena, lighting, HUD, lock-on camera), skips the intro, stages
 ## the fighters and drives the player with a bot that reacts to the boss's hit windows.
 
@@ -298,6 +298,46 @@ func _art_camera(radius: float, height: float, look_y: float, speed: float, star
 	add_child(_orbit_cam)
 	_orbit_cam.current = true
 	_orbit = {"radius": radius, "height": height, "look_y": look_y, "speed": speed, "start": start}
+
+
+## The plaza floor from fixed cameras, fighters out of the way:
+## `-- floor [overview|centre|medallion|puddle|moss|broken|rim|low|sweep]` (sweep: a slow low pass, 6 s).
+func shot_floor() -> void:
+	var args := OS.get_cmdline_user_args()
+	var view: String = args[1] if args.size() > 1 else "overview"
+	_stage(3.0, Vector3(1.5, 0, 10.5))
+	var views := {
+		"overview": [Vector3(0, 12.5, 16.5), Vector3(0, 0, -1.5), 55.0],
+		"centre": [Vector3(0.5, 2.1, 3.0), Vector3(0, 0, -0.2), 50.0],
+		"medallion": [Vector3(0.7, 1.05, 1.75), Vector3(0, 0, -0.1), 50.0],
+		"puddle": [Vector3(-1.7, 1.55, -3.9), Vector3(-3.9, 0, -8.4), 55.0],
+		"moss": [Vector3(5.6, 1.45, -6.6), Vector3(7.5, 0, -9.6), 55.0],
+		"broken": [Vector3(-9.4, 1.4, -2.4), Vector3(-11.7, 0, -4.4), 55.0],
+		"rim": [Vector3(2.0, 1.6, -9.5), Vector3(5.5, 0.3, -13.3), 60.0],
+		"low": [Vector3(0.0, 0.55, 7.5), Vector3(0, 0.25, -6.0), 60.0],
+		"sweep": [Vector3(-6.0, 1.3, 2.0), Vector3(-4.0, 0, -8.0), 60.0],
+	}
+	var v: Array = views.get(view, views["overview"])
+	var cc := Game.camera as Camera3D
+	if cc != null:
+		cc.set_process(false)
+		cc.set_physics_process(false)
+	Game.hud.visible = false
+	var cam := Camera3D.new()
+	cam.fov = float(v[2])
+	add_child(cam)
+	cam.current = true
+	cam.global_position = v[0]
+	cam.look_at(v[1], Vector3.UP)
+	_end_at = 0.4
+	if view == "sweep":
+		_end_at = 6.0
+		var from: Vector3 = v[0]
+		var look: Vector3 = v[1]
+		var tw := create_tween()
+		tw.tween_method(func(k: float):
+			cam.global_position = from + Vector3(9.0 * k, 0.0, -2.0 * k)
+			cam.look_at(look + Vector3(9.0 * k, 0.0, 0.0), Vector3.UP), 0.0, 1.0, 6.0)
 
 
 ## The boss idling while the camera circles him (4 s = one turn).

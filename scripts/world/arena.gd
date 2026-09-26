@@ -1,13 +1,18 @@
 class_name Arena
 extends Node3D
 ## "Moon Gate" courtyard: a circular flagstone plaza on a mountain shrine at night.
-## Everything is procedural; tweak the exports in the inspector.
+## The plaza's stones are a model (tools/build_arena_floor.py); everything else is procedural.
 
 @export var radius := 15.6
 @export var lantern_count := 8
 @export var moon_elevation_deg := 44.0
 @export var moon_azimuth_deg := -150.0     ## 0 = +Z. Default puts the moon high behind-left of the boss.
 @export var tree_count := 34
+
+const FLOOR_SCENE := "res://models/arena_floor.glb"
+const FLOOR_TEX_DIR := "res://textures/floor/"
+const FLOOR_TEXTURES := ["stone_albedo.jpg", "stone_normal.jpg", "stone_data.jpg", "moss_albedo.png", "moss_normal.png",
+	"cracks.png", "engraving.png", "plaza_a.png", "plaza_b.png"]
 
 var _lanterns: Array = []   ## Array of [OmniLight3D, base_energy, seed]
 var _t := 0.0
@@ -113,18 +118,41 @@ func _build_environment() -> void:
 
 
 # ------------------------------------------------------------------------ floor + walls
+## The flagstone plaza is modelled and textured offline (tools/build_arena_floor.py): real slabs
+## with rounded, worn edges over a mortar bed, and a puddle. The earth around it is a shader on a
+## plane just below. Collision stays a flat box at y = 0: the stones sit within millimetres of it.
 func _build_floor() -> void:
-	var floor_mat := ShaderMaterial.new()
-	floor_mat.shader = load("res://shaders/stone_floor.gdshader")
-	floor_mat.set_shader_parameter("plaza_radius", radius)
+	var ground := MeshInstance3D.new()
 	var plane := PlaneMesh.new()
 	plane.size = Vector2(260, 260)
 	plane.subdivide_width = 8
 	plane.subdivide_depth = 8
-	var mi := MeshInstance3D.new()
-	mi.mesh = plane
-	mi.material_override = floor_mat
-	add_child(mi)
+	ground.mesh = plane
+	var ground_mat := ShaderMaterial.new()
+	ground_mat.shader = load("res://shaders/ground.gdshader")
+	ground.material_override = ground_mat
+	ground.position.y = -0.06
+	ground.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(ground)
+
+	var tex := {}
+	for f in FLOOR_TEXTURES:
+		tex[f.get_basename()] = load(FLOOR_TEX_DIR + f)
+	var mats := {
+		"Stones": _floor_material("flagstones", tex),
+		"Bed": _floor_material("floor_bed", tex),
+		"Water": _floor_material("puddle", tex),
+	}
+	var plaza: Node3D = (load(FLOOR_SCENE) as PackedScene).instantiate()
+	plaza.name = "Plaza"
+	add_child(plaza)
+	for node in plaza.find_children("*", "MeshInstance3D", true, false):
+		var mi := node as MeshInstance3D
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		for key in mats:
+			if String(mi.name).begins_with(key):
+				mi.material_override = mats[key]
+
 	var body := StaticBody3D.new()
 	var cs := CollisionShape3D.new()
 	var box := BoxShape3D.new()
@@ -133,6 +161,17 @@ func _build_floor() -> void:
 	cs.position = Vector3(0, -1, 0)
 	body.add_child(cs)
 	add_child(body)
+
+
+## A floor shader with every texture it declares bound by name (stone_albedo, plaza_a, ...).
+func _floor_material(shader_name: String, tex: Dictionary) -> ShaderMaterial:
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://shaders/%s.gdshader" % shader_name)
+	for u in mat.shader.get_shader_uniform_list():
+		var uname: String = u["name"]
+		if tex.has(uname):
+			mat.set_shader_parameter(uname, tex[uname])
+	return mat
 
 
 func _build_boundary() -> void:
