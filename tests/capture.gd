@@ -5,7 +5,7 @@ extends Node
 ## shuriken5, charge, slashes, parried, inferno [stand|wide|spin|plunge|plunge_stand], attack <clip> [distance], recovery <clip>, diagnostics, the menus
 ## (menu_title, menu_options, menu_start, menu_pause), and art checks: model (orbit), model_head, model_face, model_face_p2, model_combo,
 ## model_flourish, fire_staff [level], fire_combo, floor [overview|centre|medallion|puddle|moss|broken|rim|low|sweep],
-## scenery [torii|gate|south|east|west|high|lantern].
+## scenery [torii|gate|north|south|east|west|vista|cliff|grove|shrine|lantern|high], and sizzle (a 10 s showreel).
 ## Loads the real game scene (arena, lighting, HUD, lock-on camera), skips the intro, stages
 ## the fighters and drives the player with a bot that reacts to the boss's hit windows.
 
@@ -98,6 +98,8 @@ func auto_guard(lead := 0.05, hold := 0.12) -> void:
 
 
 func _process(_delta: float) -> void:
+	if _cine_cam != null:
+		_cine_update()
 	if _orbit_cam != null and boss != null:
 		var a := deg_to_rad(float(_orbit["start"]) + t * float(_orbit["speed"]))
 		var c := boss.global_position
@@ -556,3 +558,115 @@ func shot_model_flourish() -> void:
 		boss._seq.clear()
 		boss._play_attack("b_intro", 0.0))
 	_end_at = 2.3
+
+
+# ------------------------------------------------------------------------- showreel
+var _cine_cam: Camera3D
+var _cine: Array = []      ## camera moves: {t0, t1, ...} (see _cine_update)
+var _shakes: Array = []    ## [time, metres, decay seconds]
+
+
+## Ten seconds of the boss in phase three (staff alight) on the plaza, cut between moving
+## cameras: his staff plant, a combo, his leaping strike, the Inferno's arms of fire and its
+## eruption. The first half second lets the fog settle; trim it from the video:
+##   godot --write-movie out/f.png --fixed-fps 30 res://tests/capture.tscn -- sizzle
+##   ffmpeg -framerate 30 -start_number 15 -i out/f%08d.png -ss 0.5 -i out/f.wav -frames:v 300 ...
+func shot_sizzle() -> void:
+	var t0 := 0.5
+	_stage(8.5, Vector3(0, 0, -1.5))
+	boss._enter_phase(3, false)
+	player.bot_enabled = false
+	player.controls_enabled = false
+	player.visible = false
+	player._invuln_until = INF
+	var cc := Game.camera as Camera3D
+	if cc != null:
+		cc.set_process(false)
+		cc.set_physics_process(false)
+	Game.hud.visible = false
+	_cine_cam = Camera3D.new()
+	_cine_cam.far = 3000.0
+	add_child(_cine_cam)
+	_cine_cam.current = true
+	var chest := Vector3(0, 1.25, 0)
+
+	# 1. the staff plant: a low push-in from the plaza, torii and shrine behind him
+	at(t0, func():
+		boss._seq.clear()
+		boss._play_attack("b_intro", 0.0))
+	_cine.append({"t0": 0.0, "t1": t0 + 2.0, "from": Vector3(-2.5, 0.72, 5.1), "to": Vector3(-1.25, 1.0, 2.8),
+		"look_from": Vector3(0, 1.15, -1.5), "look_to": Vector3(0, 1.42, -1.5), "fov": Vector2(40, 34), "hold": t0})
+	# 2. a combo, the camera racing round him
+	at(t0 + 2.0, func(): boss_string(["b_combo_1", "b_combo_2", "b_combo_3"]))
+	_cine.append({"t0": t0 + 2.0, "t1": t0 + 3.9, "orbit": true, "a": Vector2(72, -48), "r": Vector2(3.4, 2.9),
+		"h": Vector2(1.55, 1.2), "look_y": 1.22, "fov": Vector2(44, 44)})
+	# 3. his leaping strike, from the ground where he lands
+	at(t0 + 3.9, func():
+		boss.global_position = Vector3(0, 0, -1.5)
+		player.global_position = Vector3(0, 0, 5.0)
+		boss.face_now(player.global_position)
+		boss._seq.clear()
+		boss._play_attack("b_leap", 0.0))
+	_cine.append({"t0": t0 + 3.9, "t1": t0 + 5.7, "from": Vector3(1.35, 0.28, 5.4), "to": Vector3(1.9, 0.4, 6.6),
+		"look_boss": 1.15, "fov": Vector2(56, 52)})
+	_shakes.append([t0 + 3.9 + 0.97, 0.09, 0.3])
+	# 4. the Inferno: arms of fire sweeping round him, seen from high up with the moon beyond
+	at(t0 + 5.7, func():
+		boss.global_position = Vector3.ZERO
+		player.global_position = Vector3(0, 0, 9.5)
+		boss.face_now(player.global_position)
+		boss.begin_inferno()
+		boss.staff_fire.set_level(1.0, 10.0)
+		boss.inferno.on_event("fire_whips", {})
+		boss.inferno._begin_spin())
+	_cine.append({"t0": t0 + 5.7, "t1": t0 + 7.7, "orbit": true, "center": Vector3.ZERO, "a": Vector2(38, -12),
+		"r": Vector2(11.5, 9.5), "h": Vector2(6.2, 4.6), "look_y": 1.0, "fov": Vector2(50, 50)})
+	# 5. the plunge, then up and away as the whole plaza erupts
+	at(t0 + 7.7, func():
+		boss.begin_inferno()
+		boss.staff_fire.set_level(1.0, 10.0)
+		boss.inferno._ring_target = 1.0
+		boss.inferno._ring_level = 1.0
+		boss.inferno._begin_plunge())
+	_cine.append({"t0": t0 + 7.7, "t1": t0 + 9.95, "from": Vector3(2.9, 1.15, 4.8), "to": Vector3(5.0, 12.5, 20.5),
+		"look_from": chest + Vector3(0, 0.3, 0), "look_to": Vector3(0, 0.2, -6.0), "fov": Vector2(40, 56),
+		"hold": t0 + 8.6})
+	_shakes.append([t0 + 7.7 + 0.82, 0.12, 0.25])
+	_shakes.append([t0 + 7.7 + 1.12, 0.22, 0.6])
+	_end_at = t0 + 10.2
+	_cine_update()
+
+
+## Poses the showreel camera for time t: a path (from/to, looking from/to a point or at the boss)
+## or an orbit (round the boss, or a fixed centre), eased; "hold" keeps it still until then.
+func _cine_update() -> void:
+	var s: Dictionary = {}
+	for c in _cine:
+		if t >= float(c["t0"]):
+			s = c
+	if s.is_empty():
+		return
+	var t0 := maxf(float(s["t0"]), float(s.get("hold", s["t0"])))
+	var u := clampf((t - t0) / maxf(float(s["t1"]) - t0, 0.01), 0.0, 1.0)
+	u = u * u * (3.0 - 2.0 * u)
+	var pos: Vector3
+	var look: Vector3
+	if s.get("orbit", false):
+		var c0: Vector3 = s["center"] if s.has("center") else Combat.flat(boss.global_position)
+		var a := deg_to_rad(lerpf(s["a"].x, s["a"].y, u))
+		pos = c0 + Vector3(sin(a), 0.0, cos(a)) * lerpf(s["r"].x, s["r"].y, u) + Vector3.UP * lerpf(s["h"].x, s["h"].y, u)
+		look = c0 + Vector3.UP * float(s["look_y"])
+	else:
+		pos = (s["from"] as Vector3).lerp(s["to"], u)
+		if s.has("look_boss"):
+			look = boss.global_position + Vector3.UP * float(s["look_boss"])
+		else:
+			look = (s["look_from"] as Vector3).lerp(s["look_to"], u)
+	for k in _shakes:
+		var dt := t - float(k[0])
+		if dt >= 0.0:
+			var amp := float(k[1]) * exp(-dt / float(k[2]))
+			pos += Vector3(sin(t * 53.1), 0.7 * sin(t * 47.3 + 1.2), 0.5 * sin(t * 61.7 + 2.1)) * amp
+	_cine_cam.fov = lerpf(s["fov"].x, s["fov"].y, u)
+	_cine_cam.global_position = pos
+	_cine_cam.look_at(look, Vector3.UP)
