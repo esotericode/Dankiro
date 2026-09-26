@@ -2,23 +2,26 @@
 """Builds the world round the arena: models/scenery/*.glb and textures/scenery/.
 
     pip install bpy==4.5.9                        # Blender 4.5 LTS as a Python module (once)
-    python3 tools/build_scenery.py                # everything (a few minutes: Cycles bakes occlusion)
-    python3 tools/build_scenery.py --only trees   # one family: textures trees torii shrine lantern mountains
+    python3 tools/build_scenery.py                # everything (about a minute with the occlusion bakes)
+    python3 tools/build_scenery.py --only trees   # some families: textures trees torii props approach backdrop
     python3 tools/build_scenery.py --preview      # also render Blender previews to tools/preview_out/
     godot --headless --editor --quit              # import
 
 Everything is modelled here in numpy (model3d/geo) and handed to Blender, which bakes ambient
 occlusion into the vertices (Cycles, to a colour attribute, copied into the second UV channel
-with a per-part value the shaders use) and exports the glb. Material names on the parts are
-what the game's shaders key on (scripts/world/scenery.gd).
+beside a per-part value the shaders use) and exports the glb. The material names on the parts
+are what the game keys its shaders on (MATERIALS in scripts/world/scenery.gd).
 
- - trees.glb: Japanese cedars (sugi) in three shapes, two black pines, two red maples, two
-   shrubs and two boulders. Foliage is lumpy clumps with normals bent outward from the crown,
-   so a crown lights as one soft mass.
+ - trees.glb: Japanese cedars (sugi) in three shapes and an old sacred one roped with a
+   shimenawa, two black pines, two red maples, shrubs, ferns and boulders. A crown is clumps of
+   foliage (normals bent out from its middle, so it lights as one mass) under cards of leaf
+   sprays that the game turns to face the camera (Crown).
  - torii.glb: a myojin torii with its plaque (月門, "Moon Gate").
- - shrine.glb: the shrine hall behind it.
- - lantern.glb: a hexagonal kasuga stone lantern (the plaza's eight, and the pair at the gate).
- - mountains.glb: three rings of ridges, from forested hills to snowy peaks.
+ - props.glb: the hexagonal kasuga stone lantern and its paper, a fence post and a rail.
+ - approach.glb: the path, the walled court with its steps, and the shrine hall with its
+   irimoya roof, modelled in place (world coordinates).
+ - backdrop.glb: the summit's ground, falling away to the east (edge_radius), and three rings
+   of mountains from hills to snowy peaks.
 """
 import argparse
 import math
@@ -1028,16 +1031,6 @@ def edge_radius(a_deg):
     w = 0.5 + 0.5 * np.cos(np.pi * t)               # 1 at the middle of the vista, 0 at its sides
     wob = 1.6 * np.sin(np.radians(a_deg) * 7.0 + 1.3) + 0.9 * np.sin(np.radians(a_deg) * 13.0 + 0.4)
     return EDGE_FAR + (EDGE_NEAR - EDGE_FAR) * w ** 0.6 + wob * w
-
-
-def periodic_noise(n_rows, n_cols, scale, seed, octaves=3, gain=0.5, aniso=1.0):
-    """Tileable noise sampled on a grid (rows x cols), zero mean, unit deviation."""
-    size = max(n_rows, n_cols)
-    size = 1 << int(math.ceil(math.log2(size)))
-    a = FT.fnoise(size, size, scale, seed, octaves=octaves, gain=gain, aniso=aniso, angle=0.0)
-    ri = (np.arange(n_rows) * size // max(n_rows, 1)) % size
-    ci = (np.arange(n_cols) * size // max(n_cols, 1)) % size
-    return a[np.ix_(ri, ci)]
 
 
 def terrain():
