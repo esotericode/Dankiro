@@ -42,7 +42,8 @@ void sky() {
 	vec3 d = normalize(EYEDIR);
 	float h = d.y;
 	vec3 col = mix(horizon_color, zenith_color, smoothstep(0.0, 0.6, h));
-	col = mix(ground_color, col, smoothstep(-0.06, 0.015, h));
+	// below the horizon: the same haze a little way down (it's the cloud sea's far edge), then dark
+	col = mix(mix(ground_color, horizon_color * 0.85, smoothstep(-0.35, -0.02, h)), col, smoothstep(-0.06, 0.015, h));
 
 	vec3 moon_dir = LIGHT0_ENABLED ? normalize(LIGHT0_DIRECTION) : normalize(vec3(-0.5, 0.45, -0.7));
 	float md = dot(d, moon_dir);

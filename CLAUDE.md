@@ -86,14 +86,51 @@ godot --headless --editor --quit              # import
   every exported UV (`gltf_uv`). The glb imports with `meshes/force_disable_compression=true` and no
   LODs, so that data survives; the floor textures import VRAM-compressed with mipmaps. Keep those
   `.import` settings.
-- `shaders/flagstones.gdshader` (the stones), `floor_bed.gdshader` (the mortar in the joints),
-  `puddle.gdshader` and `ground.gdshader` (the earth outside the plaza); `Arena._build_floor()` binds
-  textures to uniforms by name. Collision is still the flat box at y = 0: stone tops stay within
+- `shaders/flagstones.gdshader` (the stones), `floor_bed.gdshader` (the mortar in the joints) and
+  `puddle.gdshader`; `Arena._build_floor()` binds textures to uniforms by name (the ground round the
+  plaza is Scenery's terrain). Collision is still the flat box at y = 0: stone tops stay within
   5 mm of it and the curb at about +2.5 cm, so floor effects sit at y >= 0.03.
 - Screen-space reflections don't show in lavapipe captures, so the puddle mirrors the fog itself
   (see its shader) and the lanterns streak across it through their specular.
 - Look at it with the capture shot `floor <view>` (`overview`, `centre`, `medallion`, `puddle`, `moss`,
   `broken`, `rim`, `low`, `sweep`).
+
+## The world round the plaza (Blender, scripted)
+
+Everything past the plaza's rim is `models/scenery/*.glb` plus `textures/scenery/`, built by
+`tools/build_scenery.py` (geometry, occlusion bakes, export) and `tools/model3d/scenery_textures.py`
+(bark, leaf sprays, weathering, copper, boards, dry-stone wall, gravel, the torii's plaque).
+`scripts/world/scenery.gd` (`Scenery`, built by `Arena`) loads them, swaps each material for a
+game shader by its name (the `MATERIALS` table) and places everything.
+
+```
+python3 tools/build_scenery.py                 # all families, about a minute; --only trees torii ...
+python3 tools/build_scenery.py --only trees --preview    # Blender renders in tools/preview_out/
+godot --headless --editor --quit               # import
+```
+
+- Families (one glb each): `trees` (three cedars, the roped sacred cedar, black pines, red maples,
+  shrubs, ferns, rocks), `torii`, `props` (the stone lantern and its paper, a fence post, a rail),
+  `approach` (the shrine hall, its walled court with steps, the path; modelled in world
+  coordinates) and `backdrop` (the summit's ground with the cliff to the east, three rings of
+  mountains). `textures` writes the textures.
+- A tree's crown is clumps (the inner mass, `foliage.gdshader`) under cards of leaf sprays
+  (`leaves.gdshader`): squares in the object's xy plane that the shader turns to face the camera.
+  It finds a card's centre from its UV and `card_size`, so `card_size` in `Scenery.MATERIALS` must
+  match what the build passes to `Crown.parts()`. Cards sit out of the occlusion bake and copy
+  it from the clump under them.
+- UV2.x is baked occlusion, UV2.y a per-part value (a clump's tone, a mountain range's layer).
+  UVs are pre-flipped (`gltf_uv`) as for the floor, and the glbs import with
+  `meshes/force_disable_compression=true`, no LODs (they would drop leaf cards) and
+  `gltf/embedded_image_handling=3`; the textures VRAM-compressed with mipmaps. Keep those settings.
+- The scene's fog would bury the mountains, so they skip it and are drawn half-transparent over
+  the sky, farthest range first (`render_priority`): they fade into whatever the sky looks like.
+  The cloud sea (`cloud_sea.gdshader`, a plane at `Scenery.CLOUD_Y`) takes the normal fog.
+- `Scenery.edge_radius()` repeats the build's `edge_radius()` (where the summit falls away; trees
+  keep back from it): change both together.
+- The fence you see is Scenery's; the wall that keeps the fight in is `Arena._build_boundary()`.
+- Look at it with the capture shot `scenery <view>` (`torii`, `gate`, `north`, `south`, `east`,
+  `west`, `vista`, `cliff`, `grove`, `shrine`, `lantern`, `high`).
 
 ## Conventions and pitfalls
 

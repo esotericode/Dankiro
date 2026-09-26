@@ -20,13 +20,22 @@ const MATERIALS := {
 	"bark_maple": ["bark", {"bark_albedo": "bark_pine.jpg", "bark_normal": "bark_pine_n.jpg",
 		"moss_albedo": "floor/moss_albedo.png", "period": Vector2(0.6, 0.9), "tint": Color(0.8, 0.8, 0.85),
 		"moss_height": 1.2}],
-	"foliage_sugi": ["foliage", {"leaf_tex": "needles.png", "noise_tex": "fx/fire_noise.png"}],
-	"foliage_pine": ["foliage", {"leaf_tex": "needles.png", "noise_tex": "fx/fire_noise.png", "brightness": 0.85,
+	"foliage_sugi": ["foliage", {"leaf_tex": "needles.png"}],
+	"foliage_pine": ["foliage", {"leaf_tex": "needles.png", "brightness": 0.85,
 		"dry": 0.05, "sway_height": 6.0}],
-	"foliage_maple": ["foliage", {"leaf_tex": "maple_leaves.png", "noise_tex": "fx/fire_noise.png", "dry": 0.0,
+	"foliage_maple": ["foliage", {"leaf_tex": "maple_leaves.png", "dry": 0.0, "brightness": 0.72,
 		"leaf_period": 1.2, "backlight": 0.5, "sway_height": 5.0}],
-	"foliage_shrub": ["foliage", {"leaf_tex": "needles.png", "noise_tex": "fx/fire_noise.png", "brightness": 1.1,
+	"foliage_shrub": ["foliage", {"leaf_tex": "needles.png", "brightness": 1.1,
 		"leaf_period": 1.0, "dry": 0.0, "sway": 0.0}],
+	"leaves_sugi": ["leaves", {"leaf_tex": "spray_sugi.png", "card_size": 1.15}],
+	"leaves_pine": ["leaves", {"leaf_tex": "spray_pine.png", "card_size": 1.0, "dry": 0.05, "sway_height": 6.0}],
+	"leaves_maple": ["leaves", {"leaf_tex": "spray_maple.png", "card_size": 0.8, "dry": 0.0, "backlight": 0.4,
+		"brightness": 0.72,
+		"sway_height": 5.0}],
+	"leaves_shrub": ["leaves", {"leaf_tex": "spray_shrub.png", "card_size": 0.55, "dry": 0.0, "sway": 0.0}],
+	"foliage_fern": ["foliage", {"leaf_tex": "needles.png", "brightness": 0.8, "dry": 0.0, "sway": 0.0}],
+	"leaves_fern": ["leaves", {"leaf_tex": "spray_fern.png", "card_size": 0.75, "dry": 0.15, "sway": 0.02,
+		"sway_height": 1.0}],
 	"rock": ["stone", {"stone_albedo": "floor/stone_albedo.jpg", "stone_normal": "floor/stone_normal.jpg",
 		"moss_albedo": "floor/moss_albedo.png", "grime": "grime.png", "base_color": Color(0.3, 0.3, 0.29),
 		"moss_amount": 0.9}],
@@ -66,7 +75,9 @@ const MATERIALS := {
 	"ishigaki": ["masonry", {"albedo_tex": "ishigaki.png", "normal_tex": "ishigaki_n.jpg",
 		"moss_albedo": "floor/moss_albedo.png", "period": 3.0, "moss_amount": 0.6}],
 	"terrain": ["terrain", {"stone_albedo": "floor/stone_albedo.jpg", "stone_normal": "floor/stone_normal.jpg"}],
-	"mountains": ["mountains", {"noise_tex": "fx/fire_noise.png"}],
+	"range_far": ["mountains", {"noise_tex": "fx/fire_noise.png", "haze": 0.62, "_priority": -3}],
+	"range_mid": ["mountains", {"noise_tex": "fx/fire_noise.png", "haze": 0.5, "_priority": -2}],
+	"range_near": ["mountains", {"noise_tex": "fx/fire_noise.png", "haze": 0.22, "_priority": -1}],
 	"gravel": ["masonry", {"albedo_tex": "gravel.jpg", "normal_tex": "gravel_n.jpg", "moss_albedo": "floor/moss_albedo.png",
 		"period": 0.8, "world_xz": true, "moss_amount": 0.0, "damp_height": -10.0, "tint": Color(0.85, 0.85, 0.85),
 		"normal_depth": 0.6}],
@@ -82,7 +93,8 @@ const VISTA_AT := 90.0
 const VISTA_HALF := 42.0
 const EDGE_NEAR := 22.0
 const EDGE_FAR := 125.0
-const CLOUD_Y := -12.0
+const CLOUD_Y := -30.0
+const SHADOW_REACH := 58.0   ## trees farther out than this can't shadow anything the moon's shadow map covers
 
 var radius := 15.6
 var _assets := {}      ## asset name -> Mesh
@@ -136,10 +148,14 @@ func _material(mname: String) -> Material:
 		mat = StandardMaterial3D.new()
 	else:
 		var sm := ShaderMaterial.new()
+		sm.resource_name = mname     # the meshes are shared: a scene reload maps them back by name
 		sm.shader = load("res://shaders/%s.gdshader" % spec[0])
 		var params: Dictionary = spec[1]
 		for key in params:
 			var v = params[key]
+			if key == "_priority":
+				sm.render_priority = int(v)
+				continue
 			if v is String:
 				v = _texture(v)
 			sm.set_shader_parameter(key, v)
@@ -244,10 +260,10 @@ func _build_lanterns() -> void:
 	for p in [Vector2(2.35, -19.4), Vector2(3.5, -27.9), Vector2(4.3, -35.8)]:
 		for sx in [-1.0, 1.0]:
 			var y := 2.4 if p.y < -33.0 else 0.0
-			_lantern(Vector3(p.x * sx, y, p.y), PI, 1.6, 6.5, false)
+			_lantern(Vector3(p.x * sx, y, p.y), PI, 1.6, 6.5, false, 0.25)
 
 
-func _lantern(pos: Vector3, yaw: float, energy: float, reach: float, shadow: bool) -> void:
+func _lantern(pos: Vector3, yaw: float, energy: float, reach: float, shadow: bool, fog := 0.6) -> void:
 	var sd := _rng.randf()
 	_place("lantern", pos, yaw, 1.0, {"seed": sd})
 	var paper := _place("lantern_paper", pos, yaw, 1.0, {"seed": sd})
@@ -257,7 +273,7 @@ func _lantern(pos: Vector3, yaw: float, energy: float, reach: float, shadow: boo
 	l.light_energy = energy
 	l.omni_range = reach
 	l.omni_attenuation = 1.3
-	l.light_volumetric_fog_energy = 0.6
+	l.light_volumetric_fog_energy = fog
 	l.shadow_enabled = shadow
 	l.position = pos + Vector3(0.0, 1.335, 0.0)
 	add_child(l)
@@ -284,12 +300,15 @@ func _plant(asset: String, p: Vector2, clearance: float, s := 1.0, tint := Color
 	var params := {"seed": _rng.randf(), "tint": tint}
 	if asset.begins_with("sugi") or asset.begins_with("pine") or asset.begins_with("maple"):
 		params["tree_tint"] = tint
-	_place(asset, Vector3(p.x, -0.05, p.y), _rng.randf() * TAU, s, params)
+	var mi := _place(asset, Vector3(p.x, -0.05, p.y), _rng.randf() * TAU, s, params)
+	if p.length() > SHADOW_REACH:
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 
 ## Scatters `count` of the assets (picked by weight) between radii r0 and r1 from the plaza's
 ## centre, keeping `clearance` metres between trunks.
-func _scatter(count: int, r0: float, r1: float, choices: Dictionary, clearance: float, s0 := 0.85, s1 := 1.15) -> void:
+func _scatter(count: int, r0: float, r1: float, choices: Dictionary, clearance: float, s0 := 0.85, s1 := 1.15,
+		open_vista := true) -> void:
 	var names: Array = choices.keys()
 	var total := 0.0
 	for k in names:
@@ -303,6 +322,8 @@ func _scatter(count: int, r0: float, r1: float, choices: Dictionary, clearance: 
 		var p := Vector2(sin(a) * d, cos(a) * d)
 		if _clear(p, clearance) or not _free_spot(p, clearance) or d > edge_radius(a) - clearance - 1.0:
 			continue
+		if open_vista and absf(fposmod(rad_to_deg(a) - VISTA_AT + 180.0, 360.0) - 180.0) < VISTA_HALF * 0.8:
+			continue    # nothing tall in front of the view east
 		var pick := _rng.randf() * total
 		var asset: String = names[0]
 		for k in names:
@@ -320,14 +341,17 @@ func _build_forest() -> void:
 	# the old sacred cedar beside the steps, roped with a shimenawa
 	_plant("sugi_sacred", Vector2(-10.5, -29.0), 4.0)
 	# the near ring: maples and pines by the fence, shrubs and rocks between
-	_scatter(7, radius + 3.0, radius + 8.0, {"maple_a": 1.0, "maple_b": 1.0}, 3.2)
-	_scatter(6, radius + 3.0, radius + 9.0, {"pine_a": 1.0, "pine_b": 1.0}, 3.0)
+	_scatter(4, radius + 3.0, radius + 7.0, {"maple_a": 1.0, "maple_b": 1.0}, 3.2)
+	_scatter(5, radius + 8.0, radius + 20.0, {"maple_a": 1.0, "maple_b": 1.0}, 3.2, 0.9, 1.25)
+	_scatter(4, radius + 3.0, radius + 9.0, {"pine_a": 1.0, "pine_b": 1.0}, 3.0)
+	_scatter(4, radius + 9.0, radius + 24.0, {"pine_a": 1.0, "pine_b": 1.0}, 3.0, 1.0, 1.3)
 	# the cedar wood
 	_scatter(34, radius + 7.0, radius + 30.0, {"sugi_a": 1.0, "sugi_b": 1.0, "sugi_c": 1.0}, 3.4)
 	_scatter(22, radius + 28.0, radius + 55.0, {"sugi_a": 1.0, "sugi_b": 1.0, "sugi_c": 1.0}, 4.0, 1.0, 1.3)
 	# under the trees
-	_scatter(22, radius + 2.2, radius + 14.0, {"shrub_a": 1.0, "shrub_b": 1.0}, 1.2, 0.8, 1.4)
-	_scatter(14, radius + 2.2, radius + 20.0, {"rock_a": 1.0, "rock_b": 1.0}, 1.4, 0.6, 1.6)
+	_scatter(22, radius + 2.2, radius + 14.0, {"shrub_a": 1.0, "shrub_b": 1.0}, 1.2, 0.8, 1.4, false)
+	_scatter(14, radius + 2.2, radius + 20.0, {"rock_a": 1.0, "rock_b": 1.0}, 1.4, 0.6, 1.6, false)
+	_scatter(46, radius + 1.2, radius + 16.0, {"fern_a": 1.0, "fern_b": 1.0}, 0.9, 0.8, 1.3, false)
 	_build_cliff_edge()
 
 

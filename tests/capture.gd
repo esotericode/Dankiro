@@ -358,6 +358,8 @@ func shot_scenery() -> void:
 		"vista": [Vector3(12.5, 2.4, -2.0), Vector3(80.0, -4.0, 8.0), 60.0],
 		"north": [Vector3(-3.0, 2.0, 12.0), Vector3(2.0, 9.0, -60.0), 60.0],
 		"cliff": [Vector3(13.0, 4.5, -14.0), Vector3(24.0, -6.0, 6.0), 60.0],
+		"grove": [Vector3(-9.0, 2.2, 9.5), Vector3(-19.0, 5.0, 19.0), 55.0],
+		"shrine": [Vector3(5.0, 4.4, -32.0), Vector3(0.0, 5.0, -41.5), 55.0],
 	}
 	var v: Array = views.get(view, views["torii"])
 	var cc := Game.camera as Camera3D

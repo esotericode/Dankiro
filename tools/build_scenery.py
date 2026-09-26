@@ -44,13 +44,17 @@ PREVIEW_DIR = os.path.join(ROOT, "tools", "preview_out")
 # ================================================================== primitives
 class Part:
     """A piece of an asset: a mesh, the material it's drawn with, a per-vertex value for the
-    shader (UV2.y) and optionally custom per-vertex normals."""
+    shader (UV2.y) and optionally custom per-vertex normals. Cards (leaf sprays) take no part in
+    the occlusion bake; each vertex copies the occlusion of a vertex of `ao_part` (ao_src)."""
 
     def __init__(self, mesh, material, extra=0.0, normals=None):
         self.mesh = mesh
         self.material = material
         self.extra = np.broadcast_to(np.asarray(extra, dtype=float), (len(mesh.v),)).copy()
         self.normals = None if normals is None else np.asarray(normals, dtype=float)
+        self.card = False
+        self.ao_part = None
+        self.ao_src = None
 
 
 def icosphere(subdiv=2):
@@ -109,7 +113,7 @@ def rot_y(deg):
     return G.rot("y", deg)
 
 
-def clump(center, radii, yaw, seed, rough=0.28, flat_bottom=None, subdiv=2, droop=0.0):
+def clump(center, radii, yaw, seed, rough=0.28, flat_bottom=None, subdiv=1, droop=0.0):
     """A lumpy foliage mass: an icosphere scaled to `radii`, displaced by noise, turned `yaw`
     degrees. flat_bottom: squash its underside to this fraction of its height (pine pads)."""
     V, F = ico(subdiv)
@@ -133,6 +137,76 @@ def bend_normals(mesh, centers, weight=0.55, up=0.25):
     out /= np.linalg.norm(out, axis=1, keepdims=True) + 1e-9
     n = own * (1.0 - weight) + out * weight
     return n / (np.linalg.norm(n, axis=1, keepdims=True) + 1e-9)
+
+
+class Crown:
+    """Collects a tree's clumps of foliage, then makes its parts: the clumps themselves, shrunk a
+    little, as the crown's inner mass (normals bent out from the crown's middle), and cards of
+    foliage over their outer faces. A card is a square in the object's xy plane centred on its
+    spot; the leaves shader turns it to face the camera (it finds the centre from UV and the
+    card size), so the crown's outline is always made of sprays."""
+
+    def __init__(self, seed):
+        self.rng = np.random.default_rng(seed)
+        self.blobs = []
+
+    def add(self, mesh, centre):
+        self.blobs.append((mesh, np.asarray(centre, dtype=float), self.rng.random()))
+
+    def parts(self, material, card_material, card_size, density, weight=0.55, up=0.3, shrink=0.85):
+        fol = Mesh()
+        cent, tone = [], []
+        spans = []
+        for m, c, t in self.blobs:
+            m2 = m.copy()
+            mc = m2.v.mean(axis=0)
+            m2.v = mc + (m2.v - mc) * shrink
+            spans.append((len(fol.v), len(fol.f), len(m2.v), len(m2.f)))
+            fol.add(m2)
+            cent.append(np.repeat(c[None, :], len(m2.v), 0))
+            tone.append(np.full(len(m2.v), t))
+        cent = np.concatenate(cent)
+        tone = np.concatenate(tone)
+        nrm = bend_normals(fol, cent, weight, up)
+        blob = Part(fol, material, tone, nrm)
+        rng = self.rng
+        hs = card_size * 0.5
+        V, F, UV, N, T, SRC = [], [], [], [], [], []
+        for (v0, f0, nv, nf), (m, c, t) in zip(spans, self.blobs):
+            faces = np.array([f[:3] for f in fol.f[f0:f0 + nf]])
+            a, b, cc = fol.v[faces[:, 0]], fol.v[faces[:, 1]], fol.v[faces[:, 2]]
+            area = 0.5 * np.linalg.norm(np.cross(b - a, cc - a), axis=1)
+            fc = (a + b + cc) / 3.0
+            out = fc - c
+            out[:, 1] += up * np.linalg.norm(out, axis=1)
+            fn = nrm[faces].mean(axis=1)
+            ok = np.einsum("ij,ij->i", fn, out) > 0.0
+            if not ok.any():
+                continue
+            w = area * ok
+            k = max(2, int(round(w.sum() / shrink ** 2 * density)))
+            pick = rng.choice(len(faces), size=k, p=w / w.sum())
+            for fi in pick:
+                r1, r2 = rng.random(2)
+                if r1 + r2 > 1.0:
+                    r1, r2 = 1.0 - r1, 1.0 - r2
+                i0, i1, i2 = faces[fi]
+                p = fol.v[i0] + (fol.v[i1] - fol.v[i0]) * r1 + (fol.v[i2] - fol.v[i0]) * r2
+                n = nrm[i0] + (nrm[i1] - nrm[i0]) * r1 + (nrm[i2] - nrm[i0]) * r2
+                n /= np.linalg.norm(n) + 1e-9
+                p = p + n * card_size * 0.1
+                base = len(V)
+                V += [p + (-hs, -hs, 0.0), p + (hs, -hs, 0.0), p + (hs, hs, 0.0), p + (-hs, hs, 0.0)]
+                UV += [(0.0, 1.0), (1.0, 1.0), (1.0, 0.0), (0.0, 0.0)]
+                F.append((base, base + 1, base + 2, base + 3))
+                N += [n] * 4
+                T += [t] * 4
+                SRC += [i0] * 4
+        cards = Part(Mesh(np.array(V), F, np.array(UV)), card_material, np.array(T), np.array(N))
+        cards.card = True
+        cards.ao_part = blob
+        cards.ao_src = np.array(SRC)
+        return [blob, cards]
 
 
 def vertex_normals(mesh):
@@ -179,10 +253,8 @@ def sugi(seed, H=19.0, girth=1.0, sacred=False):
     if sacred:
         parts.extend(shimenawa(2.4, float(np.interp(2.4, ys, r)) + 0.06, seed))
     y0 = H * rng.uniform(0.3, 0.4) * (1.3 if sacred else 1.0)
-    R0 = rng.uniform(2.0, 2.6)
-    fol = Mesh()
-    cent = []
-    tone = []
+    R0 = rng.uniform(2.0, 2.6) * (1.25 if sacred else 1.0)
+    crown = Crown(seed)
     y = y0
     k = 0
     while y < H * 0.93:
@@ -192,30 +264,22 @@ def sugi(seed, H=19.0, girth=1.0, sacred=False):
         phase = rng.uniform(0, 360)
         axis = path_at(path, y)
         for j in range(n):
+            if rng.random() < 0.12:
+                continue                                       # a gap in the tier
             a = phase + j * 360.0 / n + rng.uniform(-18, 18)
             rr = Rc * rng.uniform(0.45, 0.8)
             c = axis + np.array([math.sin(math.radians(a)) * rr, rng.uniform(-0.2, 0.2), math.cos(math.radians(a)) * rr])
-            s = rng.uniform(0.85, 1.15) * (0.55 + 0.55 * (1.0 - t))
-            m = clump(c, (s * 1.15, s * 0.72, s * 0.95), a, seed * 100 + k, droop=0.35)
-            fol.add(m)
-            cent.append(np.repeat(axis[None, :], len(m.v), 0))
-            tone.append(np.full(len(m.v), rng.random()))
+            sc = rng.uniform(0.85, 1.15) * (0.55 + 0.55 * (1.0 - t))
+            crown.add(clump(c, (sc * 1.15, sc * 0.72, sc * 0.95), a, seed * 100 + k, droop=0.35), axis)
             k += 1
         y += rng.uniform(0.75, 1.0)
     for j in range(2):                                         # the pointed top
         ytop = H * (0.93 + 0.035 * j)
         axis = path_at(path, ytop)
         m = clump(axis + np.array([0, 0.3, 0]), (0.5 - 0.15 * j, 0.95, 0.5 - 0.15 * j), 0, seed * 100 + k + j)
-        fol.add(m)
-        cent.append(np.repeat((axis - np.array([0, 0.8, 0]))[None, :], len(m.v), 0))
-        tone.append(np.full(len(m.v), rng.random()))
-    cent = np.concatenate(cent)
-    parts.append(Part(fol, "foliage_sugi", np.concatenate(tone), bend_normals(fol, cent, 0.6, 0.35)))
+        crown.add(m, axis - np.array([0, 0.8, 0]))
+    parts.extend(crown.parts("foliage_sugi", "leaves_sugi", 1.15, 2.0, 0.6, 0.35))
     return parts
-
-
-def _foliage_part(fol, cent, tone, material, weight, up):
-    return Part(fol, material, np.concatenate(tone), bend_normals(fol, np.concatenate(cent), weight, up))
 
 
 def pine(seed, H=9.0):
@@ -231,8 +295,7 @@ def pine(seed, H=9.0):
     path = np.stack([np.zeros_like(ys), ys, np.zeros_like(ys)], 1) + off
     r = 0.25 * (1.0 - t) ** 0.8 + 0.06 + 0.14 * np.exp(-ys / 0.35)
     wood = tube(path, r, segs=12)
-    fol = Mesh()
-    cent, tone = [], []
+    crown = Crown(seed)
     k = 0
 
     def pad(c, R, yaw):
@@ -249,9 +312,7 @@ def pine(seed, H=9.0):
                 sz = R * rng.uniform(0.42, 0.58)
             m = clump(c + o, (sz * 1.15, sz * rng.uniform(0.42, 0.55), sz), rng.uniform(0, 360), seed * 100 + k,
                       rough=0.3, flat_bottom=0.5)
-            fol.add(m)
-            cent.append(np.repeat(pc[None, :], len(m.v), 0))
-            tone.append(np.full(len(m.v), rng.random()))
+            crown.add(m, pc)
             k += 1
 
     n_limbs = int(rng.integers(5, 8))
@@ -275,7 +336,7 @@ def pine(seed, H=9.0):
                           np.array([0.06, 0.045, 0.03]), segs=6))
             pad(tip + np.array([0.0, 0.25, 0.0]), rng.uniform(0.7, 0.95), a)
     pad(path_at(path, H) + np.array([0.0, 0.25, 0.0]), rng.uniform(1.1, 1.4), la)
-    return [Part(wood, "bark_pine", 0.0), _foliage_part(fol, cent, tone, "foliage_pine", 0.5, 0.9)]
+    return [Part(wood, "bark_pine", 0.0)] + crown.parts("foliage_pine", "leaves_pine", 1.0, 2.2, 0.5, 0.9)
 
 
 def maple(seed, H=6.5):
@@ -288,8 +349,8 @@ def maple(seed, H=6.5):
     path = np.stack([lean[0] * ys + 0.07 * np.sin(ys * 2.1), ys, lean[1] * ys + 0.07 * np.cos(ys * 1.7)], 1)
     wood = tube(path, 0.19 - 0.05 * ys / fork + 0.11 * np.exp(-ys / 0.25), segs=12)
     base = path[-1]
-    fol = Mesh()
-    centres, tone, clumps = [], [], []
+    crown = Crown(seed)
+    clumps = []
     k = 0
     n_limbs = int(rng.integers(4, 6))
     for i in range(n_limbs):
@@ -324,12 +385,9 @@ def maple(seed, H=6.5):
         clumps.append((top + np.array([rng.normal(0, 0.5), 0.35 + 0.2 * q, rng.normal(0, 0.5)]), rng.uniform(0.6, 0.8)))
     cc = top - np.array([0.0, 0.6, 0.0])
     for c, sz in clumps:
-        m = clump(c, (sz * 1.15, sz * 0.5, sz), rng.uniform(0, 360), seed * 100 + k, rough=0.38, droop=0.3)
-        fol.add(m)
-        centres.append(np.repeat(cc[None, :], len(m.v), 0))
-        tone.append(np.full(len(m.v), rng.random()))
+        crown.add(clump(c, (sz * 1.15, sz * 0.5, sz), rng.uniform(0, 360), seed * 100 + k, rough=0.38, droop=0.3), cc)
         k += 1
-    return [Part(wood, "bark_maple", 0.0), _foliage_part(fol, centres, tone, "foliage_maple", 0.5, 0.35)]
+    return [Part(wood, "bark_maple", 0.0)] + crown.parts("foliage_maple", "leaves_maple", 0.8, 3.2, 0.5, 0.35)
 
 
 def shimenawa(y, radius, seed=0):
@@ -349,17 +407,25 @@ def shimenawa(y, radius, seed=0):
 
 def shrub(seed):
     rng = np.random.default_rng(seed)
-    fol = Mesh()
-    cent, tone = [], []
+    crown = Crown(seed)
     c0 = np.array([0.0, 0.35, 0.0])
     for k in range(int(rng.integers(3, 6))):
         c = c0 + np.array([rng.uniform(-0.7, 0.7), rng.uniform(0.0, 0.3), rng.uniform(-0.7, 0.7)])
-        s = rng.uniform(0.5, 0.8)
-        m = clump(c, (s, s * 0.8, s), rng.uniform(0, 360), seed * 100 + k, rough=0.3, flat_bottom=0.6)
-        fol.add(m)
-        cent.append(np.repeat(c0[None, :], len(m.v), 0))
-        tone.append(np.full(len(m.v), rng.random()))
-    return [Part(fol, "foliage_shrub", np.concatenate(tone), bend_normals(fol, np.concatenate(cent), 0.5, 0.5))]
+        sz = rng.uniform(0.5, 0.8)
+        crown.add(clump(c, (sz, sz * 0.8, sz), rng.uniform(0, 360), seed * 100 + k, rough=0.3, flat_bottom=0.6), c0)
+    return crown.parts("foliage_shrub", "leaves_shrub", 0.55, 5.0, 0.5, 0.5)
+
+
+def fern(seed):
+    """A low clump of ferns: a flat hidden core with fern cards over it."""
+    rng = np.random.default_rng(seed)
+    crown = Crown(seed)
+    c0 = np.array([0.0, 0.1, 0.0])
+    for k in range(int(rng.integers(2, 4))):
+        c = c0 + np.array([rng.uniform(-0.3, 0.3), rng.uniform(0.1, 0.2), rng.uniform(-0.3, 0.3)])
+        sz = rng.uniform(0.35, 0.5)
+        crown.add(clump(c, (sz, sz * 0.45, sz), rng.uniform(0, 360), seed * 100 + k, rough=0.2, flat_bottom=0.6), c0)
+    return crown.parts("foliage_fern", "leaves_fern", 0.75, 7.0, 0.4, 0.8, shrink=0.7)
 
 
 def boulder(seed, size=1.0):
@@ -386,6 +452,8 @@ def trees():
         assets["shrub_%s" % "ab"[i]] = shrub(seed)
     for i, (seed, s) in enumerate(((51, 1.1), (52, 0.7))):
         assets["rock_%s" % "ab"[i]] = boulder(seed, s)
+    for i, seed in enumerate((61, 62)):
+        assets["fern_%s" % "ab"[i]] = fern(seed)
     return assets
 
 
@@ -1002,10 +1070,11 @@ def terrain():
 
 
 def ridge_band(seed, dist, dist_var, crest, crest_var, front, back, base_y, peaks=(), n_a=720, n_r=16,
-               layer=0.0, relief=0.25):
+               layer=0.0, relief=0.25, material="mountains", jag=0.0):
     """One ring of mountains round the whole horizon as a polar height field: a crest line at
     distance dist(a) and height crest(a), slopes falling to base_y in front and behind, carved with
-    ridged noise. peaks: (angle deg, extra height, width deg). UV2.y carries `layer`."""
+    ridged noise. peaks: (angle deg, extra height, width deg), cusped; jag: metres of fine
+    raggedness along the crest. UV2.y carries `layer`."""
     rng = np.random.default_rng(seed)
     a = np.linspace(0.0, 2 * math.pi, n_a + 1)
     D = np.full_like(a, float(dist))
@@ -1013,9 +1082,11 @@ def ridge_band(seed, dist, dist_var, crest, crest_var, front, back, base_y, peak
     for k in range(1, 9):
         D += dist_var * rng.normal(0, 1) / k * np.sin(k * a + rng.uniform(0, 6.28))
         H += crest_var * rng.normal(0, 1) / k ** 0.8 * np.sin(k * a + rng.uniform(0, 6.28))
+    for k in range(9, 90):
+        H += jag * rng.normal(0, 1) / (k / 9.0) ** 0.9 * np.sin(k * a + rng.uniform(0, 6.28))
     for ang, hgt, wid in peaks:
         dd = np.abs(((np.degrees(a) - ang + 180.0) % 360.0) - 180.0)
-        H += hgt * np.exp(-(dd / wid) ** 1.2)
+        H += hgt * np.exp(-dd / wid)
     s = np.linspace(-1.0, 1.0, n_r + 1)[:, None]
     wdt = np.where(s < 0, front, back)
     Rr = D[None, :] + s * wdt
@@ -1038,17 +1109,21 @@ def ridge_band(seed, dist, dist_var, crest, crest_var, front, back, base_y, peak
     fn, fc = G.face_normals(m)
     if np.sum(np.einsum("ij,ij->i", fn, -fc * np.array([1.0, 0.0, 1.0]))) < 0:
         m.flip()
-    return Part(m, "mountains", layer)
+    return Part(m, material, layer)
 
 
 def mountains():
-    far = ridge_band(71, 1200.0, 120.0, 250.0, 70.0, 420.0, 260.0, -150.0, layer=2.0, relief=0.3,
-                     peaks=((-160.0, 190.0, 7.0), (-120.0, 120.0, 5.0), (40.0, 210.0, 6.0), (95.0, 140.0, 9.0),
-                            (150.0, 170.0, 6.0), (-60.0, 90.0, 8.0), (-15.0, 130.0, 5.0)))
-    mid = ridge_band(72, 520.0, 90.0, 75.0, 35.0, 170.0, 150.0, -80.0, n_a=540, layer=1.0, relief=0.28,
-                     peaks=((70.0, 60.0, 10.0), (115.0, 45.0, 7.0), (-140.0, 55.0, 9.0), (-40.0, 40.0, 12.0)))
-    near = ridge_band(73, 230.0, 45.0, 4.0, 14.0, 70.0, 60.0, -45.0, n_a=360, layer=0.0, relief=0.2,
-                      peaks=((65.0, 18.0, 9.0), (110.0, 14.0, 7.0), (88.0, 8.0, 5.0)))
+    far = ridge_band(71, 1200.0, 120.0, 250.0, 70.0, 420.0, 260.0, -150.0, n_a=1440, n_r=36, layer=2.0, relief=0.32,
+                     material="range_far", jag=14.0,
+                     peaks=((-160.0, 230.0, 4.0), (-128.0, 150.0, 3.0), (-95.0, 120.0, 5.0), (-60.0, 110.0, 4.0),
+                            (-18.0, 160.0, 3.5), (15.0, 90.0, 5.0), (40.0, 250.0, 3.5), (72.0, 130.0, 4.0),
+                            (98.0, 190.0, 3.0), (122.0, 110.0, 5.0), (150.0, 210.0, 4.0), (178.0, 120.0, 4.5)))
+    mid = ridge_band(72, 560.0, 90.0, 45.0, 30.0, 170.0, 150.0, -80.0, n_a=1080, n_r=30, layer=1.0, relief=0.2,
+                     material="range_mid", jag=7.0,
+                     peaks=((70.0, 70.0, 5.0), (115.0, 55.0, 4.0), (-140.0, 60.0, 6.0), (-40.0, 45.0, 7.0),
+                            (160.0, 50.0, 5.0), (20.0, 40.0, 6.0)))
+    near = ridge_band(73, 230.0, 45.0, -8.0, 12.0, 70.0, 60.0, -60.0, n_a=540, n_r=24, layer=0.0, relief=0.2,
+                      material="range_near", jag=2.5, peaks=((65.0, 22.0, 7.0), (110.0, 16.0, 6.0), (88.0, 10.0, 4.0)))
     return {"mountains_far": [far], "mountains_mid": [mid], "hills": [near]}
 
 
@@ -1060,9 +1135,10 @@ def gltf_uv(uv):
     return uv
 
 
-def to_blender(name, parts):
+def to_blender(name, parts, ao=None):
     """One object per asset: a material slot per material name, UVMap (metres) and data (AO,
-    extra) UV layers, custom normals where the parts have them."""
+    extra) UV layers, custom normals where the parts have them. ao: baked occlusion per vertex of
+    the asset's solid (non-card) parts, in order; cards copy theirs from their source vertices."""
     import bpy
     from model3d import blender_io as B
     V, F, UV, EX, NR, MI = [], [], [], [], [], []
@@ -1095,8 +1171,25 @@ def to_blender(name, parts):
     l0 = me.uv_layers.new(name="UVMap")
     l0.data.foreach_set("uv", uv0[loops_v].astype(np.float32).reshape(-1))
     ex = np.concatenate(EX)
+    occ = np.ones(len(V))
+    if ao is not None:
+        solid_base, base = {}, 0
+        for p in parts:
+            if not p.card:
+                solid_base[id(p)] = base
+                base += len(p.mesh.v)
+        solid_ao = np.asarray(ao, dtype=float)
+        at = 0
+        for p in parts:
+            n = len(p.mesh.v)
+            if p.card:
+                src = solid_ao[solid_base[id(p.ao_part)] + p.ao_src]
+                occ[at:at + n] = 0.25 + 0.75 * src          # cards stand out of the clump: a little lighter
+            else:
+                occ[at:at + n] = solid_ao[solid_base[id(p)]:solid_base[id(p)] + n]
+            at += n
     l1 = me.uv_layers.new(name="data")
-    l1.data.foreach_set("uv", gltf_uv(np.stack([np.ones(len(V)), ex], 1))[loops_v].astype(np.float32).reshape(-1))
+    l1.data.foreach_set("uv", gltf_uv(np.stack([occ, ex], 1))[loops_v].astype(np.float32).reshape(-1))
     me.shade_smooth()
     if any_custom:
         nrm = B.arr_to_bl(np.concatenate(NR))
@@ -1140,7 +1233,7 @@ def bake_ao(obj, distance, samples=48):
 def export(objs, path):
     import bpy
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    for o in bpy.context.view_layer.objects:
+    for o in bpy.context.scene.objects:
         o.select_set(False)
     for o in objs:
         o.select_set(True)
@@ -1159,17 +1252,24 @@ def build_family(fname, assets, ao_dist, args, spacing=12.0, views=None):
     import bpy
     from model3d import blender_io as B
     B.reset_scene()
+    aos = {}
+    if not args.no_bake:
+        tmp = []
+        for i, (name, parts) in enumerate(assets.items()):
+            solid = [p for p in parts if not p.card]
+            obj = to_blender(name + "_bake", solid)
+            obj.location.x = i * spacing
+            tmp.append((name, obj))
+        for name, obj in tmp:
+            aos[name] = bake_ao(obj, ao_dist, args.samples)
+        for _, obj in tmp:
+            bpy.data.objects.remove(obj, do_unlink=True)
+        bpy.context.view_layer.update()
     objs = []
     for i, (name, parts) in enumerate(assets.items()):
-        obj = to_blender(name, parts)
-        obj.location.x = i * spacing
+        obj = to_blender(name, parts, aos.get(name))
         objs.append(obj)
         print("  %s: %d verts" % (name, len(obj.data.vertices)))
-    if not args.no_bake:
-        for o in objs:
-            bake_ao(o, ao_dist, args.samples)
-    for o in objs:
-        o.location.x = 0.0
     if args.preview:
         preview(fname, objs, spacing, views)
     export(objs, os.path.join(OUT, fname + ".glb"))
@@ -1222,6 +1322,9 @@ def write_textures():
     FT.save_rgb(os.path.join(TEX, "bark_pine.jpg"), a, 90)
     FT.save_rgb(os.path.join(TEX, "bark_pine_n.jpg"), n, 92)
     FT.save_rgba(os.path.join(TEX, "needles.png"), ST.needles())
+    for kind, fn in (("sugi", ST.sugi_spray), ("pine", ST.pine_spray), ("maple", ST.maple_spray), ("shrub", ST.shrub_spray),
+                     ("fern", ST.fern_spray)):
+        FT.save_rgba(os.path.join(TEX, "spray_%s.png" % kind), fn())
     FT.save_rgba(os.path.join(TEX, "maple_leaves.png"), ST.maple_leaves())
     FT.save_rgb(os.path.join(TEX, "grime.png"), ST.grime())
     c, cn = ST.copper_roof()

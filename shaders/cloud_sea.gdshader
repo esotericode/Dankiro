@@ -1,18 +1,16 @@
 shader_type spatial;
-render_mode diffuse_burley, specular_disabled, fog_disabled, depth_draw_never, cull_disabled;
+render_mode diffuse_burley, specular_disabled, depth_draw_never, cull_disabled;
 // The sea of cloud below the summit: a wide plane whose billows are layered noise, drifting.
-// Lit by the moon like anything else; faded into the horizon haze with distance, and softened
-// where it meets the hills rising through it.
+// Lit by the moon and fogged like anything else, soft where hills rise through it, and gone
+// before the plane ends (the sky below the horizon carries on in the same haze).
 
 uniform sampler2D noise_tex : hint_default_white, filter_linear_mipmap, repeat_enable;
 uniform sampler2D depth_tex : hint_depth_texture, filter_linear_mipmap;
-uniform vec3 top_color : source_color = vec3(0.62, 0.65, 0.76);
-uniform vec3 trough_color : source_color = vec3(0.22, 0.24, 0.33);
-uniform vec3 haze_color : source_color = vec3(0.17, 0.18, 0.27);
+uniform vec3 top_color : source_color = vec3(0.4, 0.42, 0.52);
+uniform vec3 trough_color : source_color = vec3(0.13, 0.14, 0.2);
 uniform float scale = 90.0;
 uniform float drift = 1.2;          // m/s
 uniform float soft = 10.0;          // metres of soft contact
-uniform float haze_far = 1600.0;
 uniform float edge = 2300.0;        // fades out before the plane ends
 
 varying vec3 wpos;
@@ -37,15 +35,11 @@ void fragment() {
 	float hz = billows(p + vec2(0.0, e), t);
 	vec3 nw = normalize(vec3(-(hx - h0) / e * 40.0, 1.0, -(hz - h0) / e * 40.0));
 	NORMAL = normalize((VIEW_MATRIX * vec4(nw, 0.0)).xyz);
-	float dist = length(wpos.xz - CAMERA_POSITION_WORLD.xz);
-	float haze = smoothstep(0.0, haze_far, dist) * 0.8;
-	vec3 col = mix(trough_color, top_color, smoothstep(0.3, 0.75, h0));
-	ALBEDO = col * (1.0 - haze);
-	EMISSION = haze_color * haze;
+	ALBEDO = mix(trough_color, top_color, smoothstep(0.3, 0.75, h0));
 	// soft where hills rise through it, gone at the plane's far edge
 	float scene = texture(depth_tex, SCREEN_UV).r;
 	vec4 v = INV_PROJECTION_MATRIX * vec4(SCREEN_UV * 2.0 - 1.0, scene, 1.0);
 	float scene_z = -v.z / v.w;
 	float thick = clamp((scene_z + VERTEX.z) / soft, 0.0, 1.0);
-	ALPHA = thick * (1.0 - smoothstep(edge * 0.8, edge, length(wpos.xz))) * smoothstep(0.1, 0.45, h0 + 0.25);
+	ALPHA = thick * (1.0 - smoothstep(edge * 0.6, edge, length(wpos.xz))) * smoothstep(0.05, 0.4, h0 + 0.25);
 }
