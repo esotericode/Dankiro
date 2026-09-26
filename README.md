@@ -373,7 +373,7 @@ visuals was checked on frames rendered with Movie Maker.
 (cones on sticks, boxes, seven-sided pyramids); now they are models built by a Blender script,
 like the boss and the floor, with their own textures and shaders. A wood of Japanese cedars
 rings the plaza, with an old sacred cedar roped with a shimenawa beside the steps, black pines,
-red autumn maples by the fence, shrubs, ferns and mossy boulders. Each crown is clumps of
+red autumn maples by the fence and among the cedars, shrubs, ferns and mossy boulders. Each crown is clumps of
 foliage under cards of leaf sprays that always face the camera, so the outline of every tree is
 needles or leaves, and the crowns sway. North of the plaza a stone path leads through a
 vermilion myojin torii (its gilt plaque reads 月門, Moon Gate) to a flight of steps and a shrine
