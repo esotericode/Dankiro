@@ -2,9 +2,9 @@ extends Node
 ## Scripted capture director for visual checks with Godot's Movie Maker:
 ##   godot --write-movie out/frame.png --fixed-fps 30 res://tests/capture.tscn -- <shot>
 ## Shots: overview, deflect, deflect_offcenter, block, mikiri, thrust_backstep, sweep, sweep_flee, whirl, shuriken,
-## shuriken5, charge, slashes, parried, inferno [stand|wide|plunge|plunge_stand], attack <clip> [distance], recovery <clip>, diagnostics, the menus
+## shuriken5, charge, slashes, parried, inferno [stand|wide|spin|plunge|plunge_stand], attack <clip> [distance], recovery <clip>, diagnostics, the menus
 ## (menu_title, menu_options, menu_start, menu_pause), and art checks: model (orbit), model_head, model_face, model_face_p2, model_combo,
-## model_flourish, floor [overview|centre|medallion|puddle|moss|broken|rim|low|sweep].
+## model_flourish, fire_staff [level], fire_combo, floor [overview|centre|medallion|puddle|moss|broken|rim|low|sweep].
 ## Loads the real game scene (arena, lighting, HUD, lock-on camera), skips the intro, stages
 ## the fighters and drives the player with a bot that reacts to the boss's hit windows.
 
@@ -432,6 +432,18 @@ func shot_inferno() -> void:
 	var mode: String = args[1] if args.size() > 1 else "jump"
 	_stage(7.0, Vector3(0, 0, -4.0))
 	boss._enter_phase(2, false)
+	if mode == "spin":
+		# straight to the turn (the arms of fire and the ring round him), for looking at the fire
+		at(0.3, func():
+			boss.global_position = Vector3.ZERO
+			player.global_position = Vector3(0, 0, 7.0)
+			boss.begin_inferno()
+			boss.staff_fire.set_level(1.0, 10.0)
+			boss.inferno.on_event("fire_whips", {})
+			boss.inferno._begin_spin())
+		set_meta("inferno_bot", "jump")
+		_end_at = 4.5
+		return
 	if mode.begins_with("plunge"):
 		# straight to the finisher, for looking at the eruption: he's already in the middle
 		at(0.3, func():
@@ -476,6 +488,28 @@ func _inferno_bot_tick() -> void:
 		if player.state != Player.S.AIR and player.state != Player.S.KNOCKDOWN:
 			_jumped_for = key
 			player.press_action("jump", Game.clock)
+
+
+## The fire on his staff, from a slow orbit: `-- fire_staff [level]` (0.3 = smouldering, as in
+## his normal fighting from phase 2 on; 1 = ablaze, as in the Inferno).
+func shot_fire_staff() -> void:
+	var args := OS.get_cmdline_user_args()
+	var level: float = float(args[1]) if args.size() > 1 else StaffFire.SMOULDER
+	_stage(7.0)
+	boss._enter_phase(2, false)
+	boss.staff_fire.set_level(level, 50.0)
+	_art_camera(3.4, 1.5, 1.25, 45.0, 30.0)
+	_end_at = 3.0
+
+
+## Phase three (staff smouldering): his opening combo from a fixed 3/4 view, to check the
+## strikes still read with the fire on.
+func shot_fire_combo() -> void:
+	_stage(3.0)
+	boss._enter_phase(3, false)
+	_art_camera(4.2, 1.6, 1.15, 0.0, 35.0)
+	at(0.4, func(): boss_string(["b_combo_1", "b_combo_2", "b_thrust"]))
+	_end_at = 4.2
 
 
 ## His staff plant (the intro / flourish), 3/4 front.

@@ -254,9 +254,10 @@ fails if the engine or a script reports any error during the run (it listens thr
 **Captures**: `tests/capture.tscn` stages shots (`overview`, `deflect`, `deflect_offcenter`,
 `block`, `mikiri`, `thrust_backstep`, `sweep`, `sweep_flee`, `whirl`, `shuriken`, `shuriken5`,
 `charge`, `slashes`, `parried`, `inferno` for his fire move (`inferno stand` to take the
-arms, `inferno wide` from high above the arena, `inferno plunge` straight to the finisher), `attack <clip> [distance]` for any single boss attack from
+arms, `inferno wide` from high above the arena, `inferno spin` straight to the arms of fire, `inferno plunge`
+straight to the finisher), `attack <clip> [distance]` for any single boss attack from
 the lock-on camera, `recovery <clip>` for one attack played to the end from a fixed 3/4 view,
-`diagnostics` for the overlay, the menus `menu_title`, `menu_options` and `menu_start` (boot,
+`fire_staff [level]` and `fire_combo` for the fire on his staff, `diagnostics` for the overlay, the menus `menu_title`, `menu_options` and `menu_start` (boot,
 then press Start), the model close-ups `model`, `model_head`, `model_face`,
 `model_face_p2`, `model_combo`, `model_flourish`, and `floor <view>` for the plaza from fixed
 cameras: `overview`, `centre`, `medallion`, `puddle`, `moss`, `broken`, `rim`, `low`, `sweep`)
@@ -309,6 +310,7 @@ Python 3.11), and the floor needs `shapely`.
 | Arena floor (flagstones, textures) | `tools/build_arena_floor.py`, `tools/model3d/floor_textures.py`, `shaders/flagstones.gdshader` | `python3 tools/build_arena_floor.py` (~3 min with the AO bake; `--no-bake` for quick layout changes, `--textures` for the tiling textures only), then `godot --headless --editor --quit` to import | `tools/preview_out/floor_ao.png` shows the plan and the baked occlusion; in the engine, the capture shots `floor overview`, `floor centre`, `floor puddle`, ... |
 | Player look, boss materials and ribbons | `tools/build_models.py` | `python3 tools/build_models.py` | `python3 tools/model_preview.py player` |
 | Sound effects | `tools/gen_audio.py` | `python3 tools/gen_audio.py [name]` | |
+| Fire noise (the flame shaders) | `tools/gen_fx_textures.py` | `python3 tools/gen_fx_textures.py` | the capture shots `fire_staff 0.3`, `fire_staff 1`, `fire_combo`, `inferno spin` |
 | Kanji + UI font | `tools/gen_textures.py` | `python3 tools/gen_textures.py` | |
 | GDScript sanity | | | `python3 tools/check_gdscript.py` cross-checks member and function names and call arity across the scripts |
 
@@ -361,7 +363,15 @@ This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (6
 a full-fight soak), the game boots and runs with no script errors, and every change to the
 visuals was checked on frames rendered with Movie Maker.
 
-**Latest: a new plaza floor.** The flagstones were a flat shader; now they're a model built by a
+**Latest: new fire.** Every flame is now drawn by a shader instead of a painted sprite: tongues
+of fire that lick and flicker as noise scrolls up through them, white-yellow at the root, orange,
+then red at the tips, with embers and a little smoke over the big fires. From phase two his staff
+smoulders with small flames that cling to the blades, kept low so his strikes read clearly;
+in the Inferno they blaze and stream behind the blades, and the arms of fire, the ring round
+him and the blast use the same fire. The finisher's eruption lost its rings of flame (they read
+as walls; it's the floor that burns) except the one round him.
+
+**Before that: a new plaza floor.** The flagstones were a flat shader; now they're a model built by a
 Blender script, like the boss. The plan is the same (a carved moon medallion at the centre,
 eight wedges, twelve rings of flagstones and a raised basalt curb under the fence), but every
 stone is a real slab with rounded, worn edges and a dark joint down to the mortar bed, set a

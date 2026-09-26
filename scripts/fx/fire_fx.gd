@@ -1,125 +1,223 @@
 class_name FireFx
 extends RefCounted
-## Fire for Sojin's Inferno (phase 2 on): shared textures, materials and meshes, and one-shot
-## bursts. Walls of fire (the sweeping arms, the ring round him, the blast) are quads with
-## WALL_SHADER: layered scrolling value noise cut off with height, a white-yellow core fading
-## through orange to red tips, drawn additively (HDR, so it blooms). Loose flames and embers
-## are CPU particles with a procedural flame sprite.
+## Fire for Sojin (his burning staff from phase 2 on, and the Inferno): shaders, materials,
+## meshes and one-shot bursts.
+##
+## Every flame is drawn by a shader rather than a painted sprite, all of them reading one small
+## tileable noise texture (textures/fx/fire_noise.png, tools/gen_fx_textures.py):
+##  - FLAME_SHADER: a single tongue of flame on an upright camera-facing quad (the particles).
+##    A teardrop bent and torn at its tip by noise scrolling up through it; the colour runs from
+##    a white-yellow root through orange to red tips. The particle colour carries its life:
+##    r = heat (1 fresh, cooling), g = brightness, a = opacity.
+##  - WALL_SHADER: a wall of flame on a strip or band (the Inferno's arms, the ring round him,
+##    the blast): tongues of every height licking up along it.
+##  - EMBER_SHADER and SMOKE_SHADER for the sparks and the smoke above big fires.
+## All additive fire is HDR: its colours stay near 1.0 so the glow blooms it without blowing it
+## out to white.
 
-static var _flame_tex: Texture2D
-static var _flame_mat: StandardMaterial3D
-static var _ember_mat: StandardMaterial3D
-static var _smoke_mat: StandardMaterial3D
-static var _wall_shader: Shader
-static var _strip_shader: Shader
-static var _cracks_shader: Shader
+static var _noise: Texture2D
+static var _shaders: Dictionary = {}
+static var _mats: Dictionary = {}
 static var _glow_mats: Dictionary = {}
+
+const NOISE_PATH := "res://textures/fx/fire_noise.png"
+
+## Upright billboard (keeps the particle's scale): flames always burn upward, whatever the
+## emitter is doing.
+const _BILLBOARD_Y := """
+	mat4 bb = mat4(
+		vec4(normalize(cross(vec3(0.0, 1.0, 0.0), INV_VIEW_MATRIX[2].xyz)), 0.0),
+		vec4(0.0, 1.0, 0.0, 0.0),
+		vec4(normalize(cross(INV_VIEW_MATRIX[0].xyz, vec3(0.0, 1.0, 0.0))), 0.0),
+		MODEL_MATRIX[3]);
+	MODELVIEW_MATRIX = VIEW_MATRIX * bb * mat4(
+		vec4(length(MODEL_MATRIX[0].xyz), 0.0, 0.0, 0.0),
+		vec4(0.0, length(MODEL_MATRIX[1].xyz), 0.0, 0.0),
+		vec4(0.0, 0.0, length(MODEL_MATRIX[2].xyz), 0.0),
+		vec4(0.0, 0.0, 0.0, 1.0));
+	MODELVIEW_NORMAL_MATRIX = mat3(MODELVIEW_MATRIX);
+"""
+
+## Camera-facing billboard (keeps the particle's scale).
+const _BILLBOARD := """
+	MODELVIEW_MATRIX = VIEW_MATRIX * mat4(INV_VIEW_MATRIX[0], INV_VIEW_MATRIX[1], INV_VIEW_MATRIX[2],
+		MODEL_MATRIX[3]) * mat4(
+		vec4(length(MODEL_MATRIX[0].xyz), 0.0, 0.0, 0.0),
+		vec4(0.0, length(MODEL_MATRIX[1].xyz), 0.0, 0.0),
+		vec4(0.0, 0.0, length(MODEL_MATRIX[2].xyz), 0.0),
+		vec4(0.0, 0.0, 0.0, 1.0));
+	MODELVIEW_NORMAL_MATRIX = mat3(MODELVIEW_MATRIX);
+"""
+
+const FLAME_SHADER := """
+shader_type spatial;
+render_mode unshaded, blend_add, cull_disabled, depth_draw_never, shadows_disabled, fog_disabled;
+
+uniform sampler2D noise_tex : filter_linear_mipmap, repeat_enable;
+uniform float intensity = 1.0;
+uniform float speed = 1.0;
+uniform vec3 col_core : source_color = vec3(1.0, 0.9, 0.64);
+uniform vec3 col_mid : source_color = vec3(1.0, 0.52, 0.13);
+uniform vec3 col_edge : source_color = vec3(0.75, 0.15, 0.025);
+
+varying float v_seed;
+varying vec4 v_life;
+
+void vertex() {
+@BILLBOARD_Y@
+	v_seed = fract(float(INSTANCE_ID) * 0.618034 + 0.137);
+	v_life = COLOR;
+}
+
+void fragment() {
+	float h = 1.0 - UV.y;                          // 0 at the root, 1 at the tip
+	float x = UV.x * 2.0 - 1.0;
+	float t = TIME * speed;
+	vec2 s = vec2(v_seed * 7.31, v_seed * 3.17);
+	float n1 = texture(noise_tex, vec2(UV.x * 0.5, h * 0.7 - t * 0.85) + s).r;
+	float n2 = texture(noise_tex, vec2(UV.x * 1.25, h * 1.5 - t * 2.0) + s.yx).g;
+	// bent by the noise, more toward the tip
+	float xs = x + ((n1 - 0.5) * 1.15 + (n2 - 0.5) * 0.35) * h;
+	float width = 0.74 * pow(max(1.0 - h, 0.0), 0.55);
+	float body = 1.0 - smoothstep(width * 0.2, width + 0.05, abs(xs));
+	// the tip torn into tongues
+	float tip = 1.0 - smoothstep(0.32, 0.95, h + (n2 - 0.5) * 0.65 + (n1 - 0.5) * 0.35);
+	float root = smoothstep(0.0, 0.18, h);
+	float f = body * tip * root;
+	float temp = f * (1.12 - 0.6 * h) * mix(0.45, 1.0, v_life.r);
+	vec3 c = mix(col_edge, col_mid, smoothstep(0.06, 0.4, temp));
+	c = mix(c, col_core, smoothstep(0.42, 0.86, temp));
+	ALBEDO = c * intensity * v_life.g;
+	ALPHA = clamp(smoothstep(0.0, 0.3, f) * v_life.a, 0.0, 1.0);
+}
+"""
 
 const WALL_SHADER := """
 shader_type spatial;
 render_mode unshaded, blend_add, cull_disabled, depth_draw_never, shadows_disabled, fog_disabled;
 
+uniform sampler2D noise_tex : filter_linear_mipmap, repeat_enable;
 uniform float heat = 1.0;          // brightness
-uniform float height = 1.0;        // flame height as a fraction of the quad
+uniform float height = 1.0;        // flame height as a fraction of the strip
 uniform float alpha_mult = 1.0;
 uniform float reveal = 1.0;        // 0..1 along the strip: an arm unrolling / retracting
-uniform float scale_x = 16.0;      // metres along UV.x (keeps the noise the same size)
-uniform float speed = 1.7;
+uniform float scale_x = 16.0;      // metres along UV.x (keeps the flames the same size)
+uniform float wall_h = 1.0;        // metres from UV.y 0 to 1
+uniform float speed = 1.0;
 uniform float seed = 0.0;
 uniform float loop_x = 0.0;        // 1 for a closed band (ring, blast): no seam, no end fade
-uniform vec3 core : source_color = vec3(1.0, 0.86, 0.55);
-uniform vec3 body : source_color = vec3(1.0, 0.42, 0.08);
-uniform vec3 tip : source_color = vec3(0.6, 0.08, 0.02);
+uniform vec3 col_core : source_color = vec3(1.0, 0.88, 0.6);
+uniform vec3 col_mid : source_color = vec3(1.0, 0.48, 0.11);
+uniform vec3 col_edge : source_color = vec3(0.7, 0.13, 0.02);
 
-float hash(vec2 p) {
-	p = fract(p * vec2(123.34, 456.21));
-	p += dot(p, p + 45.32);
-	return fract(p.x * p.y);
-}
-
-float vnoise(vec2 p) {
-	vec2 i = floor(p);
-	vec2 f = fract(p);
-	vec2 u = f * f * (3.0 - 2.0 * f);
-	return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
-			mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
-}
-
-float fbm(vec2 p) {
-	float v = 0.0;
-	float a = 0.55;
-	for (int i = 0; i < 4; i++) {
-		v += a * vnoise(p);
-		p = p * 2.07 + vec2(1.7, 9.2);
-		a *= 0.5;
-	}
-	return v;
-}
-
-float flame(float x, float y, float t) {
-	float n = fbm(vec2(x * 1.5, y * 1.3 - t));
-	float n2 = fbm(vec2(x * 3.3 + 7.1, y * 2.7 - t * 1.6));
-	return (0.62 * n + 0.48 * n2) * 1.3 - y * 1.05 + 0.1;
+float flame(vec2 m, float t) {
+	// tongues of every height: a slow swell along the wall sets how tall the fire licks
+	float swell = texture(noise_tex, vec2(m.x * 0.06 + seed, t * 0.05)).r;
+	float top = wall_h * height * (0.45 + 0.8 * swell);
+	float n1 = texture(noise_tex, vec2(m.x * 0.23 + seed * 0.37, m.y * 0.42 - t * 0.55)).r;
+	float n2 = texture(noise_tex, vec2(m.x * 0.61 - seed * 0.21, m.y * 1.05 - t * 1.35)).g;
+	float wisp = texture(noise_tex, vec2(m.x * 0.37 + seed * 0.11, m.y * 0.6 - t * 0.9)).b;
+	return 1.0 - m.y / top + (n1 - 0.5) * 1.05 + (n2 - 0.5) * 0.5 + wisp * 0.18;
 }
 
 void fragment() {
-	float x = UV.x * scale_x + seed;
-	float y = UV.y / max(height, 0.05);
+	vec2 m = vec2(UV.x * scale_x, UV.y * wall_h);
 	float t = TIME * speed;
-	float f = flame(x, y, t);
+	float f = flame(m, t);
 	if (loop_x > 0.5) {
-		// blend into the noise from the other end over the last stretch: a seamless loop
-		f = mix(f, flame(x - scale_x, y, t), smoothstep(0.85, 1.0, UV.x));
+		// blend into the flames from the other end over the last stretch: a seamless loop
+		f = mix(f, flame(m - vec2(scale_x, 0.0), t), smoothstep(0.85, 1.0, UV.x));
 	}
-	float a = smoothstep(0.0, 0.22, f);
-	vec3 c = mix(tip, body, smoothstep(0.05, 0.40, f));
-	c = mix(c, core, smoothstep(0.34, 0.80, f));
+	float a = smoothstep(0.0, 0.32, f);
+	float temp = f * (1.05 - 0.45 * UV.y);
+	vec3 c = mix(col_edge, col_mid, smoothstep(0.05, 0.42, temp));
+	c = mix(c, col_core, smoothstep(0.45, 0.95, temp));
 	float ends = 1.0;
 	if (loop_x < 0.5) {
 		ends = smoothstep(0.0, 0.012, UV.x) * (1.0 - smoothstep(reveal - 0.025, reveal, UV.x));
 	}
-	ALBEDO = c * heat * 1.25;
-	ALPHA = clamp(a * alpha_mult * ends * 0.85, 0.0, 1.0);
+	ALBEDO = c * heat;
+	ALPHA = clamp(a * alpha_mult * ends * 0.9, 0.0, 1.0);
 }
 """
 
-## A burning line on the floor (under each arm): hot core along the middle, flickering edges.
+## A burning line on the floor (under each arm): a bed of hot coals, brightest along the middle.
 const STRIP_SHADER := """
 shader_type spatial;
 render_mode unshaded, blend_add, cull_disabled, depth_draw_never, shadows_disabled, fog_disabled;
 
+uniform sampler2D noise_tex : filter_linear_mipmap, repeat_enable;
 uniform float heat = 1.0;
 uniform float alpha_mult = 1.0;
 uniform float reveal = 1.0;
 uniform float scale_x = 16.0;
-uniform vec3 core : source_color = vec3(1.0, 0.8, 0.45);
-uniform vec3 body : source_color = vec3(1.0, 0.32, 0.05);
-
-float hash(vec2 p) {
-	p = fract(p * vec2(123.34, 456.21));
-	p += dot(p, p + 45.32);
-	return fract(p.x * p.y);
-}
-
-float vnoise(vec2 p) {
-	vec2 i = floor(p);
-	vec2 f = fract(p);
-	vec2 u = f * f * (3.0 - 2.0 * f);
-	return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
-			mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
-}
+uniform vec3 core : source_color = vec3(1.0, 0.72, 0.36);
+uniform vec3 body : source_color = vec3(0.9, 0.22, 0.03);
 
 void fragment() {
 	float d = abs(UV.y - 0.5) * 2.0;
 	float x = UV.x * scale_x;
-	float n = vnoise(vec2(x * 2.2 - TIME * 3.0, UV.y * 4.0)) * 0.6 + vnoise(vec2(x * 5.0 + TIME * 1.3, UV.y * 9.0)) * 0.4;
-	float f = (1.0 - d) * (0.55 + 0.7 * n);
+	float n = texture(noise_tex, vec2(x * 0.45 - TIME * 0.25, UV.y * 0.35)).g * 0.6
+		+ texture(noise_tex, vec2(x * 1.1 + TIME * 0.4, UV.y * 0.8 + 0.3)).r * 0.4;
+	float f = (1.0 - d) * (0.5 + 0.8 * n);
 	float ends = smoothstep(0.0, 0.012, UV.x) * (1.0 - smoothstep(reveal - 0.025, reveal, UV.x));
-	ALBEDO = mix(body, core, smoothstep(0.55, 0.95, f)) * heat * 1.05;
-	ALPHA = clamp(smoothstep(0.15, 0.6, f) * alpha_mult * ends, 0.0, 1.0);
+	ALBEDO = mix(body, core, smoothstep(0.55, 1.0, f)) * heat;
+	ALPHA = clamp(smoothstep(0.18, 0.65, f) * alpha_mult * ends, 0.0, 1.0);
 }
 """
 
+const EMBER_SHADER := """
+shader_type spatial;
+render_mode unshaded, blend_add, cull_disabled, depth_draw_never, shadows_disabled, fog_disabled;
+
+uniform float intensity = 1.2;
+
+varying float v_seed;
+varying vec4 v_life;
+
+void vertex() {
+@BILLBOARD@
+	v_seed = fract(float(INSTANCE_ID) * 0.618034 + 0.41);
+	v_life = COLOR;
+}
+
+void fragment() {
+	vec2 p = UV * 2.0 - 1.0;
+	float d = dot(p, p);
+	float core = exp(-d * 10.0);
+	float halo = exp(-d * 2.5) * 0.35;
+	float flicker = 0.65 + 0.35 * sin(TIME * (19.0 + v_seed * 23.0) + v_seed * 40.0);
+	vec3 c = mix(vec3(1.0, 0.32, 0.05), vec3(1.0, 0.82, 0.48), core * v_life.r);
+	ALBEDO = c * intensity * flicker * v_life.g;
+	ALPHA = clamp((core + halo) * v_life.a, 0.0, 1.0);
+}
+"""
+
+## Smoke above big fires: soft dark puffs, their edges eaten by the noise's cells.
+const SMOKE_SHADER := """
+shader_type spatial;
+render_mode unshaded, blend_mix, cull_disabled, depth_draw_never, shadows_disabled;
+
+uniform sampler2D noise_tex : filter_linear_mipmap, repeat_enable;
+uniform vec3 smoke_color : source_color = vec3(0.06, 0.055, 0.05);
+
+varying float v_seed;
+varying vec4 v_life;
+
+void vertex() {
+@BILLBOARD@
+	v_seed = fract(float(INSTANCE_ID) * 0.618034 + 0.73);
+	v_life = COLOR;
+}
+
+void fragment() {
+	vec2 p = UV * 2.0 - 1.0;
+	float n = texture(noise_tex, UV * 0.45 + vec2(v_seed * 5.3, v_seed * 2.9 - TIME * 0.04)).a;
+	float puff = 1.0 - smoothstep(0.35, 1.0, length(p) + (0.5 - n) * 0.7);
+	ALBEDO = smoke_color * (0.7 + 0.6 * n) * v_life.r;
+	ALPHA = clamp(puff * v_life.a, 0.0, 1.0);
+}
+"""
 
 ## The floor cracking open before the arena erupts: a network of glowing cracks (the edges of
 ## Voronoi cells) and jagged spokes out from the middle, revealed out to `reveal` (0..1 of the
@@ -179,98 +277,63 @@ void fragment() {
 """
 
 
+
 # ------------------------------------------------------------------------------ resources
-## A flame-shaped sprite: a soft teardrop, broad at the bottom, licked into a point at the top.
-static func flame_texture() -> Texture2D:
-	if _flame_tex != null:
-		return _flame_tex
-	var n := 64
-	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
-	for py in n:
-		for px in n:
-			var u := (float(px) + 0.5) / n * 2.0 - 1.0          # -1..1 across
-			var v := (float(py) + 0.5) / n                       # 0 top .. 1 bottom
-			var h := 1.0 - v                                     # 0 bottom .. 1 top
-			# a soft tongue of flame: round and broad low down, rounding off (not a spike) at the top
-			var half := 0.78 * pow(maxf(0.0, 1.0 - h), 0.35) * (0.6 + 0.4 * sin(PI * minf(1.0, h * 2.0 + 0.15)))
-			var edge := 1.0 - smoothstep(half * 0.05, half + 0.14, absf(u))
-			var vert := smoothstep(0.0, 0.3, v) * smoothstep(1.0, 0.62, v)
-			var a := clampf(edge * vert, 0.0, 1.0)
-			img.set_pixel(px, py, Color(1, 1, 1, a * a * (3.0 - 2.0 * a)))
-	_flame_tex = ImageTexture.create_from_image(img)
-	return _flame_tex
+static func noise_texture() -> Texture2D:
+	if _noise == null:
+		_noise = load(NOISE_PATH) as Texture2D
+	return _noise
 
 
-static func flame_material() -> StandardMaterial3D:
-	if _flame_mat == null:
-		_flame_mat = StandardMaterial3D.new()
-		_flame_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		_flame_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		_flame_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-		_flame_mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-		_flame_mat.vertex_color_use_as_albedo = true
-		_flame_mat.albedo_texture = flame_texture()
-		_flame_mat.albedo_color = Color(1.3, 1.1, 1.0)
-		_flame_mat.disable_receive_shadows = true
-	return _flame_mat
+static func _shader(key: String, code: String) -> Shader:
+	if not _shaders.has(key):
+		var sh := Shader.new()
+		sh.code = code.replace("@BILLBOARD_Y@", _BILLBOARD_Y).replace("@BILLBOARD@", _BILLBOARD)
+		_shaders[key] = sh
+	return _shaders[key]
 
 
-static func ember_material() -> StandardMaterial3D:
-	if _ember_mat == null:
-		_ember_mat = StandardMaterial3D.new()
-		_ember_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		_ember_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		_ember_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-		_ember_mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-		_ember_mat.vertex_color_use_as_albedo = true
-		_ember_mat.albedo_texture = Fx.radial_texture("ember", Color(1, 1, 1, 1), Color(1, 0.6, 0.2, 0), 32)
-		_ember_mat.albedo_color = Color(2.0, 1.5, 1.1)
-	return _ember_mat
-
-
-static func smoke_material() -> StandardMaterial3D:
-	if _smoke_mat == null:
-		_smoke_mat = StandardMaterial3D.new()
-		_smoke_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		_smoke_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		_smoke_mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-		_smoke_mat.vertex_color_use_as_albedo = true
-		_smoke_mat.albedo_texture = Fx.radial_texture("smoke", Color(1, 1, 1, 1), Color(1, 1, 1, 0), 64)
-	return _smoke_mat
-
-
-static func wall_material(scale_x: float, loop := false) -> ShaderMaterial:
-	if _wall_shader == null:
-		_wall_shader = Shader.new()
-		_wall_shader.code = WALL_SHADER
+static func _material(key: String, code: String, params := {}, priority := 0) -> ShaderMaterial:
 	var m := ShaderMaterial.new()
-	m.shader = _wall_shader
-	m.set_shader_parameter("scale_x", scale_x)
-	m.set_shader_parameter("loop_x", 1.0 if loop else 0.0)
-	m.set_shader_parameter("seed", randf() * 50.0)
-	m.render_priority = 2
+	m.shader = _shader(key, code)
+	if code.contains("noise_tex"):
+		m.set_shader_parameter("noise_tex", noise_texture())
+	for k in params:
+		m.set_shader_parameter(k, params[k])
+	m.render_priority = priority
 	return m
+
+
+## Shared flame material (particles carry heat, brightness and opacity in their colour).
+static func flame_material() -> ShaderMaterial:
+	if not _mats.has("flame"):
+		_mats["flame"] = _material("flame", FLAME_SHADER, {}, 3)
+	return _mats["flame"]
+
+
+static func ember_material() -> ShaderMaterial:
+	if not _mats.has("ember"):
+		_mats["ember"] = _material("ember", EMBER_SHADER, {}, 4)
+	return _mats["ember"]
+
+
+static func smoke_material() -> ShaderMaterial:
+	if not _mats.has("smoke"):
+		_mats["smoke"] = _material("smoke", SMOKE_SHADER)
+	return _mats["smoke"]
+
+
+static func wall_material(scale_x: float, loop := false, wall_h := 1.0) -> ShaderMaterial:
+	return _material("wall", WALL_SHADER, {"scale_x": scale_x, "loop_x": 1.0 if loop else 0.0, "wall_h": wall_h,
+		"seed": randf() * 50.0}, 2)
 
 
 static func strip_material(scale_x: float) -> ShaderMaterial:
-	if _strip_shader == null:
-		_strip_shader = Shader.new()
-		_strip_shader.code = STRIP_SHADER
-	var m := ShaderMaterial.new()
-	m.shader = _strip_shader
-	m.set_shader_parameter("scale_x", scale_x)
-	m.render_priority = 1
-	return m
+	return _material("strip", STRIP_SHADER, {"scale_x": scale_x}, 1)
 
 
 static func cracks_material() -> ShaderMaterial:
-	if _cracks_shader == null:
-		_cracks_shader = Shader.new()
-		_cracks_shader.code = CRACKS_SHADER
-	var m := ShaderMaterial.new()
-	m.shader = _cracks_shader
-	m.render_priority = 1
-	return m
+	return _material("cracks", CRACKS_SHADER, {}, 1)
 
 
 ## A flat additive glow for the floor, from a radial gradient (`key` caches it).
@@ -356,31 +419,31 @@ static func floor_quad(size: float, y := 0.03) -> MeshInstance3D:
 
 
 # ------------------------------------------------------------------------------ particles
-## Loose flames (world-space: they trail behind whatever emits them). `size` is the sprite
-## height in metres.
+## Loose flames (world-space: they trail behind whatever emits them). `size` is the flame's
+## height in metres. Set `color` to (heat, brightness, 1, opacity) to damp them.
 static func flames(amount: int, lifetime: float, size: float) -> CPUParticles3D:
 	var p := CPUParticles3D.new()
 	p.amount = amount
 	p.lifetime = lifetime
 	p.local_coords = false
 	p.direction = Vector3.UP
-	p.spread = 14.0
-	p.gravity = Vector3(0, 2.4, 0)
-	p.initial_velocity_min = 0.3
-	p.initial_velocity_max = 1.1
+	p.spread = 12.0
+	p.gravity = Vector3(0, 2.2, 0)
+	p.initial_velocity_min = 0.25
+	p.initial_velocity_max = 0.9
 	p.damping_min = 0.4
 	p.damping_max = 1.4
-	p.angle_min = -25.0
-	p.angle_max = 25.0
-	p.scale_amount_min = 0.55
+	p.scale_amount_min = 0.6
 	p.scale_amount_max = 1.1
-	p.scale_amount_curve = Fx._curve([Vector2(0.0, 0.35), Vector2(0.22, 1.0), Vector2(1.0, 0.12)])
+	p.scale_amount_curve = Fx._curve([Vector2(0.0, 0.45), Vector2(0.25, 1.0), Vector2(1.0, 0.55)])
 	var q := QuadMesh.new()
-	q.size = Vector2(size * 0.74, size)
+	q.size = Vector2(size * 0.62, size)
+	q.center_offset = Vector3(0, size * 0.32, 0)       # the root sits on the emission point
 	p.mesh = q
 	p.material_override = flame_material()
-	p.color_ramp = Fx._ramp([Color(1.0, 0.85, 0.55, 0.85), Color(1.0, 0.5, 0.12, 0.8), Color(0.8, 0.18, 0.03, 0.45),
-		Color(0.25, 0.03, 0.01, 0.0)], [0.0, 0.2, 0.55, 1.0])
+	# life in the colour: r heat (cooling), g brightness, a opacity
+	p.color_ramp = Fx._ramp([Color(1.0, 1.0, 1.0, 0.0), Color(1.0, 1.0, 1.0, 1.0), Color(0.72, 1.0, 1.0, 0.85),
+		Color(0.28, 1.0, 1.0, 0.0)], [0.0, 0.12, 0.5, 1.0])
 	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return p
 
@@ -392,18 +455,45 @@ static func embers(amount: int, lifetime: float) -> CPUParticles3D:
 	p.local_coords = false
 	p.direction = Vector3.UP
 	p.spread = 35.0
-	p.gravity = Vector3(0, 1.2, 0)
+	p.gravity = Vector3(0, 1.1, 0)
 	p.initial_velocity_min = 0.4
 	p.initial_velocity_max = 1.8
 	p.damping_min = 0.2
 	p.damping_max = 1.0
-	p.scale_amount_min = 0.5
+	p.tangential_accel_min = -1.5
+	p.tangential_accel_max = 1.5
+	p.scale_amount_min = 0.4
 	p.scale_amount_max = 1.0
 	var q := QuadMesh.new()
-	q.size = Vector2(0.045, 0.045)
+	q.size = Vector2(0.05, 0.05)
 	p.mesh = q
 	p.material_override = ember_material()
-	p.color_ramp = Fx._ramp([Color(1.0, 0.8, 0.4, 1.0), Color(1.0, 0.4, 0.08, 0.9), Color(0.6, 0.1, 0.02, 0.0)], [0.0, 0.5, 1.0])
+	p.color_ramp = Fx._ramp([Color(1.0, 1.0, 1.0, 1.0), Color(0.6, 1.0, 1.0, 0.9), Color(0.1, 1.0, 1.0, 0.0)], [0.0, 0.5, 1.0])
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return p
+
+
+## Smoke rising off a fire (world-space): dark puffs that swell and thin out.
+static func smoke_emitter(amount: int, lifetime: float, size: float) -> CPUParticles3D:
+	var p := CPUParticles3D.new()
+	p.amount = amount
+	p.lifetime = lifetime
+	p.local_coords = false
+	p.direction = Vector3.UP
+	p.spread = 20.0
+	p.gravity = Vector3(0, 0.8, 0)
+	p.initial_velocity_min = 0.3
+	p.initial_velocity_max = 0.8
+	p.damping_min = 0.3
+	p.damping_max = 0.8
+	p.scale_amount_min = 0.8
+	p.scale_amount_max = 1.3
+	p.scale_amount_curve = Fx._curve([Vector2(0, 0.45), Vector2(0.35, 1.0), Vector2(1, 1.9)])
+	var q := QuadMesh.new()
+	q.size = Vector2(size, size)
+	p.mesh = q
+	p.material_override = smoke_material()
+	p.color_ramp = Fx._ramp([Color(1.0, 1.0, 1.0, 0.0), Color(1.0, 1.0, 1.0, 0.32), Color(1.3, 1.0, 1.0, 0.0)], [0.0, 0.25, 1.0])
 	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return p
 
@@ -413,17 +503,17 @@ static func embers(amount: int, lifetime: float) -> CPUParticles3D:
 static func burst(parent: Node, pos: Vector3, scale := 1.0) -> void:
 	if parent == null or not parent.is_inside_tree():
 		return
-	var f := flames(int(22 * scale) + 6, 0.5, 0.55 * scale)
+	var f := flames(int(18 * scale) + 6, 0.5, 0.6 * scale)
 	f.one_shot = true
 	f.explosiveness = 0.85
 	f.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	f.emission_sphere_radius = 0.18 * scale
+	f.emission_sphere_radius = 0.2 * scale
 	f.spread = 70.0
-	f.initial_velocity_min = 0.8
-	f.initial_velocity_max = 2.6 * scale
+	f.initial_velocity_min = 0.6
+	f.initial_velocity_max = 2.2 * scale
 	Fx._emit_at(parent, f, pos)
 	Fx._free_later(f, 1.0)
-	var e := embers(int(20 * scale) + 4, 0.8)
+	var e := embers(int(18 * scale) + 4, 0.8)
 	e.one_shot = true
 	e.explosiveness = 0.9
 	e.spread = 80.0
@@ -437,29 +527,10 @@ static func burst(parent: Node, pos: Vector3, scale := 1.0) -> void:
 static func smoke(parent: Node, pos: Vector3, amount := 10, size := 0.6) -> void:
 	if parent == null or not parent.is_inside_tree():
 		return
-	var p := CPUParticles3D.new()
+	var p := smoke_emitter(amount, 1.8, size)
 	p.one_shot = true
 	p.explosiveness = 0.5
-	p.amount = amount
-	p.lifetime = 1.8
-	p.local_coords = false
 	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
 	p.emission_sphere_radius = 0.15
-	p.direction = Vector3.UP
-	p.spread = 25.0
-	p.gravity = Vector3(0, 0.7, 0)
-	p.initial_velocity_min = 0.3
-	p.initial_velocity_max = 0.9
-	p.damping_min = 0.3
-	p.damping_max = 0.8
-	p.scale_amount_min = 0.8
-	p.scale_amount_max = 1.4
-	p.scale_amount_curve = Fx._curve([Vector2(0, 0.4), Vector2(0.3, 1.0), Vector2(1, 1.8)])
-	var q := QuadMesh.new()
-	q.size = Vector2(size, size)
-	p.mesh = q
-	p.material_override = smoke_material()
-	p.color_ramp = Fx._ramp([Color(0.2, 0.18, 0.17, 0.0), Color(0.22, 0.2, 0.19, 0.4), Color(0.3, 0.29, 0.28, 0.0)], [0.0, 0.2, 1.0])
-	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	Fx._emit_at(parent, p, pos)
 	Fx._free_later(p, 2.2)

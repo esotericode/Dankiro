@@ -113,5 +113,9 @@ godot --headless --editor --quit              # import
   means toward the boss.
 - Godot writes `.uid` and `.import` files next to assets. They're committed on purpose.
 - Phase 2's fire move lives in `scripts/combat/inferno.gd` (the boss hands over to it in
-  `Boss.S.INFERNO`); its fire is `scripts/fx/fire_fx.gd` and `staff_fire.gd`. Fire is drawn
-  additively in HDR: keep its colours near 1.0 or it blows out to white under the glow.
+  `Boss.S.INFERNO`); its fire is `scripts/fx/fire_fx.gd` and `staff_fire.gd`. Every flame is a
+  shader (tongues, walls, embers, smoke) scrolling through `textures/fx/fire_noise.png`
+  (`tools/gen_fx_textures.py`); a flame particle's colour is (heat, brightness, -, opacity).
+  Fire is drawn additively in HDR: keep its colours near 1.0 and thin out overlapping flames, or
+  it blows out to white under the glow. The staff's smoulder (his normal fighting) is kept low so
+  strikes stay readable; captures `fire_staff [level]`, `fire_combo`, `inferno spin|plunge`.

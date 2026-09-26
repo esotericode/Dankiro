@@ -87,7 +87,7 @@ var _plunge_at := -1.0             ## the plunge can't start before this (after 
 var _erupt_t := -1.0               ## seconds since the eruption (while it can burn you)
 
 # visuals
-var _arms: Array = []              ## per arm: {pivot, wall, strip, flames, lights}
+var _arms: Array = []              ## per arm: {pivot, wall, strip, flames, embers, smoke, lights}
 var _arm_len := 0.0
 var _arm_target := 0.0
 var _heat := 1.0
@@ -272,6 +272,7 @@ func _blast() -> void:
 	Fx.light_pulse(p, center + Vector3(0, 1.4, 0), Color(1.0, 0.5, 0.15), 6.0, 16.0, 0.7)
 	Fx.dust(p, center, 40, 2.5)
 	var burst := FireFx.flames(110, 0.55, 0.9)
+	burst.color = Color(1, 0.7, 1, 0.85)
 	burst.one_shot = true
 	burst.explosiveness = 0.95
 	burst.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
@@ -494,7 +495,8 @@ func _erupt() -> void:
 		Sfx.play("fire_whoosh", player.global_position + Vector3(0, 0.4, 0), 4.0, 0.8, 0.0)
 	Game.shake(0.8, 0.6)
 	Game.rumble(0.8, 1.0, 0.4)
-	var burst := FireFx.flames(420, 0.75, 1.2)
+	var burst := FireFx.flames(520, 0.8, 1.6)
+	burst.color = Color(1, 0.55, 1, 0.8)
 	burst.one_shot = true
 	burst.explosiveness = 0.8
 	burst.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
@@ -655,7 +657,7 @@ func _build_visuals() -> void:
 		add_child(pivot)
 		var wall := MeshInstance3D.new()
 		wall.mesh = FireFx.wall_mesh(ARM_FROM - 0.35, REACH, WALL_H)
-		wall.material_override = FireFx.wall_material(REACH - ARM_FROM)
+		wall.material_override = FireFx.wall_material(REACH - ARM_FROM, false, WALL_H)
 		wall.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		wall.extra_cull_margin = 4.0
 		pivot.add_child(wall)
@@ -664,13 +666,24 @@ func _build_visuals() -> void:
 		strip.material_override = FireFx.strip_material(REACH - ARM_FROM)
 		strip.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		pivot.add_child(strip)
-		var fl := FireFx.flames(120, 0.3, 0.7)
+		# (they ride on the arm: left behind, a sweeping arm would strew the floor with flames)
+		var fl := FireFx.flames(110, 0.34, 0.9)
+		fl.local_coords = true
 		fl.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
 		fl.emitting = false
-		fl.gravity = Vector3(0, 3.0, 0)
-		fl.initial_velocity_min = 0.8
-		fl.initial_velocity_max = 2.0
+		fl.gravity = Vector3(0, 2.0, 0)
+		fl.initial_velocity_min = 0.3
+		fl.initial_velocity_max = 1.0
 		pivot.add_child(fl)
+		var em := FireFx.embers(44, 1.1)
+		em.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+		em.emitting = false
+		em.initial_velocity_max = 2.4
+		pivot.add_child(em)
+		var sm := FireFx.smoke_emitter(16, 1.7, 1.1)
+		sm.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+		sm.emitting = false
+		pivot.add_child(sm)
 		var lights: Array = []
 		for x in [5.0, 11.0]:
 			var l := OmniLight3D.new()
@@ -683,24 +696,25 @@ func _build_visuals() -> void:
 			pivot.add_child(l)
 			lights.append(l)
 		pivot.visible = false
-		_arms.append({"pivot": pivot, "wall": wall, "strip": strip, "flames": fl, "lights": lights})
+		_arms.append({"pivot": pivot, "wall": wall, "strip": strip, "flames": fl, "embers": em, "smoke": sm, "lights": lights})
 
 	_ring = Node3D.new()
 	add_child(_ring)
 	var band := MeshInstance3D.new()
 	band.mesh = FireFx.band_mesh(1.1, 72)
 	band.scale = Vector3(RING_R, 1.0, RING_R)
-	_ring_mat = FireFx.wall_material(TAU * RING_R, true)
+	_ring_mat = FireFx.wall_material(TAU * RING_R, true, 1.1)
 	band.material_override = _ring_mat
 	band.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_ring.add_child(band)
-	_ring_flames = FireFx.flames(110, 0.45, 0.7)
+	_ring_flames = FireFx.flames(100, 0.45, 0.8)
 	_ring_flames.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
 	_ring_flames.emission_ring_axis = Vector3.UP
 	_ring_flames.emission_ring_radius = RING_R
 	_ring_flames.emission_ring_inner_radius = RING_R - 0.12
 	_ring_flames.emission_ring_height = 0.05
 	_ring_flames.emitting = false
+	_ring_flames.color = Color(1, 0.6, 1, 0.8)
 	_ring.add_child(_ring_flames)
 	_ring_glow = FireFx.floor_quad((RING_R + 1.2) * 2.0)
 	_ring_glow.material_override = FireFx.glow_material("fire_ring",
@@ -751,7 +765,7 @@ func _build_visuals() -> void:
 
 	_blast_band = MeshInstance3D.new()
 	_blast_band.mesh = FireFx.band_mesh(1.0, 72)
-	_blast_mat = FireFx.wall_material(TAU * BLAST_R, true)
+	_blast_mat = FireFx.wall_material(TAU * BLAST_R, true, 1.0)
 	_blast_band.material_override = _blast_mat
 	_blast_band.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_blast_band.visible = false
@@ -762,12 +776,12 @@ func _build_visuals() -> void:
 	_cracks.material_override = _cracks_mat
 	_cracks.visible = false
 	add_child(_cracks)
-	# (no band out where the blast's ring of flame stood: in the finisher only the floor burns,
-	# and a ring there would read as the blast again)
-	for r in [3.6, 10.8, 14.6]:
+	# only the ring round him: in the finisher it's the floor that burns, and rings of flame
+	# further out would read as walls when all it takes is a jump
+	for r in [3.6]:
 		var band2 := MeshInstance3D.new()
 		band2.mesh = FireFx.band_mesh(1.0, 96)
-		var m2 := FireFx.wall_material(TAU * r, true)
+		var m2 := FireFx.wall_material(TAU * r, true, 1.0)
 		band2.material_override = m2
 		band2.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		band2.visible = false
@@ -907,7 +921,7 @@ func _update_ring(delta: float) -> void:
 	_ring.global_position = center
 	_ring_mat.set_shader_parameter("alpha_mult", _ring_level)
 	_ring_mat.set_shader_parameter("height", 0.55 + 0.45 * _ring_level)
-	_ring_mat.set_shader_parameter("heat", 0.72 + 0.25 * _heat)
+	_ring_mat.set_shader_parameter("heat", 0.5 + 0.2 * _heat)
 	(_ring_glow.material_override as StandardMaterial3D).albedo_color = Color(1.1, 0.95, 0.85, _ring_level)
 	(_ring.get_node("RingLight") as OmniLight3D).light_energy = 2.0 * _ring_level
 
@@ -923,6 +937,8 @@ func _update_arms(delta: float) -> void:
 		var on := _arm_len > 0.01
 		pivot.visible = on
 		(a["flames"] as CPUParticles3D).emitting = _arm_len > 0.15
+		(a["embers"] as CPUParticles3D).emitting = _arm_len > 0.3
+		(a["smoke"] as CPUParticles3D).emitting = _arm_len > 0.3
 		if not on:
 			continue
 		pivot.global_position = center + fwd * ARM_OFFSET
@@ -930,7 +946,7 @@ func _update_arms(delta: float) -> void:
 		var heat := clampf(_heat, 0.0, 2.0)
 		var wall: ShaderMaterial = (a["wall"] as MeshInstance3D).material_override
 		wall.set_shader_parameter("reveal", _arm_len)
-		wall.set_shader_parameter("heat", 0.35 + 0.65 * heat)
+		wall.set_shader_parameter("heat", 0.3 + 0.55 * heat)
 		wall.set_shader_parameter("height", 0.6 + 0.1 * minf(heat, 1.0) + 0.25 * maxf(0.0, heat - 1.0))
 		wall.set_shader_parameter("alpha_mult", clampf(heat * 1.4, 0.0, 1.0))
 		var strip: ShaderMaterial = (a["strip"] as MeshInstance3D).material_override
@@ -941,7 +957,12 @@ func _update_arms(delta: float) -> void:
 		var run := (REACH - ARM_FROM) * _arm_len
 		fl.position = Vector3(ARM_FROM + run * 0.5, 0.12, 0)
 		fl.emission_box_extents = Vector3(maxf(0.1, run * 0.5), 0.05, 0.14)
-		fl.color = Color(1, 1, 1, clampf(heat, 0.0, 1.0))
+		fl.color = Color(1, 0.72, 1, clampf(heat, 0.0, 1.0))
+		for key in ["embers", "smoke"]:
+			var extra: CPUParticles3D = a[key]
+			extra.position = Vector3(ARM_FROM + run * 0.5, 0.35 if key == "embers" else 0.7, 0)
+			extra.emission_box_extents = Vector3(maxf(0.1, run * 0.5), 0.1, 0.18)
+			extra.color = Color(1, 1, 1, clampf(heat, 0.0, 1.0))
 		for l in a["lights"]:
 			var light: OmniLight3D = l
 			light.light_energy = 1.4 * minf(heat, 1.3) * clampf((_arm_len * REACH - light.position.x) / 2.0, 0.0, 1.0)
