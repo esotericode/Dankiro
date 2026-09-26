@@ -12,6 +12,9 @@ extends Node3D
 ##    window runs out), blue when only a block is left.
 ##  * shuriken in flight (with where they'll be in 0.1 s) and a marker where each blow landed:
 ##    gold deflect, blue block, red hit, magenta mikiri, cyan dodged.
+##  * his Inferno: the blast radius while he channels (and the blast front), each arm of fire
+##    as a line at the height you have to clear (orange while it can hit you), and the ring
+##    round him. His hurtbox is orange while the fire turns your sword.
 ## The HUD adds the live readout (Hud._update_debug). Keeps drawing while paused.
 
 const C_HURT := Color(0.3, 1.0, 0.45, 0.9)
@@ -25,6 +28,8 @@ const C_KATANA := Color(1.0, 0.95, 0.3, 1.0)
 const C_DEFLECT := Color(1.0, 0.8, 0.25, 1.0)
 const C_BLOCK := Color(0.4, 0.62, 1.0, 1.0)
 const C_SHURIKEN := Color(1.0, 0.55, 0.2, 1.0)
+const C_FIRE := Color(1.0, 0.45, 0.05, 1.0)
+const C_MANTLE := Color(1.0, 0.5, 0.1, 0.95)
 const MARK_TIME := 0.9
 
 var player: Player
@@ -91,6 +96,7 @@ func _process(delta: float) -> void:
 	_weapon(player, C_KATANA)
 	_guard_ring()
 	_shuriken()
+	_inferno()
 	for m in _marks:
 		if not get_tree().paused:
 			m[2] = float(m[2]) - real_dt
@@ -123,6 +129,8 @@ func _hurtboxes() -> void:
 			bc = C_IGNORED
 		Boss.S.REACT:
 			bc = C_OPEN
+		Boss.S.INFERNO:
+			bc = C_MANTLE
 		_:
 			if not boss.can_be_hit():
 				bc = C_IFRAMES
@@ -172,6 +180,29 @@ func _shuriken() -> void:
 			var s := n as Shuriken
 			_star(s.global_position, 0.1, C_SHURIKEN)
 			_line(s.global_position, s.global_position + s.velocity * 0.1, Color(C_SHURIKEN, 0.6))
+
+
+func _inferno() -> void:
+	var inf := boss.inferno
+	if inf == null or not inf.is_active():
+		return
+	var c := inf.center + Vector3(0, 0.03, 0)
+	if inf.charging():
+		_ring(c, Inferno.BLAST_R, Color(C_FIRE, 0.9), 64)
+	var br := inf.blast_radius()
+	if br > 0.0:
+		_ring(c, br, C_FIRE, 64)
+	if inf.ring_live():
+		_ring(c, Inferno.RING_R, C_FIRE, 48)
+	if inf.stage >= Inferno.St.SPIN:
+		var col := C_FIRE if inf.arms_live() else Color(C_FIRE, 0.35)
+		for yaw in inf.arm_yaws():
+			var d := Combat.dir_of(float(yaw))
+			var a := inf.center + d * Inferno.ARM_FROM
+			var b := inf.center + d * Inferno.REACH
+			var top := Vector3(0, inf.fire_top, 0)
+			_thick_line(a + top, b + top, col, 0.02)
+			_line(a + Vector3(0, 0.03, 0), b + Vector3(0, 0.03, 0), Color(col, 0.5))
 
 
 # ------------------------------------------------------------------------------ primitives

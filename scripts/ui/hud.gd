@@ -375,6 +375,7 @@ func _update_debug() -> void:
 	lines.append("DIAGNOSTICS (F3)")
 	lines.append("hurtbox  green hittable, cyan i-frames, yellow open, grey ignores hits")
 	lines.append("weapon   red hit window, orange perilous, yellow your katana")
+	lines.append("fire     orange arms/ring/blast (Inferno), flames up to the jump line")
 	lines.append("guard    gold deflect window (shrinks), blue block")
 	lines.append("last guard: " + _last_timing)
 	lines.append("")
@@ -395,10 +396,26 @@ func _update_debug() -> void:
 		lines.append("       cooldown %.2f   reeling %d/%d   guard %d/%d" % [maxf(0.0, boss.cooldown),
 			boss._flinches, boss._breakout_after, boss._guard_count, boss._parry_threshold])
 		lines.append("       " + _boss_clip_line())
+		if boss.inferno != null and (boss.inferno.is_active() or boss.phase >= 2):
+			lines.append("       " + _inferno_line())
 	if player and boss:
 		lines.append("distance %.2f m   fps %d   time scale %.2f" % [player.distance_to_opponent(),
 			Engine.get_frames_per_second(), Engine.time_scale])
 	_debug.text = "\n".join(lines)
+
+
+## The Inferno: what stage it's at, passes, when the next arm reaches you; or when he may use it.
+func _inferno_line() -> String:
+	var inf := boss.inferno
+	if not inf.is_active():
+		var wait := boss._inferno_at - Game.clock
+		return "inferno  used %d   next %s" % [boss.inferno_uses, "ready" if wait <= 0.0 else ("%.0f s" % wait if wait < 1e6 else "-")]
+	var s := "INFERNO  %s   passes %d/%d   burned %d   fire top %.2f m   turning %.0f deg/s" % [inf.stage_name(), inf.passes,
+		Inferno.PASSES, inf.hits, inf.fire_top, inf._omega]
+	var n := inf.next_pass_in()
+	if n < INF:
+		s += "   next arm in %.2f s" % n
+	return s
 
 
 ## His current clip, and where it is relative to its hit windows.

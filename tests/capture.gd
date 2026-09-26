@@ -2,7 +2,7 @@ extends Node
 ## Scripted capture director for visual checks with Godot's Movie Maker:
 ##   godot --write-movie out/frame.png --fixed-fps 30 res://tests/capture.tscn -- <shot>
 ## Shots: overview, deflect, deflect_offcenter, block, mikiri, thrust_backstep, sweep, sweep_flee, whirl, shuriken,
-## shuriken5, charge, slashes, parried, attack <clip> [distance], recovery <clip>, diagnostics, the menus
+## shuriken5, charge, slashes, parried, inferno [stand|wide], attack <clip> [distance], recovery <clip>, diagnostics, the menus
 ## (menu_title, menu_options, menu_start, menu_pause), and art checks: model (orbit), model_head, model_face, model_face_p2, model_combo,
 ## model_flourish.
 ## Loads the real game scene (arena, lighting, HUD, lock-on camera), skips the intro, stages
@@ -80,6 +80,8 @@ func _physics_process(delta: float) -> void:
 	for s in due:
 		_steps.erase(s)
 		(s[1] as Callable).call()
+	if has_meta("inferno_bot") and boss != null:
+		_inferno_bot_tick()
 	if t >= _end_at:
 		get_tree().quit()
 
@@ -379,6 +381,46 @@ func shot_recovery() -> void:
 	_art_camera(4.2, 1.6, 1.25, 0.0, 35.0)
 	at(0.3, func(): boss_string([clip]))
 	_end_at = 0.3 + AnimLibrary.get_clip(clip).length + 0.5
+
+
+## Phase 2's fire move (the Inferno) from the lock-on camera: he leaps to the middle, you back
+## out of the blast radius while he channels, then jump each arm of fire (the bot jumps 0.3 s
+## before an arm reaches it). `-- inferno stand` stands still and gets burned instead;
+## `-- inferno wide` films it (jumping) from high above the arena.
+func shot_inferno() -> void:
+	var args := OS.get_cmdline_user_args()
+	var mode: String = args[1] if args.size() > 1 else "jump"
+	_stage(7.0, Vector3(0, 0, -4.0))
+	boss._enter_phase(2, false)
+	at(0.3, func(): boss.begin_inferno())
+	set_meta("inferno_bot", "stand" if mode == "stand" else "jump")
+	if mode == "wide":
+		var cc := Game.camera as Camera3D
+		if cc != null:
+			cc.set_process(false)
+			cc.set_physics_process(false)
+		Game.hud.visible = false
+		var cam := Camera3D.new()
+		cam.fov = 50.0
+		add_child(cam)
+		cam.current = true
+		cam.global_position = Vector3(9.0, 15.0, 17.0)
+		cam.look_at(Vector3(0, 0, 0.5), Vector3.UP)
+	_end_at = 16.5
+
+
+var _jumped_for := -1
+
+
+func _inferno_bot_tick() -> void:
+	var inf := boss.inferno
+	var to := Combat.flat(player.global_position - inf.center)
+	var escaping := boss.state == Boss.S.INFERNO and inf.stage <= Inferno.St.IGNITE and not inf.blast_hit
+	player.bot_move = Vector2(0, 1) if escaping and to.length() < Inferno.BLAST_R + 1.5 else Vector2.ZERO
+	if str(get_meta("inferno_bot")) == "jump" and inf.stage == Inferno.St.SPIN and inf.passes != _jumped_for:
+		if inf.next_pass_in() <= 0.30 and player.state != Player.S.AIR and player.state != Player.S.KNOCKDOWN:
+			_jumped_for = inf.passes
+			player.press_action("jump", Game.clock)
 
 
 ## His staff plant (the intro / flourish), 3/4 front.

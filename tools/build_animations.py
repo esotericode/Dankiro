@@ -1302,8 +1302,222 @@ def build_boss():
          events=[{"t": 0.44, "type": "ground_impact", "blade": "lower"}])
 
 
+# =====================================================================================
+# BOSS: Inferno (phase 2 on). He leaps to the middle of the arena and drives the staff into
+# the stones; fire climbs it while he channels (the floor glows out to the blast radius);
+# he wrenches it free (the fire blast throws you out), lifts it overhead with both ends
+# ablaze, then drops into a low wide stance with the staff level across his hips and turns:
+# the fire from both ends reaches the walls and sweeps the arena (scripts/combat/inferno.gd
+# drives the turn and the fire). Spent afterwards: he leans on the planted staff, panting.
+# =====================================================================================
+FIRE_SPIN_OMEGA = 100.0     # deg/s the stepping loop is authored for (the game scales its speed)
+FIRE_SPIN_CYCLE = 1.2       # one step with each foot
+FIRE_SPIN_DUTY = 0.6        # fraction of the cycle each foot is planted
+FIRE_PLANT_C = [0.06, 1.30, -0.44]      # staff centre when planted: lower blade 0.3 m into the stones
+FIRE_SPIN_C = [0.0, 0.98, -0.30]        # staff centre in the spin: level across his hips
+
+
+def place_c(pose, center, shaft, edge, grip_r, grip_l, prev=None):
+    """Like place(), but positions the staff by its centre."""
+    s = unit(shaft)
+    return place(pose, list(np.array(center, dtype=float) + s * grip_r), s, edge, grip_r, grip_l, prev)
+
+
+def staff_turn(t0, t1, steps, c0, c1, shaft0, edge0, axis, deg, prev_rot, ease=None):
+    """The staff turning rigidly about `axis` while its centre moves c0 -> c1: [(t, centre, shaft, edge)]."""
+    out = []
+    for i in range(1, steps + 1):
+        u = i / steps
+        ue = u if ease is None else ease(u)
+        R = axis_angle(axis, deg * ue)
+        out.append((t0 + (t1 - t0) * u, lerp3(c0, c1, ue), R @ unit(shaft0), R @ unit(edge0)))
+    return out
+
+
+def fire_spin_pose(S, ph):
+    """The spin loop at phase ph (0..1). His pivot turns right (clockwise from above) at
+    FIRE_SPIN_OMEGA; a planted foot therefore turns the other way in his frame, and the
+    swinging foot steps back round ahead of the turn. The staff stays square across him."""
+    p = S.copy()
+    p.update({"hips_pos": [0, round(0.80 - 0.018 * math.cos(4 * math.pi * ph), 4), 0.02],
+              "hips": [0, round(5.0 * math.sin(2 * math.pi * ph), 3), 0],
+              "spine": [-8, round(-2.0 * math.sin(2 * math.pi * ph), 3), 0],
+              "chest": [round(-8 - 1.5 * math.cos(4 * math.pi * ph), 3), round(-3.0 * math.sin(2 * math.pi * ph), 3), 0],
+              "neck": [10, 0, 0], "head": [6, 0, 0], "yaw": 0.0, "root": [0, 0, 0],
+              "knee_l": [-0.6, 0, -1], "knee_r": [0.6, 0, -1],
+              "elbow_l": [-0.7, -0.7, 0.1], "elbow_r": [0.7, -0.7, 0.1]})
+    exc = FIRE_SPIN_OMEGA * FIRE_SPIN_DUTY * FIRE_SPIN_CYCLE / 2.0       # degrees a planted foot turns
+    for side, base, yaw0, off in (("r", [0.38, 0.08, 0.04], -12.0, 0.0), ("l", [-0.38, 0.08, -0.04], 12.0, 0.5)):
+        u = (ph + off) % 1.0
+        if u < FIRE_SPIN_DUTY:
+            beta = -exc + 2 * exc * (u / FIRE_SPIN_DUTY)
+            lift = 0.0
+        else:
+            s = (u - FIRE_SPIN_DUTY) / (1 - FIRE_SPIN_DUTY)
+            beta = exc - 2 * exc * smooth(s)
+            lift = 0.15 * math.sin(math.pi * s)
+        pos = axis_angle([0, 1, 0], beta) @ np.array(base, dtype=float)
+        p["foot_" + side] = r3([pos[0], base[1] + lift, pos[2]])
+        p["foot_%s_rot" % side] = [round(8.0 * lift / 0.15, 2), round(yaw0 + beta, 2), 0]
+    bob = -0.012 * math.cos(4 * math.pi * ph)
+    place_c(p, [FIRE_SPIN_C[0], FIRE_SPIN_C[1] + bob, FIRE_SPIN_C[2]], [1, 0, 0], [0, 0, -1], 0.30, -0.30,
+            S["weapon_rot"])
+    return p
+
+
+def build_boss_fire():
+    S = B_STANCE
+    spin0 = fire_spin_pose(S, 0.0)
+    UP = [0.0, 1.0, 0.0]
+    EDGE_V = [0.0, 0.0, -1.0]       # planted / vertical staff: upper blade's edge toward you
+
+    # ---- the stepping loop (the game turns him; this is his body and feet while he turns)
+    n = 24
+    keys = [key(FIRE_SPIN_CYCLE * i / n, fire_spin_pose(S, i / n)) for i in range(n + 1)]
+    clip("b_fire_spin", "boss", keys, loop=True, omega=FIRE_SPIN_OMEGA)
+
+    # ---- leap to the middle and drive the staff into the stones
+    crouch = S.copy()
+    crouch.update({"hips_pos": [0, 0.80, 0.10], "hips": [0, -12, 0], "spine": [-10, 0, 0], "chest": [-16, 0, 0],
+                   "neck": [12, 0, 0], "head": [6, 0, 0], "foot_l": [-0.20, 0.08, -0.26], "foot_r": [0.24, 0.08, 0.24],
+                   "elbow_l": [-0.8, -0.5, 0.3], "elbow_r": [0.8, -0.5, 0.3]})
+    crouch["weapon_pos"] = r3(np.array(S["weapon_pos"]) + np.array([0.0, -0.20, 0.10]))
+
+    def air_pose(hy, tuck, stc, lift=0.0):
+        a = S.copy()
+        a.update({"hips_pos": [0, hy, 0.0], "hips": [0, -8, 0], "spine": [2, 0, 0], "chest": [4, 0, 0],
+                  "neck": [-2, 0, 0], "head": [-2, 0, 0],
+                  "foot_l": [-0.18, round(hy - 0.93 + 0.40 * tuck, 3), round(-0.12 - 0.08 * tuck, 3)],
+                  "foot_r": [0.20, round(hy - 0.90 + 0.52 * tuck, 3), round(0.16 + 0.06 * tuck, 3)],
+                  "foot_l_rot": [round(20 * tuck, 1), -6, 0], "foot_r_rot": [round(40 * tuck, 1), -20, 0],
+                  "knee_l": [-0.2, 0, -1], "knee_r": [0.2, 0, -1],
+                  "elbow_l": [-0.8, -0.3, 0.4], "elbow_r": [0.8, -0.3, 0.4]})
+        place_c(a, [0.12, hy + stc + lift, -0.26], UP, EDGE_V, 0.20, -0.15, S["weapon_rot"])
+        return a
+
+    landed = S.copy()                  # deep crouch hanging on the planted staff, head down
+    landed.update({"hips_pos": [0, 0.70, 0.08], "hips": [0, -6, 0], "spine": [-18, -2, 0], "chest": [-20, -4, 0],
+                   "neck": [18, 4, 0], "head": [10, 2, 0],
+                   "foot_l": [-0.34, 0.08, -0.12], "foot_l_rot": [0, 15, 0],
+                   "foot_r": [0.34, 0.08, 0.14], "foot_r_rot": [0, -15, 0],
+                   "knee_l": [-0.6, 0, -1], "knee_r": [0.6, 0, -1],
+                   "elbow_l": [-0.8, -0.5, 0.3], "elbow_r": [0.8, -0.5, 0.3]})
+    place_c(landed, FIRE_PLANT_C, UP, EDGE_V, 0.22, -0.14, S["weapon_rot"])
+
+    # stance staff (forward-up) -> upright at his right side: a pitch about his side axis
+    st_shaft = unit([-0.093, 0.45, -0.885])
+    ax_up, a_up = arc(st_shaft, UP)
+    keys = [key(0.0, "b_stance"),
+            key(0.24, crouch, ease="inout_sine"),
+            key(0.30, dict(crouch, hips_pos=[0, 0.78, 0.10], chest=[-18, 0, 0]), ease="inout_sine")]
+    # take-off -> apex -> drop, the staff swinging upright on the way up and lifted to stab down
+    rise = air_pose(1.20, 0.3, 0.55)
+    apex = air_pose(2.30, 1.0, 0.45)
+    fall = air_pose(1.55, 0.6, 0.70, lift=0.15)
+    R_half = axis_angle(ax_up, a_up * 0.55)
+    place_c(rise, [0.10, 1.75, -0.30], R_half @ st_shaft, R_half @ unit([0, -0.9, -0.45]), 0.20, -0.15, S["weapon_rot"])
+    keys += [key(0.40, rise, ease="out_quad"),
+             key(0.64, apex, ease="out_sine"),
+             key(0.88, fall, ease="in_sine"),
+             key(0.98, landed, ease="in_quad"),
+             key(1.12, dict(landed, hips_pos=[0, 0.68, 0.09], chest=[-22, -4, 0]), ease="out_quad"),
+             key(1.35, dict(landed, hips_pos=[0, 0.72, 0.08]), ease="inout_sine")]
+    clip("b_fire_leap", "boss", keys, travel=[0.30, 0.98], track=[[0.0, 0.30, 360], [0.30, 0.98, 120]],
+         events=[{"t": 0.26, "type": "sfx", "name": "leap"}, {"t": 0.98, "type": "fire_plant"}])
+
+    # ---- ignition: channel -> wrench free (blast) -> overhead -> into the spin stance
+    chan = landed.copy()
+    chan.update({"hips_pos": [0, 0.84, 0.06], "spine": [-10, -2, 0], "chest": [-12, -4, 0], "neck": [22, 4, 0],
+                 "head": [14, 2, 0]})
+    place_c(chan, FIRE_PLANT_C, UP, EDGE_V, 0.22, -0.14, landed["weapon_rot"])
+    breathe = dict(chan, hips_pos=[0, 0.86, 0.06], chest=[-8, -4, 0], neck=[16, 4, 0])
+    glare = dict(chan, hips_pos=[0, 0.84, 0.06], chest=[-12, -4, 0], neck=[-2, 2, 0], head=[-4, 0, 0])
+    load = dict(glare, hips_pos=[0, 0.78, 0.08], chest=[-16, -4, 0], spine=[-12, -2, 0], neck=[0, 2, 0])
+    load = place_c(dict(load), [FIRE_PLANT_C[0], FIRE_PLANT_C[1] - 0.04, FIRE_PLANT_C[2]], UP, EDGE_V, 0.22, -0.14,
+                   landed["weapon_rot"])
+    wrench = dict(chan, hips_pos=[0, 0.94, 0.04], chest=[-4, -2, 0], spine=[-4, 0, 0], neck=[-6, 0, 0], head=[-4, 0, 0])
+    W_C = [0.06, 1.78, -0.40]
+    wrench = place_c(dict(wrench), W_C, UP, EDGE_V, 0.16, -0.20, landed["weapon_rot"])
+    over = S.copy()                    # overhead, level, both ends ablaze; chest up, roaring
+    over.update({"hips_pos": [0, 1.00, 0.04], "hips": [0, 0, 0], "spine": [6, 0, 0], "chest": [8, 0, 0],
+                 "neck": [-12, 0, 0], "head": [-8, 0, 0],
+                 "foot_l": [-0.36, 0.08, -0.06], "foot_l_rot": [0, 12, 0], "foot_r": [0.36, 0.08, 0.06],
+                 "foot_r_rot": [0, -12, 0], "knee_l": [-0.6, 0, -1], "knee_r": [0.6, 0, -1],
+                 "elbow_l": [-0.9, 0.2, 0.2], "elbow_r": [0.9, 0.2, 0.2]})
+    O_C = [0.0, 2.08, -0.12]
+    # upright -> level (upper blade to his right): a roll about the forward axis
+    turn = staff_turn(1.62, 1.88, 6, W_C, O_C, UP, EDGE_V, [0, 0, -1], 90.0, None, ease=smooth)
+    keys = [key(0.0, landed),
+            key(0.34, chan, ease="inout_sine"),
+            key(0.62, breathe, ease="inout_sine"),
+            key(0.90, chan, ease="inout_sine"),
+            key(1.16, breathe, ease="inout_sine"),
+            key(1.40, glare, ease="inout_sine"),
+            key(1.56, load, ease="inout_sine"),
+            key(1.62, wrench, ease="out_cubic")]
+    prev = wrench["weapon_rot"]
+    for i, (t, c, sh, ed) in enumerate(turn):
+        u = (i + 1) / len(turn)
+        body = {k_: (lerp3(wrench[k_], over[k_], smooth(u)) if isinstance(over[k_], list) else over[k_])
+                for k_ in ("hips_pos", "spine", "chest", "neck", "head", "foot_l", "foot_r", "elbow_l", "elbow_r")}
+        k_ = dict(over)
+        k_.update(body)
+        place_c(k_, c, sh, ed, round(0.16 + (0.30 - 0.16) * u, 3), round(-0.20 + (-0.30 + 0.20) * u, 3), prev)
+        prev = k_["weapon_rot"]
+        keys.append(key(t, k_, ease="linear" if i else "in_sine"))
+    over = place_c(dict(over), O_C, [1, 0, 0], [0, 0, -1], 0.30, -0.30, prev)
+    hold = dict(over, chest=[10, 0, 0], neck=[-14, 0, 0])
+    hold = place_c(dict(hold), [O_C[0], O_C[1] + 0.04, O_C[2]], [1, 0, 0], [0, 0, -1], 0.30, -0.30, prev)
+    keys += [key(2.04, hold, ease="out_quad"),
+             key(2.20, over, ease="inout_sine"),
+             key(2.54, dict(spin0, chest=[-12, 0, 0], hips_pos=[0, 0.76, 0.02]), ease="inout_cubic"),
+             key(2.76, spin0, ease="inout_sine")]
+    # The channel is long enough to get out of the blast radius (the floor glows out to it)
+    # even walking locked on; he keeps turning to face you, and squares up before the turn.
+    clip("b_fire_ignite", "boss", keys, track=[[0.0, 1.5, 90], [2.2, 2.76, 60]],
+         events=[{"t": 0.02, "type": "fire_charge"}, {"t": 1.60, "type": "fire_blast"},
+                 {"t": 1.96, "type": "perilous", "kind": "sweep"}, {"t": 2.48, "type": "fire_whips"}])
+
+    # ---- spent: the turn peters out, he drops the left end into the stones and leans on it,
+    # heaving for breath (open to punishment), then pulls it free and takes his stance
+    slump = landed.copy()
+    slump.update({"hips_pos": [0, 0.72, 0.10], "spine": [-22, -4, 0], "chest": [-26, -6, 0], "neck": [24, 4, 0],
+                  "head": [14, 2, 0]})
+    place_c(slump, FIRE_PLANT_C, UP, EDGE_V, 0.22, -0.14, landed["weapon_rot"])
+    # level (upper blade right) -> upright: roll back about the forward axis, the left end dropping
+    stag = dict(spin0, hips=[0, -14, 0], chest=[-14, -18, 0], spine=[-10, -8, 0], hips_pos=[0, 0.78, 0.04],
+                foot_r=[0.40, 0.08, 0.20])
+    keys = [key(0.0, spin0), key(0.30, stag, ease="out_quad")]
+    turn = staff_turn(0.30, 0.62, 5, FIRE_SPIN_C, FIRE_PLANT_C, [1, 0, 0], [0, 0, -1], [0, 0, 1], 90.0, None,
+                      ease=smooth)
+    prev = spin0["weapon_rot"]
+    for i, (t, c, sh, ed) in enumerate(turn):
+        u = (i + 1) / len(turn)
+        k_ = dict(slump)
+        for ch in ("hips_pos", "spine", "chest", "neck", "head", "foot_l", "foot_r"):
+            k_[ch] = lerp3(stag[ch], slump[ch], smooth(u))
+        place_c(k_, c, sh, ed, round(0.30 + (0.22 - 0.30) * u, 3), round(-0.30 + (-0.14 + 0.30) * u, 3), prev)
+        prev = k_["weapon_rot"]
+        keys.append(key(t, k_, ease="linear" if i else "in_sine"))
+    t = 0.62
+    for i in range(7):                  # heaving breaths
+        t += 0.22
+        up_ = i % 2 == 0
+        keys.append(key(t, dict(slump, chest=[-22 if up_ else -28, -6, 0], hips_pos=[0, 0.73 if up_ else 0.71, 0.10],
+                                neck=[20 if up_ else 26, 4, 0]), ease="inout_sine"))
+    rise_ = dict(chan, neck=[4, 2, 0], head=[0, 0, 0])
+    keys.append(key(2.30, rise_, ease="inout_sine"))
+    pull = place_c(dict(rise_, hips_pos=[0, 0.92, 0.04]), [FIRE_PLANT_C[0], 1.66, FIRE_PLANT_C[2]], UP, EDGE_V, 0.20,
+                   -0.16, landed["weapon_rot"])
+    keys.append(key(2.52, pull, ease="out_quad"))
+    keys.append({"t": 3.0, "pose": "b_stance", "ease": "inout_sine"})
+    clip("b_fire_spent", "boss", keys, vuln=[0.20, 2.55], track=[[2.3, 3.0, 160]],
+         events=[{"t": 0.04, "type": "fire_gutter"}, {"t": 0.62, "type": "ground_impact", "blade": "lower"}])
+
+
 # Clips where the staff is meant to rest on / dig into the ground.
-FLOOR_EXEMPT = {"b_posture_break", "b_death", "b_deathblow_react", "b_revive"}
+FLOOR_EXEMPT = {"b_posture_break", "b_death", "b_deathblow_react", "b_revive", "b_fire_leap", "b_fire_ignite",
+                "b_fire_spent"}
 FLOOR_CLEARANCE = 0.035
 
 
@@ -1451,6 +1665,7 @@ def clamp_blades_to_floor(rig_name="boss", passes=24, step=1.0 / 120.0):
 def main():
     build_player()
     build_boss()
+    build_boss_fire()
     # Unwrap first, so the floor clamp samples the short way round, then again for its keys.
     print("rotations unwound at", unwrap_rotations(), "boss key channels")
     print("floor clamp: tilted the staff off the floor at", clamp_blades_to_floor(), "boss keys")

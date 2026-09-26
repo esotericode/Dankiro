@@ -8,6 +8,8 @@ extends Combatant
 ##  * Posture break (or 0 vitality) -> kneels, deathblow window. Three lives: after each
 ##    deathblow he rises into the next phase (2 is faster and more aggressive; 3 is a copy
 ##    of 2 for now).
+##  * Phase 2 on: his staff smoulders, and he has the Inferno (scripts/combat/inferno.gd):
+##    he opens phase 2 with it, then uses it every so often (INFERNO_COOLDOWN).
 
 signal posture_broken
 signal life_lost(lives_left: int)
@@ -15,7 +17,7 @@ signal defeated
 signal perilous_warning(kind: String)
 signal struck(result: int, point: Vector3)   ## the player's sword reached him: Combat.RESULT_* (hit, block, parry)
 
-enum S { INTRO, NEUTRAL, ATTACK, GUARD, REACT, STAGGER, DEATHBLOWN, REVIVE, DEAD }
+enum S { INTRO, NEUTRAL, ATTACK, GUARD, REACT, STAGGER, DEATHBLOWN, REVIVE, DEAD, INFERNO }
 
 const LOCO := {"idle": "b_idle", "fwd": "b_walk_fwd", "back": "b_walk_back", "left": "b_walk_left",
 	"right": "b_walk_right", "run": "b_run"}
@@ -25,6 +27,8 @@ const RUN := 4.8
 const CHARGE := 6.4                  ## running at you: faster than your run, a touch under your sprint
 const ARENA_RADIUS := 13.5
 const DEATHBLOW_WINDOW_END := 2.75   ## b_posture_break time when he starts rising
+const INFERNO_COOLDOWN := 40.0       ## seconds from the end of one Inferno until he may use it again
+const INFERNO_PHASE3 := 18.0         ## ...and after rising into phase 3 (which has no opener)
 
 ## steps: [options ("a|b"), chance]; range: [min_d, max_d] meters; weight
 const SEQUENCES := {
@@ -105,6 +109,11 @@ var deathblow_marker: Sprite3D
 var _perilous_clip := ""
 var _danger_tex: Texture2D
 var passive := false
+var inferno: Inferno
+var staff_fire: StaffFire
+var inferno_uses := 0
+var _inferno_at := INF              ## Game.clock from when he may use the Inferno again
+var _opener := false                ## open with the Inferno as soon as the fight starts
 
 
 func _ready() -> void:
@@ -132,6 +141,14 @@ func _ready() -> void:
 		rig.add_child(tr)
 		trails.append(tr)
 	_build_aura()
+	staff_fire = StaffFire.new()
+	staff_fire.name = "StaffFire"
+	rig.add_child(staff_fire)
+	staff_fire.setup(rig)
+	inferno = Inferno.new()
+	inferno.name = "Inferno"
+	add_child(inferno)
+	inferno.setup(self)
 	deathblow_marker = Fx.glow_sprite(Fx.radial_texture("deathblow", Color(1.0, 0.12, 0.08, 1.0), Color(0.6, 0.0, 0.0, 0.0)),
 		Color(1, 1, 1, 1), 0.45)
 	deathblow_marker.visible = false
@@ -196,6 +213,9 @@ func is_dead() -> bool:
 ## Stops attacking (used after the player dies).
 func set_passive(v: bool) -> void:
 	passive = v
+	if v and state == S.INFERNO:
+		inferno.abort()
+		_to_neutral(0.5)
 
 
 func start_fight() -> void:
@@ -203,6 +223,9 @@ func start_fight() -> void:
 	state_time = 0.0
 	cooldown = 1.4
 	anim.play_locomotion(LOCO, 0.25)
+	if phase == 2:
+		_opener = true              # starting in phase 2 (Options): he opens with the Inferno
+		cooldown = 0.5
 
 
 func play_intro() -> void:
@@ -249,7 +272,12 @@ func _physics_process(delta: float) -> void:
 				_after_deathblow()
 		S.REVIVE:
 			if anim.finished:
-				_to_neutral(0.8)
+				if phase == 2 and not passive and opponent != null:
+					begin_inferno()      # he opens phase 2 with the Inferno
+				else:
+					_to_neutral(0.8)
+		S.INFERNO:
+			planar = inferno.update(delta)
 		S.DEAD:
 			pass
 	anim.update(delta)
@@ -309,6 +337,10 @@ func _state_neutral(delta: float) -> Vector3:
 	if _retreat > 0.45 and _mode == "":
 		_retreat = 0.0
 		cooldown = 0.0
+	if _opener and cooldown <= 0.0:
+		_opener = false
+		begin_inferno()
+		return Vector3.ZERO
 	match _mode:
 		"charge":
 			return _mode_charge(delta, d, dirp)
@@ -433,6 +465,9 @@ func _begin_action(pick: String, d: float) -> bool:
 			_seq.clear()
 			_play_attack("b_intro", 0.0)
 			return true
+		"inferno":
+			begin_inferno()
+			return true
 	_start_sequence(pick)
 	return true
 
@@ -464,6 +499,11 @@ func _pick_action(d: float) -> String:
 			w *= 0.5
 		options.append([sname, w])
 		total += w
+	# The Inferno (phase 2 on): more and more likely the longer it's been available.
+	if inferno_ready():
+		var wi := 1.2 + 0.12 * (Game.clock - _inferno_at)
+		options.append(["inferno", wi])
+		total += wi
 	if options.is_empty():
 		return ""
 	var roll := randf() * total
@@ -656,6 +696,8 @@ func _resolve_player_attack(info: Dictionary, p: Player) -> int:
 	match state:
 		S.INTRO, S.STAGGER, S.DEATHBLOWN, S.REVIVE, S.DEAD:
 			return Combat.RESULT_IGNORED
+		S.INFERNO:
+			return _mantle(info)
 	var pos: Vector3 = info.get("point", global_position + Vector3.UP * 1.3)
 	var facing_ok := Combat.angle_to(global_position, forward(), p.global_position) < 100.0
 	if state == S.ATTACK:
@@ -818,6 +860,10 @@ func receive_kick(p: Player, foot: Vector3) -> void:
 	match state:
 		S.INTRO, S.STAGGER, S.DEATHBLOWN, S.REVIVE, S.DEAD:
 			return
+		S.INFERNO:
+			FireFx.burst(get_parent(), foot, 0.6)
+			Sfx.play("fire_hiss", foot, 0.0)
+			return
 	var bonus := 1.6 if anim.is_playing("b_sweep") else 1.0
 	Sfx.play("kick", foot, 2.0)
 	Fx.dust(get_parent(), foot, 8, 0.3)
@@ -895,6 +941,7 @@ func _after_deathblow() -> void:
 		state_time = 0.0
 		anim.play("b_death", 0.2)
 		aura.emitting = false
+		staff_fire.set_level(0.0, 0.5)
 		_glow_target = 0.0
 		if eye_light:
 			var tw := eye_light.create_tween()
@@ -920,6 +967,12 @@ func _enter_phase(n: int, fanfare := true) -> void:
 		aura.amount = int(cfg["aura"])
 		if eye_light:
 			eye_light.light_energy = float(cfg["eye_light"])
+	# Phase 2 opens with the Inferno (which lights the staff); in phase 3 it's already alight.
+	if phase >= 3:
+		staff_fire.set_level(StaffFire.SMOULDER, 1.0)
+		_inferno_at = Game.clock + INFERNO_PHASE3
+	elif phase == 2:
+		_inferno_at = INF
 	vitals_changed.emit()
 	if fanfare:
 		Sfx.play_ui("roar", 0.0)
@@ -933,6 +986,46 @@ func set_start_phase(n: int) -> void:
 	lives_left = Combat.BOSS_LIVES - (n - 1)
 	if n > 1:
 		_enter_phase(n, false)
+
+
+# ---------------------------------------------------------------------------- the Inferno
+func inferno_ready() -> bool:
+	return phase >= 2 and not passive and Game.clock >= _inferno_at and opponent is Player \
+		and (opponent as Player).state != Player.S.DEAD
+
+
+## Hands over to the Inferno (scripts/combat/inferno.gd) until the fire is spent.
+func begin_inferno() -> void:
+	state = S.INFERNO
+	state_time = 0.0
+	_mode = ""
+	_seq.clear()
+	_opener = false
+	_end_perilous()
+	root_scale = 1.0
+	_inferno_at = INF
+	inferno_uses += 1
+	inferno.begin()
+
+
+## The fire is out: he's spent (b_fire_spent is his punish window), then back to normal.
+func inferno_spent() -> void:
+	_inferno_at = Game.clock + INFERNO_COOLDOWN
+	_seq.clear()
+	_seq_name = "inferno"
+	_flinches = 0
+	_play_attack("b_fire_spent", 0.0)
+
+
+## His burning body during the Inferno: your sword glances off the flames (no damage, no
+## posture either way), like hitting his guard.
+func _mantle(info: Dictionary) -> int:
+	var pos: Vector3 = info.get("point", global_position + Vector3.UP * 1.3)
+	FireFx.burst(get_parent(), pos, 0.7)
+	Sfx.play("fire_hiss", pos, 0.0, 1.0, 0.08)
+	Game.hitstop(0.03)
+	Game.shake(0.08, 0.1)
+	return Combat.RESULT_BLOCK
 
 
 # ---------------------------------------------------------------------------- events + visuals
@@ -959,6 +1052,10 @@ func _on_anim_event(_clip: String, ev: Dictionary) -> void:
 			Fx.flash(get_parent(), rig.joint_world("hand_l"), 0.28, Color(1.0, 0.85, 0.6), true)
 		"roar":
 			_enter_phase(phase + 1)
+		"fire_plant", "fire_charge", "fire_blast", "fire_whips":
+			inferno.on_event(str(ev.get("type", "")), ev)
+		"fire_gutter":
+			FireFx.smoke(get_parent(), rig.joint_world("chest") + Vector3(0, 0.3, 0), 12, 0.7)
 
 
 ## Shuriken from the left hand at where the player will be (a little lead on their movement).

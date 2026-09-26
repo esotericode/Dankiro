@@ -598,11 +598,11 @@ func root_motion_velocity(delta: float) -> Vector3:
 
 
 ## Whether a step's i-frames cover an attack of this kind. As in Sekiro, sweeps ignore dodge
-## i-frames, and a forward step's i-frames don't cover thrusts.
+## i-frames (so does his fire blast), and a forward step's i-frames don't cover thrusts.
 func is_dodge_invulnerable(kind := "") -> bool:
 	if state != S.DODGE or state_time < _iframes.x or state_time > _iframes.y:
 		return false
-	return kind != "sweep" and not _iframes_except.has(kind)
+	return not Combat.is_unblockable(kind) and not _iframes_except.has(kind)
 
 
 # ---------------------------------------------------------------------------- jumping
@@ -775,7 +775,7 @@ func _resolve_attack(info: Dictionary, attacker: Combatant) -> int:
 	if state == S.KNOCKDOWN and _in_clip_iframes():
 		return Combat.RESULT_IGNORED
 	var guarding := (state == S.GUARD or state == S.DEFLECT or state == S.BLOCK) and _facing_ok(attacker.global_position)
-	if guarding and kind != "sweep":
+	if guarding and not Combat.is_unblockable(kind):
 		var dt := t - guard_start
 		if dt >= -Combat.DEFLECT_GRACE and dt <= guard_window:
 			_do_deflect(info, attacker, dt)
@@ -785,7 +785,7 @@ func _resolve_attack(info: Dictionary, attacker: Combatant) -> int:
 		if is_guard_up() and kind != "thrust":
 			_do_block(info, attacker, pos)
 			return Combat.RESULT_BLOCK
-	elif kind != "sweep" and guard_start > t - 0.6:
+	elif not Combat.is_unblockable(kind) and guard_start > t - 0.6:
 		deflect_timed.emit((t - guard_start) * 1000.0, guard_window * 1000.0, "miss")
 	_do_hit(info, attacker, pos)
 	return Combat.RESULT_HIT
@@ -861,8 +861,12 @@ func _do_hit(info: Dictionary, attacker: Combatant, pos: Vector3) -> void:
 	damage(float(info.get("dmg", 20.0)))
 	add_posture(6.0)
 	var away := Combat.flat(global_position - attacker.global_position).normalized()
-	Fx.blood(get_parent(), pos, away + Vector3.UP * 0.2, 36)
-	Sfx.play("hit", pos, 2.0, 1.0, 0.08)
+	if str(info.get("element", "")) == "fire":
+		FireFx.burst(get_parent(), pos, 1.1)
+		Sfx.play("burn", pos, 3.0, 1.0, 0.08)
+	else:
+		Fx.blood(get_parent(), pos, away + Vector3.UP * 0.2, 36)
+		Sfx.play("hit", pos, 2.0, 1.0, 0.08)
 	Game.hitstop(Combat.HITSTOP_HIT)
 	Game.shake(0.4, 0.25)
 	Game.rumble(0.7, 0.8, 0.2)
@@ -872,10 +876,14 @@ func _do_hit(info: Dictionary, attacker: Combatant, pos: Vector3) -> void:
 	if hp <= 0.0:
 		_die()
 		return
-	if kind == "thrust" or kind == "sweep" or bool(info.get("final", false)) and float(info.get("dmg", 0.0)) >= 34.0:
+	if kind == "thrust" or kind == "sweep" or kind == "blast" or bool(info.get("final", false)) and float(info.get("dmg", 0.0)) >= 34.0:
 		_start_state(S.KNOCKDOWN)
 		anim.play("p_knockdown", 0.05)
 		_invuln_until = Game.clock + 0.2
+		# thrown back (his fire blast)
+		var kb: Vector3 = info.get("knockback", Vector3.ZERO)
+		if kb.length() > 0.01:
+			push(kb)
 	else:
 		_start_state(S.HIT)
 		anim.play("p_hit", 0.04)
@@ -901,6 +909,21 @@ func _do_mikiri(info: Dictionary, attacker: Combatant) -> void:
 	Game.rumble(0.5, 0.9, 0.25)
 	if Game.hud != null and Game.hud.has_method("show_callout"):
 		Game.hud.call("show_callout", "MIKIRI COUNTER")
+
+
+## Burned by the ring of fire round him (Inferno): it stings, but you keep control.
+func burn(amount: float, pos: Vector3) -> void:
+	if state == S.DEAD or state == S.DEATHBLOW:
+		return
+	damage(amount)
+	FireFx.burst(get_parent(), pos, 0.7)
+	Sfx.play("burn", pos, 0.0, 1.0, 0.08)
+	Game.shake(0.15, 0.12)
+	Game.rumble(0.4, 0.5, 0.12)
+	if Game.hud != null and Game.hud.has_method("flash_damage"):
+		Game.hud.call("flash_damage")
+	if hp <= 0.0:
+		_die()
 
 
 func _die() -> void:

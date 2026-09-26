@@ -37,6 +37,14 @@ const BANKS := {
 	"leap": ["leap"],
 	"throw": ["throw_1", "throw_2"],
 	"draw": ["draw"],
+	"fire_charge": ["fire_charge"],
+	"fire_blast": ["fire_blast"],
+	"fire_ignite": ["fire_ignite"],
+	"fire_whoosh": ["fire_whoosh"],
+	"fire_flare": ["fire_flare"],
+	"fire_hiss": ["fire_hiss"],
+	"fire_gutter": ["fire_gutter"],
+	"burn": ["burn"],
 }
 
 const POOL_3D := 24

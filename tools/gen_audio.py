@@ -181,6 +181,25 @@ def save(name, x, peak_db=-1.0, st=True, width=0.35):
     return path
 
 
+def crackle(dur, rate, seed=0, rate_end=None, lo=1400, hi=7500):
+    """Fire crackle: sparse random pops (Poisson, `rate` per second, ramping to `rate_end`)."""
+    rng = np.random.default_rng(seed)
+    n = int(dur * SR)
+    out = np.zeros(n)
+    t = 0.0
+    while True:
+        u = t / dur
+        r = rate if rate_end is None else rate + (rate_end - rate) * u
+        t += rng.exponential(1.0 / max(r, 0.1))
+        if t >= dur:
+            break
+        i = int(t * SR)
+        k = int(rng.uniform(0.002, 0.012) * SR)
+        pop = rng.standard_normal(k) * np.exp(-np.arange(k) / (k * 0.25)) * rng.uniform(0.3, 1.0)
+        out[i:i + k] += pop[: max(0, min(k, n - i))]
+    return bandpass(out, lo, hi)
+
+
 # ----------------------------------------------------------------------------- recipes
 def metal_hit(f0, dur=1.2, ring=1.0, brightness=1.0, click=1.0, body=1.0, thump=0.4, seed=0):
     """Blade-on-blade contact."""
@@ -391,6 +410,73 @@ def build(only=None):
     growl += bandpass(noise(dur, 420), 300, 2500) * 0.4
     growl *= env_bell(dur, 0.25, 1.3)
     out("roar", reverb(mix(growl * 0.8, thud(dur, 70, 30, 0.5, 0.9, 300, 421) * 0.8), 2.0, 0.35, bright=4000), peak_db=-0.8)
+
+    # --- fire (the Inferno): roaring noise bodies, crackle, whoomphs. Mono: they're positional.
+    dur = 1.6                       # the charge: a roar building up to the blast
+    t = t_axis(dur)
+    u = t / dur
+    body = swept_bandpass(noise(dur, 600), 180 + 1300 * u ** 1.6, q=1.6) * (0.15 + 0.85 * u ** 2.2)
+    rumble = sine_sweep(dur, 38, 72, 1.0) * (0.2 + 0.8 * u ** 2) * 0.5
+    out("fire_charge", reverb(mix(body, rumble, crackle(dur, 20, 601, rate_end=120) * (0.3 + 0.7 * u)), 0.9, 0.2),
+        peak_db=-1.5, st=False)
+    dur = 2.2                       # the blast
+    boom = thud(dur, 72, 26, 0.42, 1.0, 500, 610) * 1.4
+    roar_ = lowpass(noise(dur, 611), 2600) * env_exp(dur, 0.45, 0.004)
+    out("fire_blast", reverb(mix(boom, roar_ * 0.9, crackle(dur, 140, 612, rate_end=10) * 0.5), 1.8, 0.3, bright=4000),
+        peak_db=-0.5, st=False)
+    dur = 0.9                       # catching light: whoomph
+    t = t_axis(dur)
+    wh = swept_bandpass(noise(dur, 620), 2600 * np.exp(-t * 5.0) + 250, q=1.2) * env_exp(dur, 0.25, 0.02)
+    out("fire_ignite", reverb(mix(wh * 1.2, thud(dur, 90, 40, 0.12, 0.6, 400, 621) * 0.6, crackle(dur, 60, 622) * 0.4),
+                              0.8, 0.2), peak_db=-1.5, st=False)
+    dur = 0.7                       # an arm of fire going past (peaks ~0.28 s in)
+    t = t_axis(dur)
+    bell = env_bell(dur, 0.4, 1.8)
+    ws = swept_bandpass(noise(dur, 630), 350 + 1500 * bell, q=1.8) * bell
+    out("fire_whoosh", mix(ws * 1.3, lowpass(noise(dur, 631), 500) * bell * 0.8, crackle(dur, 90, 632) * bell * 0.5),
+        peak_db=-1.5, st=False)
+    dur = 1.0                       # the flare before the fourth pass: a sharp whoomph rising into a hiss
+    t = t_axis(dur)
+    fl = swept_bandpass(noise(dur, 640), 400 + 3000 * (t / dur) ** 0.7, q=1.4) * env_bell(dur, 0.18, 1.5)
+    out("fire_flare", reverb(mix(fl * 1.2, thud(dur, 110, 50, 0.1, 0.8, 600, 641) * 0.7, crackle(dur, 120, 642) * 0.5),
+                             1.0, 0.25), peak_db=-1.0, st=False)
+    dur = 0.5                       # steel meeting flame
+    hs = highpass(noise(dur, 650), 2800) * env_exp(dur, 0.14, 0.003)
+    tick = metal_hit(1850, 0.3, ring=0.25, brightness=0.8, click=0.9, body=0.6, thump=0.0, seed=651) * 0.5
+    out("fire_hiss", mix(hs, tick, crackle(dur, 80, 652) * 0.4), peak_db=-3.0, st=False)
+    dur = 0.6                       # burned
+    sz = bandpass(noise(dur, 660), 1800, 8000) * env_exp(dur, 0.18, 0.004)
+    out("burn", mix(sz * 0.9, flesh(0.35, 661) * 0.8, crackle(dur, 110, 662) * 0.6, thud(dur, 85, 45, 0.08, 0.7, 500, 663) * 0.6),
+        peak_db=-1.5, st=False)
+    dur = 1.5                       # dying down: the roar sinks and sputters out
+    t = t_axis(dur)
+    gt = swept_bandpass(noise(dur, 670), 1600 * np.exp(-t * 2.2) + 150, q=1.3) * env_exp(dur, 0.55, 0.01)
+    out("fire_gutter", reverb(mix(gt, crackle(dur, 70, 671, rate_end=6) * 0.6), 1.0, 0.2), peak_db=-2.0, st=False)
+    # the roar while the arms are out: a seamless 3 s loop
+    dur = 3.0
+    t = t_axis(dur + 0.6)
+    base = lowpass(np.cumsum(noise(dur + 0.6, 680)), 700)
+    base = highpass(base, 45)
+    base /= np.max(np.abs(base)) + 1e-9
+    flick = lowpass(noise(dur + 0.6, 681), 7.0)
+    flick = 0.7 + 0.3 * flick / (np.max(np.abs(flick)) + 1e-9)
+    midb = bandpass(noise(dur + 0.6, 682), 300, 2000) * flick * 0.45
+    x = base * flick * 0.9 + midb + crackle(dur + 0.6, 45, 683) * 0.35
+    xf = int(0.6 * SR)
+    head, tail = x[:xf].copy(), x[-xf:].copy()
+    ramp = np.linspace(0, 1, xf)
+    x = x[:-xf]
+    x[:xf] = head * ramp + tail * (1 - ramp)
+    if not only or only in "fire_roar":
+        mono = x / (np.max(np.abs(x)) + 1e-9) * 0.7
+        data = (np.clip(np.stack([mono, mono], axis=1), -1, 1) * 32767).astype(np.int16)
+        path = os.path.join(OUT, "fire_roar.wav")
+        with wave.open(path, "wb") as w:
+            w.setnchannels(2)
+            w.setsampwidth(2)
+            w.setframerate(SR)
+            w.writeframes(data.tobytes())
+        made.append(path)
 
     # --- ambience: seamless 16 s wind loop
     dur = 16.0
