@@ -610,7 +610,7 @@ func root_motion_velocity(delta: float) -> Vector3:
 func is_dodge_invulnerable(kind := "") -> bool:
 	if state != S.DODGE or state_time < _iframes.x or state_time > _iframes.y:
 		return false
-	return not Combat.is_unblockable(kind) and not _iframes_except.has(kind)
+	return not Combat.ignores_dodge(kind) and not _iframes_except.has(kind)
 
 
 # ---------------------------------------------------------------------------- jumping
@@ -885,7 +885,7 @@ func _do_hit(info: Dictionary, attacker: Combatant, pos: Vector3) -> void:
 	if hp <= 0.0:
 		_die()
 		return
-	if kind == "thrust" or kind == "sweep" or kind == "blast" or bool(info.get("final", false)) and float(info.get("dmg", 0.0)) >= 34.0:
+	if kind == "thrust" or kind == "sweep" or kind == "blast" or kind == "grab" or bool(info.get("final", false)) and float(info.get("dmg", 0.0)) >= 34.0:
 		_start_state(S.KNOCKDOWN)
 		anim.play("p_knockdown", 0.05)
 		_invuln_until = Game.clock + 0.2

@@ -129,7 +129,8 @@ The input map is registered in code (`scripts/autoload/game_input.gd`); actions 
   step, which goes forward. It has Sekiro's i-frames: 0.2 s for side and back steps and 0.3 s
   forward. A strike that's still on you when the i-frames end hits you, so a step repositions
   you but doesn't get you out of a committed attack. Hold dodge to sprint.
-- A forward step's i-frames don't cover thrusts, and no step's i-frames cover sweeps.
+- A forward step's i-frames don't cover thrusts, and no step's i-frames cover sweeps. Side
+  steps can pass through the phase-three staff snare.
 
 ### Perilous attacks (危)
 
@@ -149,6 +150,9 @@ The kanji flashes red above him with a deep warning sound and his blades glow ho
   coil, so stepping, walking or sprinting away doesn't get you out of range. **Jump** over it. While airborne near him, press **jump again** to
   kick off him. That deals posture damage (×1.6 during a sweep) and staggers him out of the
   sweep. You can follow up with an air attack.
+- **Staff snare (phase three):** he bars the staff across his chest, holds, then lunges with
+  a shoulder-height hook. Guard and deflect fail. Step sideways on the release to evade it
+  and punish the recovery; the red warning alone doesn't tell you which counter to use.
 
 ### The Inferno (phase two)
 
@@ -251,6 +255,7 @@ godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--v
 | `mikiri` | Only a neutral step from the release on counters the thrust; during the pull-back is too early; forward-held and side steps never counter. Backstepping (once or twice), an early side step, or a backstep into a sprint all still get stabbed, from 2.4 to 4.4 m |
 | `dodge` | Steps are short (1.5 m, 1.1 m for the neutral step) and have Sekiro's i-frames (0.2 s, 0.3 s forward, forward not against thrusts) |
 | `sweep` | Guarding and dodge i-frames fail against the sweep, and so does getting away (stepping back or aside, two backsteps, sprinting or walking away, from 1.5 to 3.4 m); jumping clears it, and the kick deals posture |
+| `snare` | Phase 3 alone chooses the staff snare; it reaches at close range, cannot be guarded or deflected, and a timely side step evades the hook |
 | `shuriken` | Volley rhythms (3 in the air + 1 delayed, 5 in the air), a readable tell before the first, every throw deflectable (4 posture to him each; one that fills his posture in mid-air breaks him as he lands) or blockable |
 | `attack` | Slash reach, and that mashing is rate-limited (no two hits within 0.38 s) |
 | `cancel` | Guard cancels a slash only in the early wind-up and in the recovery; a released queued guard cannot deflect later, and a lost dodge release cannot leave sprint held |

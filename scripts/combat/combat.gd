@@ -108,13 +108,17 @@ static func blade_vs_capsule(prev: PackedVector3Array, now: PackedVector3Array, 
 	return {}
 
 
-## Point-vs-capsule helper (kicks).
-## Attacks that can't be guarded (no deflect, no block) and that dodge i-frames don't cover:
-## perilous sweeps (jump them) and his fire blast (be elsewhere).
+## Attacks that can't be guarded (no deflect, no block). A snare can still be
+## stepped through; a sweep must be jumped and a blast must be escaped.
 static func is_unblockable(kind: String) -> bool:
+	return kind == "sweep" or kind == "blast" or kind == "grab"
+
+
+static func ignores_dodge(kind: String) -> bool:
 	return kind == "sweep" or kind == "blast"
 
 
+## Point-vs-capsule helper (kicks).
 static func point_vs_capsule(p: Vector3, cap_a: Vector3, cap_b: Vector3, radius: float) -> bool:
 	var q := Geometry3D.get_closest_point_to_segment(p, cap_a, cap_b)
 	return q.distance_to(p) <= radius

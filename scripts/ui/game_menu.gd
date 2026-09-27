@@ -373,7 +373,7 @@ func _show(page: String, focus_on := "") -> void:
 				func(): return Game.start_phase - 1,
 				func(i: int): Game.set_start_phase(i + 1),
 				"The phase the fight starts in, for testing: the earlier lives count as taken. " +
-				"Phase 3 is the same as phase 2 for now." + later)
+				"Phase 3 adds the close-range staff snare." + later)
 			_option("Diagnostics", ["Off", "On"],
 				func(): return 1 if Game.debug else 0,
 				func(i: int): Game.set_diagnostics(i == 1),

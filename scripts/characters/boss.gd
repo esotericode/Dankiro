@@ -6,8 +6,7 @@ extends Combatant
 ##    and punished with a counter.
 ##  * Posture regenerates unless pressured; regen slows as his vitality drops.
 ##  * Posture break (or 0 vitality) -> kneels, deathblow window. Three lives: after each
-##    deathblow he rises into the next phase (2 is faster and more aggressive; 3 is a copy
-##    of 2 for now).
+##    deathblow he rises into the next phase (2 is faster and more aggressive; 3 adds a snare).
 ##  * Phase 2 on: his staff smoulders, and he has the Inferno (scripts/combat/inferno.gd):
 ##    he opens phase 2 with it, then uses it every so often (INFERNO_COOLDOWN).
 
@@ -42,6 +41,7 @@ const SEQUENCES := {
 	"whirl": {"steps": [["b_whirl", 1.0]], "range": [0.0, 2.8], "weight": 1.2},
 	"thrust": {"steps": [["b_thrust", 1.0]], "range": [2.8, 5.6], "weight": 1.8},
 	"sweep": {"steps": [["b_sweep", 1.0]], "range": [0.0, 3.4], "weight": 2.0},
+	"snare": {"steps": [["b_snare", 1.0]], "range": [0.0, 2.8], "weight": 1.8},
 	"leap": {"steps": [["b_leap", 1.0], ["b_combo_2", 0.35]], "range": [4.6, 11.0], "weight": 2.6},
 	"retreat": {"steps": [["b_backstep", 1.0], ["b_thrust|b_leap", 0.9]], "range": [0.0, 2.0], "weight": 0.9},
 	"shuriken_4": {"steps": [["b_shuriken_4", 1.0], ["b_leap|b_thrust", 0.4]], "range": [0.0, 4.5], "weight": 1.1},
@@ -64,7 +64,7 @@ const MOVES := {
 const SPECIALS := ["leap", "thrust", "shuriken_4", "shuriken_5", "charge"]
 
 ## What changes when he rises into a phase (phase 1 is his base setup). Everything that
-## checks `phase >= 2` applies to phase 3 as well. Phase 3 is a copy of phase 2 for now.
+## checks `phase >= 2` applies to phase 3 as well. The snare is exclusive to phase 3.
 const PHASE_TWO := {"attack_speed": 1.08, "aggression": 1.5, "glow": 0.9, "aura": 48, "eye_light": 0.4}
 const PHASES := {2: PHASE_TWO, 3: PHASE_TWO}
 
@@ -493,6 +493,8 @@ func _pick_action(d: float) -> String:
 	for mname in MOVES:
 		catalog[mname] = MOVES[mname]
 	for sname in catalog:
+		if sname == "snare" and phase < 3:
+			continue
 		var sd: Dictionary = catalog[sname]
 		var r: Array = sd["range"]
 		if d < float(r[0]) or d > float(r[1]):

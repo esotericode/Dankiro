@@ -29,7 +29,7 @@ the script backs off and retries, so let it run. For another version, set
   script error during the run also fails it):
   `godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--verbose]`
   Suites: reach, tells, deflect, flurry, punish, loop, phases, menu, camera, ribbons, spam, mikiri, dodge,
-  sweep, shuriken, attack, cancel, inferno, soak. `camera` loads the real arena (main.tscn), like
+  sweep, snare, shuriken, attack, cancel, inferno, soak. `camera` loads the real arena (main.tscn), like
   `menu`. `menu` drives the real menus with simulated gamepad input
   (`Input.parse_input_event`); it sets `Game.save_enabled = false` so tests never overwrite the
   saved options.

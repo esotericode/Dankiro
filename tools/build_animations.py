@@ -810,6 +810,43 @@ def build_boss():
                 "posture_deflect": 0, "boss_posture": 0, "dir": "low", "final": True}],
          events=[{"t": 0.05, "type": "perilous", "kind": "sweep"}, {"t": SP0 - 0.04, "type": "sfx", "name": "sweep"}])
 
+    # ---- Phase 3 perilous snare. He bars the staff across his chest, waits with his arms
+    # spread, then steps in and turns the upper blade into a shoulder-height hook. Unlike a
+    # low sweep the shaft stays high; unlike the thrust it starts broadside and has no Mikiri.
+    # He stops tracking before the hook comes around: a side step on the release clears it.
+    hook_dir = unit([1.0, 0.02, 0.15])
+    hook_edge = [0.0, -1.0, 0.0]
+    bar = S.copy()
+    bar.update({"hips_pos": [0, 0.96, 0.12], "hips": [0, -25, 0], "spine": [-4, -8, 0],
+                "chest": [-2, -14, 0], "neck": [4, 20, 0], "head": [2, 8, 0],
+                "foot_l": [-0.24, 0.08, -0.32], "foot_r": [0.24, 0.08, 0.36],
+                "elbow_l": [-0.85, -0.35, 0.25], "elbow_r": [0.85, -0.35, 0.25]})
+    place(bar, [-0.08, 1.34, 0.12], hook_dir, hook_edge, -0.34, -0.02, S["weapon_rot"])
+    brace = bar.copy()
+    brace.update({"hips_pos": [0, 0.91, 0.18], "hips": [0, -38, 0], "chest": [2, -24, 0],
+                  "neck": [0, 30, 0], "head": [0, 12, 0], "elbow_l": [-0.9, -0.2, 0.25],
+                  "ik_l": 0.0, "upper_arm_l": [25, 0, -30], "forearm_l": [55, 0, 0]})
+    place(brace, [-0.10, 1.36, 0.18], hook_dir, hook_edge, -0.34, -0.02, bar["weapon_rot"])
+    sw_hook, _ = hswing(0.72, 0.98, 10, [0.02, 1.34, 0.08], [0, 1, 0], 94,
+                        [-0.10, 1.36, 0.18], hook_dir, hook_edge, -0.34, brace["weapon_rot"],
+                        ease=in_quad, pivot_move=[-0.10, -0.10, -0.50])
+    keys = [key(0.0, "b_stance"), key(0.30, bar, ease="inout_sine"),
+            key(0.52, brace, ease="inout_sine"), key(0.68, brace, ease="inout_sine")]
+    keys += bkeys_from_swing(sw_hook, lambda u: {
+        "hips_pos": [0, 0.91 - 0.04 * u, 0.18 - 0.24 * u], "hips": [0, -38 + 42 * u, 0],
+        "spine": [-4 - 7 * u, -8 + 20 * u, 0], "chest": [2 - 16 * u, -24 + 45 * u, 0],
+        "neck": [0, 30 - 30 * u, 0], "root": [0, 0, -0.9 * u],
+        "foot_l": lerp3([-0.24, 0.08, -0.32], [-0.24, 0.08, -0.55], smooth(u)),
+        "elbow_l": [-0.8, -0.45, 0.25], "elbow_r": [0.65, -0.5, 0.35]})
+    keys.append(key(1.14, {"root": [0, 0, -0.94], "chest": [-14, 21, 0]}, ease="out_quad"))
+    keys.append({"t": 1.85, "pose": "b_stance", "set": {"root": [0, 0, -0.96]}, "ease": "inout_sine"})
+    clip("b_snare", "boss", keys, chain=1.6, close=[0.10, 0.70, 1.8, 4.2], vuln=[1.08, 1.75], perilous="grab",
+         track=[[0.0, 0.58, 440], [0.58, 0.68, 160]],
+         hits=[{"from": 0.77, "to": 1.02, "blade": "upper", "kind": "grab", "dmg": 36,
+                "posture_block": 0, "posture_deflect": 0, "boss_posture": 0, "dir": "mid", "final": True}],
+         events=[{"t": 0.05, "type": "perilous", "kind": "grab"},
+                 {"t": 0.70, "type": "sfx", "name": "swing_heavy"}])
+
     # ---- Whirling Fangs: windmill at his right side (4 chops) + finishing diagonal slash.
     # Readability: he presents the staff overhead (tell), cocks it back at his right side and
     # the wheel spins up from rest, so the first blade visibly rises behind him and falls on

@@ -30,6 +30,8 @@ const GUIDE := """[b]Deflect[/b]   Tap guard just before a blade lands, a 0.2 s 
 
 [img=20x20]res://textures/kanji_danger_icon.png[/img]  [b]Perilous sweep[/b]   Low and long, and you can't back out of it. Jump, then jump again to kick him.
 
+[img=20x20]res://textures/kanji_danger_icon.png[/img]  [b]Staff snare · phase 3[/b]   He holds the staff across his chest, then hooks at shoulder height. Step sideways as he releases; guard and deflect won't stop it.
+
 [b]Shuriken[/b]   He leaps back and throws three fast and one late, or five fast. Deflect each one.
 
 His posture recovers when you back off, and faster while his vitality is high."""

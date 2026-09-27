@@ -5,7 +5,7 @@ extends Node3D
 ##
 ## Run (from the project folder):
 ##   godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--verbose]
-## Suites: reach, tells, deflect, flurry, punish, loop, phases, menu, spam, mikiri, dodge, sweep, shuriken, attack, cancel, inferno, soak (default: all).
+## Suites: reach, tells, deflect, flurry, punish, loop, phases, menu, spam, mikiri, dodge, sweep, snare, shuriken, attack, cancel, inferno, soak (default: all).
 ## Exit code 0 when every check passes, including "no engine or script errors during the run".
 
 const DT := 1.0 / 120.0
@@ -56,7 +56,7 @@ func _ready() -> void:
 		if not a.begins_with("--"):
 			suites.append(a)
 	if suites.is_empty():
-		suites = ["reach", "tells", "deflect", "flurry", "punish", "loop", "phases", "menu", "camera", "ribbons", "spam", "mikiri", "dodge", "sweep", "shuriken", "attack", "cancel", "inferno", "soak"]
+		suites = ["reach", "tells", "deflect", "flurry", "punish", "loop", "phases", "menu", "camera", "ribbons", "spam", "mikiri", "dodge", "sweep", "snare", "shuriken", "attack", "cancel", "inferno", "soak"]
 	await get_tree().physics_frame
 	for s in suites:
 		print("\n=== suite: %s ===" % s)
@@ -206,7 +206,7 @@ const BOSS_ATTACKS := {
 	# far end of the range the AI uses the attack from (Boss.SEQUENCES) plus a little.
 	"b_combo_1": [1.0, 3.4], "b_combo_2": [1.0, 3.4], "b_combo_3": [1.0, 3.4], "b_backhand": [1.0, 3.4],
 	"b_jab": [1.0, 3.5], "b_whirl": [1.0, 3.0], "b_parry_counter": [1.0, 3.0], "b_thrust": [1.0, 5.6],
-	"b_sweep": [1.0, 3.4], "b_leap": [4.8, 8.0], "b_dash_cut": [1.3, 3.8],
+	"b_sweep": [1.0, 3.4], "b_snare": [1.0, 2.8], "b_leap": [4.8, 8.0], "b_dash_cut": [1.3, 3.8],
 }
 
 
@@ -239,7 +239,7 @@ func suite_reach() -> void:
 ## deflect timing wouldn't match what you see), and an attack that opens a string must give
 ## at least TELL_MIN of warning before its first blow.
 const TELL_MIN := 0.45
-const TELL_OPENERS := ["b_combo_1", "b_backhand", "b_jab", "b_whirl", "b_thrust", "b_sweep", "b_leap",
+const TELL_OPENERS := ["b_combo_1", "b_backhand", "b_jab", "b_whirl", "b_thrust", "b_sweep", "b_snare", "b_leap",
 	"b_dash_cut", "b_parry_counter"]
 
 
@@ -594,6 +594,60 @@ func suite_sweep() -> void:
 	await run_until_boss_done()
 	print("  jump+kick: boss posture %.0f, boss state %s" % [boss.posture, Boss.S.keys()[boss.state]])
 	check(boss.posture >= Combat.KICK_POSTURE, "kicking off him during the sweep deals posture (%.0f)" % boss.posture)
+
+
+## Phase-three snare: the high, broadside hook has a distinct tell and must be stepped
+## through. Its grab contact defeats guard, including a well-timed deflect attempt.
+func suite_snare() -> void:
+	for n in [1, 2, 3]:
+		await setup(2.2)
+		boss.set_start_phase(n)
+		seed(703 + n)
+		var chosen := 0
+		for i in 200:
+			if boss._pick_action(2.2) == "snare":
+				chosen += 1
+		check(chosen == 0 if n < 3 else chosen >= 5,
+			"phase %d chooses the snare %d times in 200 close-range openings" % [n, chosen])
+	await setup(2.2)
+	boss.set_start_phase(3)
+	var start := boss_attack("b_snare")
+	await run_until_boss_done()
+	check(_results.size() == 1 and str((_results[0]["info"] as Dictionary).get("kind", "")) == "grab",
+		"staff hook reaches a still player as a grab (%s)" % str(_results))
+	if _results.is_empty():
+		return
+	var rel := float(_results[0]["t"]) - start
+	check(rel >= 0.65, "the snare warns before contact (%.3f s)" % rel)
+	for lead in [0.08, 0.3]:
+		await setup(2.2)
+		boss.set_start_phase(3)
+		var t0 := boss_attack("b_snare")
+		var pg: float = t0 + rel - lead
+		at(pg, func(): player.press_guard(pg))
+		await run_until_boss_done()
+		check(first_result() == Combat.RESULT_HIT,
+			"guard %.2f s before the snare cannot deflect or block (%s)" % [lead, res_name(first_result())])
+	# The tracking stops before the hook. A timely side step clears the live weapon;
+	# presses far into the wind-up should be over before it arrives.
+	var evaded := 0
+	var row := PackedStringArray()
+	for lead in [0.75, 0.60, 0.32, 0.20, 0.16, 0.12, 0.08]:
+		await setup(2.2)
+		boss.set_start_phase(3)
+		var t0 := boss_attack("b_snare")
+		var pd: float = t0 + rel - lead
+		at(pd, func():
+			player.bot_move = Vector2(1, 0)
+			player.press_action("dodge", pd))
+		at(pd + 0.06, func(): player.release_dodge())
+		await run_until_boss_done()
+		var got := res_name(first_result())
+		row.append("%.2f:%s" % [lead, got])
+		if got == "none":
+			evaded += 1
+	print("  snare contact %.3fs, side steps %s" % [rel, " ".join(row)])
+	check(evaded >= 2, "at least two side-step timings evade the snare (%d)" % evaded)
 
 
 ## Shuriken volleys: he leaps back and throws 3 fast + 1 delayed, or 5 fast. Every throw can
@@ -1099,7 +1153,7 @@ func _pad_stick(axis: JoyAxis, values: Array) -> void:
 
 ## Three lives, one per phase. The starting-phase option starts a fight in a later phase with
 ## the earlier lives taken; each deathblow raises him into the next phase, and the third one
-## ends the fight. Phase 3 is a copy of phase 2 for now.
+## ends the fight. Phase 3 adds the staff snare.
 func suite_phases() -> void:
 	for n in [1, 2, 3]:
 		await setup(3.0)
@@ -1472,6 +1526,15 @@ func suite_soak() -> void:
 						player.press_action("jump", now)
 						var kt := now + 0.32
 						at(kt, func(): player.press_action("jump", kt))
+					continue
+				if peril == "grab":
+					if boss.anim.time >= float(h["from"]) - 0.12:
+						handled[key] = true
+						if player.guard_held:
+							player.release_guard(now)
+						player.bot_move = Vector2(1, 0)
+						player.press_action("dodge", now)
+						at(now + 0.06, func(): player.release_dodge())
 					continue
 				if peril == "thrust" and randf() < 0.75:
 					if boss.anim.time >= float(h["from"]) - 0.16:

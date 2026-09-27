@@ -26,13 +26,13 @@ The automated checks in `tests/` (see the README) verify the rules marked **[tes
 
 ## 2. Perilous attacks (危)
 
-A red kanji flashes with a warning sound. Sekiro has three kinds; this boss uses two.
+A red kanji flashes with a warning sound. Sojin uses all three kinds in phase 3.
 
 | Kind | Sekiro | Dankiro |
 | --- | --- | --- |
 | **Thrust** | Can be deflected but not blocked. Its counter is the **Mikiri Counter**. It tracks you and has long reach, so stepping back just gets you stabbed as the step ends. | Blocking a perilous thrust fails and you get hit. He closes in during the wind-up, tracks you hard through the release, and the lunge stretches (up to 2×) if you backed off. A backstep, two backsteps, a backstep into a sprint, or an early side step all get stabbed, from 2.4 to 4.4 m. **[tested]** |
 | **Sweep** | Can't be blocked or deflected, and dodge i-frames don't help. **Jump** over it, then press **jump again** while above or in front of him to **kick off his head** for major posture damage, with a bonus against sweeps. | Same. The kick deals ×1.6 posture during a sweep. The sweep is low (shin height) and ~2.5 m long. He chases you through the coil at up to sprint speed, and the blade only crosses in front of him once he has closed in. Stepping back or aside, two backsteps, walking away or sprinting away as the kanji shows all get caught, from 1.5 to 3.4 m: it forces the jump. **[tested]** |
-| Grab | Can't be blocked. Dodge it. | Not used by this boss. |
+| **Grab** | Can't be blocked. Dodge it. | In phase 3, Sojin holds his staff broadside at chest height, then lunges and hooks you with it. The staff snare can't be guarded or deflected and knocks you down on contact. Step to the side on the release: its tracking ends before the hook, and side-step i-frames cover it. It leaves an opening after a miss. **[tested]** |
 
 ### Phase two's fire move (the Inferno)
 
