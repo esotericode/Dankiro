@@ -1,7 +1,7 @@
 class_name Hud
 extends CanvasLayer
 ## Fight HUD + overlays, built in code for a 1920x1080 canvas (stretch mode canvas_items) and
-## anchored so it adapts to other aspect ratios. The look is UiTheme's: thin flat bars, ivory
+## anchored so it adapts to other aspect ratios. The look is UiTheme's: flat bars, ivory
 ## and ink with vermilion for what matters (damage, deathblows, death).
 ##
 ## Like Sekiro: his vitality and deathblow marks top left, his posture top centre, yours bottom
@@ -117,10 +117,10 @@ func _build_boss_ui() -> void:
 	UiTheme.place(_boss_name, Vector2(0, 0), Vector2(m + 18 * Combat.BOSS_LIVES + 8, 44), Vector2(700, 44))
 	_root.add_child(_boss_name)
 	_boss_hp = VitalityBar.new()
-	UiTheme.place(_boss_hp, Vector2(0, 0), Vector2(m, 94), Vector2(560, 5))
+	UiTheme.place(_boss_hp, Vector2(0, 0), Vector2(m, 94), Vector2(600, 8))
 	_root.add_child(_boss_hp)
 	_boss_posture = PostureBar.new()
-	UiTheme.place(_boss_posture, Vector2(0.5, 0), Vector2(-260, 136), Vector2(520, 5))
+	UiTheme.place(_boss_posture, Vector2(0.5, 0), Vector2(-280, 138), Vector2(560, 7))
 	_root.add_child(_boss_posture)
 
 
@@ -128,16 +128,16 @@ func _build_player_ui() -> void:
 	var m := UiTheme.MARGIN
 	_player_hp = VitalityBar.new()
 	_player_hp.warn_below = 0.25
-	UiTheme.place(_player_hp, Vector2(0, 1), Vector2(m, -m - 5), Vector2(460, 5))
+	UiTheme.place(_player_hp, Vector2(0, 1), Vector2(m, -m - 8), Vector2(480, 8))
 	_root.add_child(_player_hp)
 	_gourd = GourdMark.new()
-	UiTheme.place(_gourd, Vector2(0, 1), Vector2(m, -m - 62), Vector2(26, 40))
+	UiTheme.place(_gourd, Vector2(0, 1), Vector2(m, -m - 66), Vector2(26, 40))
 	_root.add_child(_gourd)
 	_heal_label = UiTheme.label("3", UiTheme.sans(500), 30)
-	UiTheme.place(_heal_label, Vector2(0, 1), Vector2(m + 38, -m - 64), Vector2(80, 44))
+	UiTheme.place(_heal_label, Vector2(0, 1), Vector2(m + 38, -m - 68), Vector2(80, 44))
 	_root.add_child(_heal_label)
 	_player_posture = PostureBar.new()
-	UiTheme.place(_player_posture, Vector2(0.5, 1), Vector2(-220, -m - 58), Vector2(440, 5))
+	UiTheme.place(_player_posture, Vector2(0.5, 1), Vector2(-240, -m - 62), Vector2(480, 7))
 	_root.add_child(_player_posture)
 
 

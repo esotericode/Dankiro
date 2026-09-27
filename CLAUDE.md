@@ -28,7 +28,7 @@ the script backs off and retries, so let it run. For another version, set
 - Combat lab (headless, about 6 min for everything, exits 0 when all checks pass; any engine or
   script error during the run also fails it):
   `godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--verbose]`
-  Suites: reach, tells, deflect, flurry, punish, loop, phases, menu, camera, spam, mikiri, dodge,
+  Suites: reach, tells, deflect, flurry, punish, loop, phases, menu, camera, ribbons, spam, mikiri, dodge,
   sweep, shuriken, attack, cancel, inferno, soak. `camera` loads the real arena (main.tscn), like
   `menu`. `menu` drives the real menus with simulated gamepad input
   (`Input.parse_input_event`); it sets `Game.save_enabled = false` so tests never overwrite the
@@ -220,5 +220,14 @@ godot --headless --editor --quit               # import
   plaza, which only the fighters collide with. The camera's spring arm only hits layer 1, so at
   the rim it swings out over the fence instead of being squeezed onto your back; foliage and bark
   it comes close to out there dissolve (`shaders/near_fade.gdshaderinc`, not in the shadow pass).
+- Cloth and hair are `SpringChain`s (`scripts/rig/spring_chain.gd`, set up per chain in
+  `tools/build_models.py`: the SCARF, BAND, MANE, SASH and TASSEL presets). Physical units: gravity,
+  drag across a ribbon's face (or a strand) and along it, a pose spring toward the rest shape with a
+  natural frequency and damping ratio, a shared breeze with a flutter wave, a speed cap. Keep the
+  pull toward the rest shape relative to the root (a pose), not to each point's parent: pulling a
+  point toward its parent + rest pushes without pushing back and a towed ribbon snakes. Keep sway
+  near 1 Hz and flutter well above it (they resonate). The lab's `ribbons` suite measures it; for
+  tuning, `RIBBON_SET="flutter=0,..."`, `RIBBON_NOCOLLIDE=1`, `RIBBON_DUMP=<json>` and
+  `RIBBON_BENCH=1` (see the suite's comment), and the capture shot `ribbons` films it.
 - The combat camera frames deathblows itself (`CombatCamera.play_deathblow`, called by the
   player): it swings beside the fighters while the kill plays out, then eases back.

@@ -40,7 +40,7 @@ func _draw() -> void:
 	var h := size.y
 	var cx := w * 0.5
 	var a := _alpha
-	draw_rect(Rect2(Vector2(-1, -1), Vector2(w + 2, h + 2)), Color(UiTheme.TRACK, UiTheme.TRACK.a * a))
+	UiTheme.bar_track(self, w, h, a)
 	var half := cx * shown
 	var col := UiTheme.AMBER.lerp(UiTheme.ACCENT, smoothstep(0.45, 0.95, shown))
 	var glow := smoothstep(0.72, 1.0, shown) * (0.7 + 0.3 * sin(_t * 12.0))
@@ -55,6 +55,6 @@ func _draw() -> void:
 				Color(col, 0.11 * glow * a))
 	if half > 0.25:
 		draw_rect(Rect2(Vector2(cx - half, 0), Vector2(half * 2.0, h)), Color(col, a))
-	draw_rect(Rect2(Vector2(cx - 0.5, -4), Vector2(1, h + 8)), Color(UiTheme.TEXT, 0.6 * a))
-	for x in [-1.0, w]:
-		draw_rect(Rect2(Vector2(x, -3), Vector2(1, h + 6)), Color(UiTheme.TEXT, 0.4 * a))
+	draw_rect(Rect2(Vector2(cx - 1.0, -4), Vector2(2, h + 8)), Color(UiTheme.TEXT, 0.65 * a))
+	for x in [-2.0, w]:
+		draw_rect(Rect2(Vector2(x, -4), Vector2(2, h + 8)), Color(UiTheme.TEXT, 0.45 * a))

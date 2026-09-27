@@ -10,7 +10,8 @@ const FAINT := Color(0.94, 0.92, 0.87, 0.34)
 const INK := Color(0.03, 0.03, 0.04)
 const ACCENT := Color(0.88, 0.25, 0.16)            ## vermilion
 const AMBER := Color(0.98, 0.72, 0.3)
-const TRACK := Color(0.0, 0.0, 0.0, 0.45)          ## behind a bar
+const TRACK := Color(0.0, 0.0, 0.0, 0.55)          ## behind a bar
+const EDGE := Color(0.0, 0.0, 0.0, 0.3)            ## a hairline round the track: the bar holds its shape on bright stone
 
 const MARGIN := 72.0                                ## from the screen's edges
 
@@ -119,6 +120,12 @@ static func shade_spot(alpha: float) -> TextureRect:
 	r.stretch_mode = TextureRect.STRETCH_SCALE
 	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return r
+
+
+## The dark track behind a (w, h) bar at the canvas item's origin, with a hairline edge round it.
+static func bar_track(ci: CanvasItem, w: float, h: float, a := 1.0) -> void:
+	ci.draw_rect(Rect2(Vector2(-2, -2), Vector2(w + 4, h + 4)), Color(EDGE, EDGE.a * a))
+	ci.draw_rect(Rect2(Vector2(-1, -1), Vector2(w + 2, h + 2)), Color(TRACK, TRACK.a * a))
 
 
 ## A key or button as a small glyph: `key` as ControlsSheet.BINDINGS writes it ("Shift", "Left

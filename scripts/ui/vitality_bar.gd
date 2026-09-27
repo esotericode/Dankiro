@@ -1,6 +1,6 @@
 class_name VitalityBar
 extends Control
-## A vitality bar: a thin ivory bar on a dark track. Damage just taken shows as a vermilion chip
+## A vitality bar: an ivory bar on a dark track. Damage just taken shows as a vermilion chip
 ## that holds for a moment, then drains down to the new value. Below `warn_below` the bar itself
 ## turns vermilion and breathes (the player's, when a blow or two from death).
 
@@ -37,7 +37,7 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	var w := size.x
 	var h := size.y
-	draw_rect(Rect2(Vector2(-1, -1), Vector2(w + 2, h + 2)), UiTheme.TRACK)
+	UiTheme.bar_track(self, w, h)
 	var warn := ratio < warn_below and ratio > 0.0
 	if chip > ratio:
 		var chip_col := Color(1.0, 0.62, 0.5, 0.45) if warn else UiTheme.ACCENT

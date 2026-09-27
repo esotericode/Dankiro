@@ -579,6 +579,33 @@ func shot_ui_hud_low() -> void:
 	_end_at = 1.4
 
 
+## The ribbons and his mane in motion (SpringChain), from the lock-on camera: you strafe round
+## him, stop, dodge back, then he runs his combo while you deflect. `-- ribbons close` follows
+## you from behind, close (your scarf and headband tails); `-- ribbons boss` watches him from
+## behind (his mane and sashes).
+func shot_ribbons() -> void:
+	var args := OS.get_cmdline_user_args()
+	var view: String = args[1] if args.size() > 1 else ""
+	_stage(3.0)
+	if view == "close":
+		_orbit_on = player
+		_art_camera(2.3, 1.5, 1.2, 0.0, 205.0)
+	elif view == "boss":
+		# straight to his combo (his mane and sashes), you deflecting
+		_orbit_on = boss
+		_art_camera(3.4, 1.9, 1.5, 0.0, 150.0)
+		auto_guard(0.05, 0.12)
+		at(0.6, func(): boss_string(["b_combo_1", "b_combo_2", "b_combo_3"]))
+		_end_at = float(args[2]) if args.size() > 2 else 3.8
+		return
+	auto_guard(0.05, 0.12)
+	at(0.2, func(): player.bot_move = Vector2(1, 0))
+	at(1.5, func(): player.bot_move = Vector2.ZERO)
+	at(2.0, func(): player.press_action("dodge", Game.clock))
+	at(2.9, func(): boss_string(["b_combo_1", "b_combo_2", "b_combo_3"]))
+	_end_at = float(args[2]) if args.size() > 2 else 6.2
+
+
 ## UI work: one of the HUD's moments over the fight, `-- ui_moment <what>`: namecard (as the fight
 ## begins), callout (MIKIRI COUNTER), deathblow (his posture broken: the red mark and the
 ## prompt), execution (忍殺), death, victory or help (F1).

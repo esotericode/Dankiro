@@ -56,7 +56,7 @@ func _ready() -> void:
 		if not a.begins_with("--"):
 			suites.append(a)
 	if suites.is_empty():
-		suites = ["reach", "tells", "deflect", "flurry", "punish", "loop", "phases", "menu", "camera", "spam", "mikiri", "dodge", "sweep", "shuriken", "attack", "cancel", "inferno", "soak"]
+		suites = ["reach", "tells", "deflect", "flurry", "punish", "loop", "phases", "menu", "camera", "ribbons", "spam", "mikiri", "dodge", "sweep", "shuriken", "attack", "cancel", "inferno", "soak"]
 	await get_tree().physics_frame
 	for s in suites:
 		print("\n=== suite: %s ===" % s)
@@ -771,6 +771,224 @@ func suite_menu() -> void:
 	Game.debug = bool(saved[1])
 	Game.save_enabled = bool(saved[2])
 	GameInput.gamepad = false
+
+
+## The ribbons and his mane (SpringChain): cloth and hair should sway and trail, not buzz. First a
+## bench, the scarf's settings on a synthetic anchor that walks (bobbing and swaying as a body
+## does) and turns on the spot: its tip must move smoothly and slowly and the chain must never
+## fold up. Then the real arena: every tip while you both stand and while you walk round him must
+## move at under 2.5 Hz (RMS frequency: velocity and acceleration together), and through his combo
+## his hair and sashes must move no quicker than his body does (the chain smooths its anchor's
+## motion instead of adding its own). The old solver buzzed at 5-9 Hz and snaked when towed.
+##
+## For tuning: RIBBON_SET="flutter=0,breeze=0" sets those on every chain, RIBBON_NOCOLLIDE=1 drops
+## the colliders, RIBBON_DUMP=<file.json> writes every tip and root track (world space, per
+## scenario), and RIBBON_BENCH=1 runs only the bench (with RIBBON_SET) and dumps it.
+func suite_ribbons() -> void:
+	var scarf: Dictionary = (_models_json()["player"]["chains"] as Array)[0]
+	var bench := {}
+	for motion in ["walk", "turn"]:
+		bench[motion] = await _ribbon_bench(scarf, motion)
+	if OS.get_environment("RIBBON_BENCH") != "":
+		_ribbon_dump_write({"bench": bench})
+		return
+	var walk := _track_stats(bench["walk"])
+	var turn := _track_stats(bench["turn"])
+	print("  bench: walking, tip %.2f m/s at %.1f Hz (anchor %.2f at %.1f); turning, tip %.2f m/s at %.1f Hz" % [
+		walk["tip"], walk["tip_hz"], walk["root"], walk["root_hz"], turn["tip"], turn["tip_hz"]])
+	check(walk["tip"] < 1.5 and walk["tip_hz"] < 2.5,
+		"a scarf on a walking body sways and ripples slowly (tip %.2f m/s at %.1f Hz)" % [walk["tip"], walk["tip_hz"]])
+	check(walk["fold"] > 0.7 and turn["fold"] > 0.7,
+		"towed or turned, the chain never folds up (tip at least %.0f%% / %.0f%% of its length from the root)" % [
+		walk["fold"] * 100.0, turn["fold"] * 100.0])
+	var saved := [Game.skip_title, Game.start_phase]
+	Game.skip_title = true
+	Game.start_phase = 1
+	if world != null:
+		world.queue_free()
+		world = null
+	var main: Node = (load("res://scenes/main.tscn") as PackedScene).instantiate()
+	add_child(main)
+	await ticks(4)
+	var p: Player = main.get("player")
+	var b: Boss = main.get("boss")
+	b.set_passive(true)
+	await ticks(320)                          # the intro plays out and the fight starts
+	p.bot_enabled = true
+	b.global_position = Vector3(0, 0, -1.5)
+	p.global_position = Vector3(0, 0, 1.5)
+	p.face_now(b.global_position)
+	b.face_now(p.global_position)
+	await ticks(240)
+	var chains: Array = []
+	for who in [p, b]:
+		for c in (who as Node).find_children("*", "SpringChain", true, false):
+			c.set_meta("who", "you" if who == p else "him")
+			chains.append(c)
+	if OS.get_environment("RIBBON_NOCOLLIDE") != "":
+		for c in chains:
+			c.colliders = []
+	for kv in OS.get_environment("RIBBON_SET").split(",", false):
+		var parts := kv.split("=")
+		var key := parts[0].strip_edges()
+		var only := ""                    # "you.chest:flutter=9": only chains named "you, chest ..."
+		if key.contains(":"):
+			only = key.get_slice(":", 0).replace(".", ", ")
+			key = key.get_slice(":", 1)
+		for c in chains:
+			var name := "%s, %s" % [c.get_meta("who", "?"), c.anchor.name]
+			if only == "" or name == only:
+				c.set(key, float(parts[1]))
+	var dump := {"bench": bench}
+	dump["standing"] = await _chain_tracks(chains, 360)
+	p.bot_move = Vector2(1, 0)
+	dump["walking round him"] = await _chain_tracks(chains, 240)
+	p.bot_move = Vector2.ZERO
+	p.press_action("dodge", Game.clock)
+	dump["after a dodge"] = await _chain_tracks(chains, 180)
+	b.set_passive(false)
+	b._seq.clear()
+	b._seq.append(["b_combo_2", 1.0])
+	b._seq.append(["b_combo_3", 1.0])
+	b.face_now(p.global_position)
+	b._play_attack("b_combo_1", 0.0)
+	b.set_passive(true)
+	dump["his combo"] = await _chain_tracks(chains, 300)
+	if OS.get_environment("RIBBON_DUMP") != "":
+		_ribbon_dump_write(dump)
+	for scen in ["standing", "walking round him", "after a dodge", "his combo"]:
+		var worst_hz := 0.0
+		var worst_speed := 0.0
+		var body_hz := 0.0
+		var hair_hz := 0.0
+		var n_him := 0
+		for chain in dump[scen]:
+			var st := _track_stats(dump[scen][chain])
+			worst_hz = maxf(worst_hz, st["tip_hz"])
+			worst_speed = maxf(worst_speed, st["tip"])
+			if verbose:
+				print("    %-18s %-16s tip %5.2f m/s %4.1f Hz   root %5.2f m/s %4.1f Hz" % [scen, chain, st["tip"],
+					st["tip_hz"], st["root"], st["root_hz"]])
+			if str(chain).begins_with("him") and not str(chain).contains("weapon"):
+				body_hz += st["root_hz"]
+				hair_hz += st["tip_hz"]
+				n_him += 1
+		print("  %s: fastest tip %.2f m/s, quickest %.1f Hz" % [scen, worst_speed, worst_hz])
+		if scen == "standing" or scen == "walking round him":
+			check(worst_hz < 2.5, "%s, every ribbon and his hair sway slowly (quickest tip %.1f Hz)" % [scen, worst_hz])
+		if scen == "his combo":
+			check(hair_hz <= body_hz, "through his combo his hair and sashes move no quicker than his body (%.1f Hz, body %.1f Hz)" % [
+				hair_hz / maxf(1.0, n_him), body_hz / maxf(1.0, n_him)])
+	main.queue_free()
+	await ticks(2)
+	Game.camera = null
+	Game.hud = null
+	Game.player = null
+	Game.boss = null
+	Game.skip_title = bool(saved[0])
+	Game.start_phase = int(saved[1])
+
+
+func _models_json() -> Dictionary:
+	return JSON.parse_string(FileAccess.get_file_as_string("res://data/models.json"))
+
+
+func _ribbon_dump_write(dump: Dictionary) -> void:
+	var f := FileAccess.open(OS.get_environment("RIBBON_DUMP"), FileAccess.WRITE)
+	f.store_string(JSON.stringify(dump))
+	f.close()
+
+
+## One chain with `spec`'s settings (as in data/models.json) on a synthetic anchor, away from any
+## fighter: `motion` is "walk" (forward at 1.4 m/s, bobbing 3 cm at 2 Hz and swaying 2 cm at 1 Hz)
+## or "turn" (on the spot at 1.5 rad/s). Its tip's and root's world tracks after a second.
+func _ribbon_bench(spec: Dictionary, motion: String, n := 480) -> Dictionary:
+	var anchor := Node3D.new()
+	add_child(anchor)
+	anchor.global_position = Vector3(40, 1.4, 0)
+	var c := SpringChain.new()
+	c.setup(anchor, StandardMaterial3D.new())
+	var rd: Array = spec["rest_dir"]
+	c.rest_dir = Vector3(rd[0], rd[1], rd[2])
+	c.segments = int(spec["segments"])
+	c.seg_len = float(spec["seg_len"])
+	for key in ["gravity", "sway_hz", "sway_damping", "air_drag", "edge_drag", "breeze", "flutter", "flutter_hz",
+			"max_speed"]:
+		if spec.has(key):
+			c.set(key, float(spec[key]))
+	for kv in OS.get_environment("RIBBON_SET").split(",", false):
+		var parts := kv.split("=")
+		c.set(parts[0].strip_edges().get_slice(":", parts[0].count(":")), float(parts[1]))
+	add_child(c)
+	var dt := 1.0 / float(Engine.physics_ticks_per_second)
+	var track := []
+	for i in n + 120:
+		var t := float(i) * dt
+		if motion == "walk":
+			anchor.global_position = Vector3(40.0 + 0.02 * sin(TAU * t), 1.4 + 0.03 * sin(TAU * 2.0 * t), -1.4 * t)
+		else:
+			anchor.global_transform = Transform3D(Basis(Vector3.UP, 1.5 * t), Vector3(40, 1.4, 0))
+		await ticks(1)
+		if i >= 120:
+			var tip: Vector3 = c._pts[c.segments]
+			var root: Vector3 = c._pts[0]
+			track.append([tip.x, tip.y, tip.z, root.x, root.y, root.z, c.seg_len * c.segments])
+	c.queue_free()
+	anchor.queue_free()
+	return {"world": track}
+
+
+## Every chain's tip and root in world space for `n` ticks: {"who, anchor k": {"world": [[tip, root,
+## length]...]}}.
+func _chain_tracks(chains: Array, n: int) -> Dictionary:
+	var out := {}
+	var names := []
+	for k in chains.size():
+		var c: SpringChain = chains[k]
+		names.append("%s, %s %d" % [c.get_meta("who", "?"), c.anchor.name, k])
+		out[names[k]] = {"world": []}
+	for _i in n:
+		await ticks(1)
+		for k in chains.size():
+			var c: SpringChain = chains[k]
+			var tip: Vector3 = c._pts[c.segments]
+			var root: Vector3 = c._pts[0]
+			(out[names[k]]["world"] as Array).append([tip.x, tip.y, tip.z, root.x, root.y, root.z, c.seg_len * c.segments])
+	return out
+
+
+## A track's tip and root: RMS speed (m/s, steady drift removed) and RMS frequency (Hz: how quick
+## the motion is, from velocity and acceleration together), and how close the tip came to the root
+## as a share of the chain's length (a folded chain comes close).
+func _track_stats(entry: Dictionary) -> Dictionary:
+	var tr: Array = entry["world"]
+	var dt := 1.0 / float(Engine.physics_ticks_per_second)
+	var out := {"fold": 1.0}
+	for part in ["tip", "root"]:
+		var o := 0 if part == "tip" else 3
+		var vs: Array = []
+		for i in range(1, tr.size()):
+			var a: Array = tr[i - 1]
+			var b: Array = tr[i]
+			vs.append(Vector3(b[o] - a[o], b[o + 1] - a[o + 1], b[o + 2] - a[o + 2]) / dt)
+		var vmean := Vector3.ZERO
+		for v: Vector3 in vs:
+			vmean += v
+		vmean /= float(vs.size())
+		var v2 := 0.0
+		var a2 := 0.0
+		for i in vs.size():
+			v2 += ((vs[i] as Vector3) - vmean).length_squared()
+			if i > 0:
+				a2 += (((vs[i] as Vector3) - (vs[i - 1] as Vector3)) / dt).length_squared()
+		v2 /= float(vs.size())
+		a2 /= float(vs.size() - 1)
+		out[part] = sqrt(v2)
+		out[part + "_hz"] = sqrt(a2 / maxf(v2, 1e-9)) / TAU
+	for q: Array in tr:
+		var d := Vector3(q[0] - q[3], q[1] - q[4], q[2] - q[5]).length()
+		out["fold"] = minf(out["fold"], d / float(q[6]))
+	return out
 
 
 ## The lock-on camera at the plaza's rim, in the real arena: the invisible wall that keeps the

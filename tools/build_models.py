@@ -82,6 +82,26 @@ class Model:
 
 
 # ---------------------------------------------------------------- mesh spec helpers
+# How each kind of chain moves (SpringChain, in physical units): gravity (m/s^2); sway_hz and
+# sway_damping, the natural frequency and damping ratio of the pull toward its rest shape; air_drag
+# (1/s) across a ribbon's face (strand: across a strand of hair every way round) and edge_drag edge-on
+# and along it: real cloth is damped hard face-on and hardly at all edge-on, so it trails and ripples
+# instead of whipping; breeze (m/s), the wind at rest; flutter (per m/s of air across it) and
+# flutter_hz, the wave that runs down it; max_speed (m/s), a cap on any point's speed relative to its
+# anchor. Cloth sways at about 1 Hz; faster reads as buzzing, and a flutter near the sway's own
+# frequency resonates into big swings.
+SCARF = dict(gravity=5.0, sway_hz=1.0, sway_damping=0.4, air_drag=8.0, edge_drag=1.0, breeze=1.0, flutter=7.5,
+             flutter_hz=1.6, max_speed=4.5)
+BAND = dict(gravity=6.0, sway_hz=1.4, sway_damping=0.45, air_drag=9.0, edge_drag=1.5, breeze=0.6, flutter=5.0,
+            flutter_hz=2.2, max_speed=4.0)
+MANE = dict(gravity=7.0, sway_hz=0.9, sway_damping=0.55, air_drag=5.0, edge_drag=0.8, strand=True, breeze=0.5,
+            flutter=2.0, flutter_hz=1.6, max_speed=4.0)
+SASH = dict(gravity=6.5, sway_hz=0.85, sway_damping=0.45, air_drag=7.0, edge_drag=1.0, breeze=0.5, flutter=5.0,
+            flutter_hz=1.6, max_speed=4.5)
+TASSEL = dict(gravity=8.0, sway_hz=1.3, sway_damping=0.5, air_drag=6.0, edge_drag=1.0, strand=True, breeze=0.5,
+              flutter=2.0, flutter_hz=2.0, max_speed=5.0)
+
+
 def lathe(profile, segments=20, sx=1.0, sz=1.0, flat=False):
     return {"type": "lathe", "profile": [list(p) for p in profile], "segments": segments, "sx": sx, "sz": sz, "flat": flat}
 
@@ -149,14 +169,13 @@ def player():
           texture="res://" + player_spec.BAND_PNG)
     body = [["chest", 0.2, [0, 0.1, 0.02]], ["hips", 0.19, [0, 0, 0]]]
     m.chain("chest", "scarf", (0.04, 0.215, 0.10), (0.1, -0.35, 1.0), side_axis=[1, 0, 0], segments=10, seg_len=0.085,
-            width_start=0.085, width_end=0.065, stiffness=0.035, gravity=4.0, wind_strength=1.2, colliders=body)
+            width_start=0.085, width_end=0.065, **SCARF, colliders=body)
     m.chain("chest", "scarf", (0.02, 0.21, 0.10), (-0.15, -0.5, 1.0), side_axis=[1, 0, 0], segments=7, seg_len=0.08,
-            width_start=0.075, width_end=0.055, stiffness=0.04, gravity=4.5, wind_strength=1.0, colliders=body)
+            width_start=0.075, width_end=0.055, **dict(SCARF, sway_hz=1.1, flutter=6.0, flutter_hz=1.4), colliders=body)
     head = [["head", 0.105, [0, 0.12, 0.0]], ["neck", 0.085, [0, 0.0, 0.0]]]
     for sx in (-1.0, 1.0):
         m.chain("head", "band", (0.01 * sx, 0.129, 0.12), (0.25 * sx, -1.0, 0.45), side_axis=[1, 0, 0], segments=4,
-                seg_len=0.045, width_start=0.026, width_end=0.021, stiffness=0.05, gravity=5.0, wind_strength=0.6,
-                colliders=head)
+                seg_len=0.045, width_start=0.026, width_end=0.021, **BAND, colliders=head)
     return m
 
 
@@ -193,13 +212,13 @@ def boss():
     for i, off in enumerate(mane):
         side = [1, 0, 0.4 * (1 if off[0] > 0 else -1 if off[0] < 0 else 0)]
         m.chain("head", "hair", off, (off[0] * 1.5, -1.0, 0.5), side_axis=side, segments=8, seg_len=0.075 - i * 0.003,
-                width_start=0.13, width_end=0.06, stiffness=0.045, gravity=6.0, wind_strength=0.8, colliders=body)
+                width_start=0.13, width_end=0.06, **MANE, colliders=body)
     for sx in (-1.0, 1.0):
         m.chain("hips", "crimson", (0.07 * sx, 0.04, 0.17), (0.1 * sx, -1.0, 0.25), segments=9, seg_len=0.09,
-                width_start=0.09, width_end=0.07, stiffness=0.03, gravity=6.0, wind_strength=1.0, colliders=body)
+                width_start=0.09, width_end=0.07, **SASH, colliders=body)
     for end in (1.0, -1.0):
         m.chain("weapon", "crimson", (0, 0.82 * end, 0.0), (0, -1, 0), side_axis=[0, 0, 1], segments=6, seg_len=0.075,
-                width_start=0.045, width_end=0.014, stiffness=0.02, gravity=7.0, damping=0.9, wind_strength=0.5)
+                width_start=0.045, width_end=0.014, **TASSEL)
     return m
 
 

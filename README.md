@@ -244,6 +244,7 @@ godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--v
 | `punish` | Deflect an attack, then mash attack: he reels from at most a few hits, then stops it (guards, parries or hits back) |
 | `phases` | Three lives, one per phase: the starting-phase option starts a fight in phase 2 or 3 with the earlier lives taken, each deathblow raises him into the next phase, the last one ends the fight |
 | `camera` | In the real arena: with your back to the fence anywhere round the rim, the lock-on camera keeps its full distance (the wall that keeps the fighters in doesn't squeeze it onto your back), and that wall still stops both fighters |
+| `ribbons` | Cloth and hair (your scarf and headband tails, his mane, sashes and tassels): on a bench, a scarf on a walking body sways gently and a towed or turned chain never folds; in the arena every tip sways under 2.5 Hz while you both stand and while you walk round him, and through his combo his hair and sashes move no quicker than his body |
 | `menu` | The menus with a gamepad only (simulated pad input through Godot's input pipeline): D-pad and stick move one row per push, A selects, left / right change options, B goes back, Start pauses and A on Resume carries on; a closed menu lets go of its highlight; the hints show the keyboard's keys until the pad is used, then its buttons |
 | `loop` | Two 90 s fights against bots that deflect everything, one hitting him only when he's open and one hitting whenever he's in reach: no more than 3 hits leave him reeling between his attacks, and he rarely reopens with the attack he was just punished for |
 | `spam` | The window shrinks 200/133/100/67/0 ms when mashing, clears after 0.5 s and on a deflect |
@@ -256,14 +257,15 @@ godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--v
 | `inferno` | Phase 2 opens with the Inferno (starting there, or rising into it); he lands in the middle of the arena; the blast misses you outside its radius, knocks you down and throws you out of it inside, and walking away locked on from right beside him gets clear in time (stepping through it doesn't); jumping each arm clears all four from 4 to 14 m out, the beat holds (1.5, 1.5, 1.0 s) wherever you stand and while you walk round him; standing, guarding and dodging get burned by every arm and by the eruption; jumping on the beat gets caught by the fourth; one jump timed to the eruption clears it (in the air you're clear), earlier or later burns (it prints the window), and it rolls outward, reaching the wall a moment after it bursts beside him; after a burn the next arm, or the eruption, waits until you can jump it; the ring stops you and burns; your sword glances off him; his posture holds through it; he's open afterwards; he uses it again once it's off cooldown |
 | `soak` | A full fight against the real AI (charges, repositioning, volleys) with a bot player that reacts to the blade and to incoming shuriken: deflects, blocks, posture breaks, deathblows (each signalling 忍殺 once, the last as the final one), the next phase and the Inferno it opens with |
 
-The run exits with code 0 when every check passes (693 checks, including the soak). It also
+The run exits with code 0 when every check passes (698 checks, including the soak). It also
 fails if the engine or a script reports any error during the run (it listens through a
 `Logger`), so runtime errors can't hide behind passing gameplay checks.
 
 **Captures**: `tests/capture.tscn` stages shots (`overview`, `deflect`, `deflect_offcenter`,
 `block`, `mikiri`, `thrust_backstep`, `sweep`, `sweep_flee`, `whirl`, `shuriken`, `shuriken5`,
 `charge`, `slashes`, `parried`, `edge` (the lock-on camera with your back to the fence at eight
-places round the rim), `deathblow` (a posture break and the kill; `deathblow final`
+places round the rim), `ribbons` for cloth and hair in motion (`ribbons close` behind you, `ribbons boss`
+behind him through his combo), `deathblow` (a posture break and the kill; `deathblow final`
 for his last life, then the victory screen), `inferno` for his fire move (`inferno stand` to take the
 arms, `inferno wide` from high above the arena, `inferno spin` straight to the arms of fire, `inferno plunge`
 straight to the finisher), `attack <clip> [distance]` for any single boss attack from
@@ -387,11 +389,27 @@ How the boss model is built (PS2-style: ~25k triangles, one 2048 px atlas with b
 
 ## Status
 
-This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (693 checks, including
+This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (698 checks, including
 a full-fight soak), the game boots and runs with no script errors, and every change to the
 visuals was checked on frames rendered with Movie Maker.
 
-**Latest: a new UI.** The HUD, the menus and the overlays are redesigned in one quiet style
+**Latest: calmer cloth and hair, bolder bars.**
+
+- **Ribbons and his mane** ([before and after](docs/ribbons_before_after.png)): your scarf and
+  headband tails, his horsehair mane, his sashes and the staff's tassels buzzed at 5 to 9 Hz and
+  whipped about (a walking scarf's tip averaged 9 m/s). The
+  chain solver (`SpringChain`) is rebuilt in physical units: the air drags hard across a ribbon's
+  face and lightly edge-on, as it does real cloth; a gentle spring pulls each point toward its place
+  on the rest shape, measured from the root (the old pull toward each point's parent pushed without
+  pushing back, and fed a towed ribbon energy until it snaked); a breeze sends a slow flutter down
+  the cloth as a wave; and slow motion and hit-stop slow and freeze it. Cloth and hair now sway at
+  1 to 2 Hz and trail and ripple as you move (that scarf's tip: 1.9 m/s at about 1.3 Hz), and
+  through his combo his mane moves more slowly than his head does. The lab's new `ribbons` suite
+  checks it, and the capture shot `ribbons` (`close`, `boss`) films it.
+- **HUD bars** are thicker (8 px for vitality, 7 for posture) on a darker track with a fine edge, so
+  they read at a glance over bright stone.
+
+**Before that: a new UI.** The HUD, the menus and the overlays are redesigned in one quiet style
 ([before and after](docs/ui_before_after.png)): ink and ivory, with vermilion kept for what
 matters (damage, his deathblow marks, the deathblow, death), thin flat shapes, and no frames or
 ornament.

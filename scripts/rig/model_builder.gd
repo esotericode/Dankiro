@@ -109,10 +109,11 @@ static func build(rig: HumanoidRig, model_name: String) -> Dictionary:
 		sc.seg_len = float(cd.get("seg_len", 0.07))
 		sc.width_start = float(cd.get("width_start", 0.08))
 		sc.width_end = float(cd.get("width_end", 0.04))
-		sc.stiffness = float(cd.get("stiffness", 0.08))
-		sc.gravity = float(cd.get("gravity", 5.0))
-		sc.damping = float(cd.get("damping", 0.94))
-		sc.wind_strength = float(cd.get("wind_strength", 0.6))
+		for key in ["gravity", "sway_hz", "sway_damping", "air_drag", "edge_drag", "breeze", "flutter", "flutter_hz",
+				"max_speed"]:
+			if cd.has(key):
+				sc.set(key, float(cd[key]))
+		sc.strand = bool(cd.get("strand", false))
 		var cols: Array = []
 		for col in cd.get("colliders", []):
 			var ca: Array = col
