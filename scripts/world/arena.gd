@@ -147,10 +147,12 @@ func _floor_material(shader_name: String, tex: Dictionary) -> ShaderMaterial:
 	return mat
 
 
-## The invisible wall round the plaza's rim that keeps the fight (and the camera) in; the fence
-## you see there is Scenery's.
+## The invisible wall round the plaza's rim that keeps the fighters in; the fence you see there
+## is Scenery's. It sits on its own physics layer, which the camera doesn't collide with.
 func _build_boundary() -> void:
 	var body := StaticBody3D.new()
+	body.collision_layer = Combat.LAYER_BOUNDARY
+	body.collision_mask = 0
 	add_child(body)
 	var segs := 36
 	var wall_r := radius - 0.2

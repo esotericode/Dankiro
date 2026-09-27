@@ -9,6 +9,13 @@ extends RefCounted
 ## after a successful deflect, so deflecting a combo in rhythm works while mashing doesn't.
 ## Holding guard past the window (or a tapped guard that is still up) becomes a block.
 
+# --- Physics layers ----------------------------------------------------------------------
+## The world: the floor the fighters stand on and the camera keeps above.
+const LAYER_WORLD := 1
+## The invisible wall round the plaza: only the fighters bump into it. The camera ignores it
+## and swings out over the low fence, so it never gets squeezed onto your back at the rim.
+const LAYER_BOUNDARY := 2
+
 # --- Deflect -------------------------------------------------------------------------
 const DEFLECT_WINDOW := 0.200
 ## Window used for the n-th quick re-press in a row (index clamps to the last entry).

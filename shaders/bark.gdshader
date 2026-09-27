@@ -4,6 +4,8 @@ render_mode diffuse_burley, specular_schlick_ggx;
 // (a whole number of tiles round); UV2.x is baked ambient occlusion. Moss and damp creep up from
 // the roots on the shaded side.
 
+#include "res://shaders/near_fade.gdshaderinc"
+
 uniform sampler2D bark_albedo : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D bark_normal : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D moss_albedo : source_color, filter_linear_mipmap, repeat_enable;
@@ -26,6 +28,9 @@ void vertex() {
 }
 
 void fragment() {
+	if (near_fade_discard(VERTEX, FRAGCOORD.xy, PROJECTION_MATRIX)) {
+		discard;
+	}
 	vec2 uv = UV / period;
 	vec3 col = texture(bark_albedo, uv).rgb * tint * tree_tint * brightness;
 	NORMAL_MAP = texture(bark_normal, uv).rgb;

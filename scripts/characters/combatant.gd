@@ -60,6 +60,7 @@ func _setup_rig(rig_name: String) -> void:
 	cs.shape = shape
 	cs.position = Vector3(0, shape.height * 0.5, 0)
 	add_child(cs)
+	collision_mask = Combat.LAYER_WORLD | Combat.LAYER_BOUNDARY
 	floor_snap_length = 0.3
 	floor_max_angle = deg_to_rad(50.0)
 

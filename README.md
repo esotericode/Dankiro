@@ -88,7 +88,9 @@ The input map is registered in code (`scripts/autoload/game_input.gd`); actions 
 - **Blocking**: if a blade lands outside the window while your guard is up (held, or a tap
   less than 0.35 s old), you block. Blocking costs no vitality but a big chunk of *your*
   posture, with a quiet, dull clank and a small spark. Fill your posture while blocking and your
-  guard breaks. Pressing too early therefore blocks; only a very early tap lets a strike through.
+  guard breaks: you stagger, open to his next blow. Still holding guard when you recover, it
+  comes straight back up (as a block), as in Sekiro. Pressing too early therefore blocks; only a
+  very early tap lets a strike through.
 - Deflecting several strikes in a row (each within 1.2 s) hits his posture harder: +12% per
   deflect, up to +36%.
 - **Flurries** (the whirl, the jabs, a shuriken volley): missing one deflect doesn't cost you the
@@ -167,7 +169,8 @@ every 40 s; phase three has it too).
   beat instead of watching the fire. The beat is the same wherever you stand, even if you
   walk round him. If an arm burns you, the next one waits until you're up (about 2 s).
 - A **ring of fire** round him keeps you off him (it burns and shoves you back), and while he
-  burns your sword glances off him.
+  burns your sword glances off him. His **posture holds** while it lasts, so surviving it costs
+  you none of the posture you'd built; it starts recovering again once he's spent.
 - **The finisher (危):** the arms die away, he stands tall with the staff upright over his head,
   holds it, and drives it down into the stones. Cracks of fire race out across the floor and
   the **whole arena erupts**, rolling out from his staff. One jump, timed to the eruption,
@@ -183,7 +186,7 @@ every 40 s; phase three has it too).
   and each shuriken you deflect chips it a little (4 of his 300; a deflected blade does 7 to 16).
   If a shuriken fills it while he's in the air, he breaks as he lands.
 - His posture recovers when you ease off, and it recovers more slowly as his vitality drops.
-  Hitting him makes the posture war easier.
+  Hitting him makes the posture war easier. It holds through the Inferno, when you can't touch him.
 - When his posture breaks (or his vitality empties), he drops to one knee under a red mark.
   Press **Attack** close to him to perform a **deathblow**: the camera swings round beside the
   two of you for the kill, time slows as the blade goes in, blood sprays across the stones and
@@ -237,9 +240,10 @@ godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--v
 | `reach` | Every hit window of every boss attack (including the running cut) connects from point-blank to the edge of its range, straight on and 25° off-axis |
 | `tells` | When each attack's blows land from 1.4 to 2.6 m: every blow lands as the blade reaches you (not the instant its hit window opens, which would mean the blade was already touching you), and every opener gives at least 0.45 s of warning |
 | `deflect` | Presses 0–200 ms before contact deflect; earlier ones block (held, or a tap still up); late ones get hit; perilous thrusts can't be blocked; a deflect never guard-breaks you; a deflect that breaks his posture partway through a multi-hit attack staggers him cleanly |
-| `flurry` | After a blow of the whirl, the jabs or a shuriken volley lands, holding guard blocks the rest; mashing guard through them never lets a blow through |
+| `flurry` | After a blow of the whirl, the jabs or a shuriken volley lands, holding guard blocks the rest; mashing guard through them never lets a blow through; a guard held through a guard break is back up after the stagger and blocks the next blow |
 | `punish` | Deflect an attack, then mash attack: he reels from at most a few hits, then stops it (guards, parries or hits back) |
 | `phases` | Three lives, one per phase: the starting-phase option starts a fight in phase 2 or 3 with the earlier lives taken, each deathblow raises him into the next phase, the last one ends the fight |
+| `camera` | In the real arena: with your back to the fence anywhere round the rim, the lock-on camera keeps its full distance (the wall that keeps the fighters in doesn't squeeze it onto your back), and that wall still stops both fighters |
 | `menu` | The menus with a gamepad only (simulated pad input through Godot's input pipeline): D-pad and stick move one row per push, A selects, left / right change options, B goes back, Start pauses and A on Resume carries on; a closed menu lets go of its highlight |
 | `loop` | Two 90 s fights against bots that deflect everything, one hitting him only when he's open and one hitting whenever he's in reach: no more than 3 hits leave him reeling between his attacks, and he rarely reopens with the attack he was just punished for |
 | `spam` | The window shrinks 200/133/100/67/0 ms when mashing, clears after 0.5 s and on a deflect |
@@ -249,16 +253,17 @@ godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--v
 | `shuriken` | Volley rhythms (3 in the air + 1 delayed, 5 in the air), a readable tell before the first, every throw deflectable (4 posture to him each; one that fills his posture in mid-air breaks him as he lands) or blockable |
 | `attack` | Slash reach, and that mashing is rate-limited (no two hits within 0.38 s) |
 | `cancel` | Guard cancels a slash only in the early wind-up and in the recovery |
-| `inferno` | Phase 2 opens with the Inferno (starting there, or rising into it); he lands in the middle of the arena; the blast misses you outside its radius, knocks you down and throws you out of it inside, and walking away locked on from right beside him gets clear in time (stepping through it doesn't); jumping each arm clears all four from 4 to 14 m out, the beat holds (1.5, 1.5, 1.0 s) wherever you stand and while you walk round him; standing, guarding and dodging get burned by every arm and by the eruption; jumping on the beat gets caught by the fourth; one jump timed to the eruption clears it (in the air you're clear), earlier or later burns (it prints the window), and it rolls outward, reaching the wall a moment after it bursts beside him; after a burn the next arm, or the eruption, waits until you can jump it; the ring stops you and burns; your sword glances off him; he's open afterwards; he uses it again once it's off cooldown |
+| `inferno` | Phase 2 opens with the Inferno (starting there, or rising into it); he lands in the middle of the arena; the blast misses you outside its radius, knocks you down and throws you out of it inside, and walking away locked on from right beside him gets clear in time (stepping through it doesn't); jumping each arm clears all four from 4 to 14 m out, the beat holds (1.5, 1.5, 1.0 s) wherever you stand and while you walk round him; standing, guarding and dodging get burned by every arm and by the eruption; jumping on the beat gets caught by the fourth; one jump timed to the eruption clears it (in the air you're clear), earlier or later burns (it prints the window), and it rolls outward, reaching the wall a moment after it bursts beside him; after a burn the next arm, or the eruption, waits until you can jump it; the ring stops you and burns; your sword glances off him; his posture holds through it; he's open afterwards; he uses it again once it's off cooldown |
 | `soak` | A full fight against the real AI (charges, repositioning, volleys) with a bot player that reacts to the blade and to incoming shuriken: deflects, blocks, posture breaks, deathblows (each signalling 忍殺 once, the last as the final one), the next phase and the Inferno it opens with |
 
-The run exits with code 0 when every check passes (686 checks, including the soak). It also
+The run exits with code 0 when every check passes (691 checks, including the soak). It also
 fails if the engine or a script reports any error during the run (it listens through a
 `Logger`), so runtime errors can't hide behind passing gameplay checks.
 
 **Captures**: `tests/capture.tscn` stages shots (`overview`, `deflect`, `deflect_offcenter`,
 `block`, `mikiri`, `thrust_backstep`, `sweep`, `sweep_flee`, `whirl`, `shuriken`, `shuriken5`,
-`charge`, `slashes`, `parried`, `deathblow` (a posture break and the kill; `deathblow final`
+`charge`, `slashes`, `parried`, `edge` (the lock-on camera with your back to the fence at eight
+places round the rim), `deathblow` (a posture break and the kill; `deathblow final`
 for his last life, then the victory screen), `inferno` for his fire move (`inferno stand` to take the
 arms, `inferno wide` from high above the arena, `inferno spin` straight to the arms of fire, `inferno plunge`
 straight to the finisher), `attack <clip> [distance]` for any single boss attack from
@@ -375,7 +380,7 @@ How the boss model is built (PS2-style: ~25k triangles, one 2048 px atlas with b
 
 ## Status
 
-This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (686 checks, including
+This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (691 checks, including
 a full-fight soak), the game boots and runs with no script errors, and every change to the
 visuals was checked on frames rendered with Movie Maker.
 
@@ -392,6 +397,21 @@ now a skinned, textured model built by a Blender script like the boss
 - Slim trousers tied into cross-bound shin wraps, split-toed tabi on straw sandals.
 - The empty scabbard at the left hip with its cord, a pouch on the obi, and a new katana:
   tempered blade, copper habaki, iron tsuba, dark silk wrap over white rayskin.
+
+**Also: three fixes from a review.**
+
+- **Holding guard through a guard break**: when blocking filled your posture and broke your
+  guard, the game dropped the held button, so after the stagger your guard stayed down and the
+  next blow hit you until you let go and pressed again. Now a guard still held when you
+  recover comes straight back up, as a block.
+- **The camera at the edge of the arena**: backed against the fence, the lock-on camera
+  collided with the invisible wall that keeps the fighters in (4 m tall, above the knee-high
+  fence) and was squeezed to 0.3 m behind your head. That wall is now only for the fighters:
+  the camera keeps its distance and looks over the fence, and bushes it comes close to out there
+  dissolve rather than fill the view.
+- **His posture during the Inferno**: your sword can't touch him for its ~12 s, yet his posture
+  kept recovering, so surviving it cost you most of what you'd built (240 of 300 fell to about
+  100). It now holds until he's spent.
 
 **Before that: the fight's finishing touches.** A polish pass on what you see while fighting him
 ([before and after](docs/polish_before_after.png)):

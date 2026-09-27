@@ -56,7 +56,7 @@ func _ready() -> void:
 		if not a.begins_with("--"):
 			suites.append(a)
 	if suites.is_empty():
-		suites = ["reach", "tells", "deflect", "flurry", "punish", "loop", "phases", "menu", "spam", "mikiri", "dodge", "sweep", "shuriken", "attack", "cancel", "inferno", "soak"]
+		suites = ["reach", "tells", "deflect", "flurry", "punish", "loop", "phases", "menu", "camera", "spam", "mikiri", "dodge", "sweep", "shuriken", "attack", "cancel", "inferno", "soak"]
 	await get_tree().physics_frame
 	for s in suites:
 		print("\n=== suite: %s ===" % s)
@@ -370,6 +370,29 @@ func suite_flurry() -> void:
 		got = _results.map(func(r): return res_name(int(r["res"])))
 		print("  %-13s spamming guard:     %s" % [clip, " ".join(got)])
 		check(got.size() == cts.size() and not got.has("HIT"), "%s: spamming guard blocks every blow (%s)" % [clip, " ".join(got)])
+	# A blocked blow breaks the guard while it's held, and the button stays held: once the
+	# stagger is over the guard comes back up by itself, as it does after a flinch (a block:
+	# the press keeps its old time, so this is no free deflect).
+	await setup(2.2)
+	player.press_guard(Game.clock)
+	await ticks(30)
+	player.posture = player.max_posture - 1.0
+	boss_attack("b_combo_1")
+	var saw_break := false
+	var t_end := Game.clock + 5.0
+	await ticks(1)
+	while (boss.state == Boss.S.ATTACK or player.state == Player.S.GUARD_BREAK) and Game.clock < t_end:
+		saw_break = saw_break or player.state == Player.S.GUARD_BREAK
+		await ticks(1)
+	await ticks(12)
+	var up := player.is_guard_up()
+	_results.clear()
+	boss_attack("b_combo_1")
+	await run_until_boss_done()
+	var after: Array = _results.map(func(r): return res_name(int(r["res"])))
+	print("  guard broken while held, still held: back up %s, next blow %s" % [up, " ".join(after)])
+	check(saw_break and up and after == ["BLOCK"],
+		"guard broken while held: the held guard is back up after the stagger and blocks the next blow (%s, %s)" % [up, " ".join(after)])
 
 
 ## Spam penalty: window per press depends on the time since the last *release*.
@@ -742,6 +765,79 @@ func suite_menu() -> void:
 	Game.start_phase = int(saved[0])
 	Game.debug = bool(saved[1])
 	Game.save_enabled = bool(saved[2])
+
+
+## The lock-on camera at the plaza's rim, in the real arena: the invisible wall that keeps the
+## fighters in must not squeeze the camera onto your back (it pulled in to 0.4 m); the camera
+## swings out over the low fence instead. The wall must still stop both fighters.
+func suite_camera() -> void:
+	var saved := [Game.skip_title, Game.start_phase]
+	Game.skip_title = true
+	Game.start_phase = 1
+	if world != null:
+		world.queue_free()
+		world = null
+	var main: Node = (load("res://scenes/main.tscn") as PackedScene).instantiate()
+	add_child(main)
+	await ticks(4)
+	var p: Player = main.get("player")
+	var b: Boss = main.get("boss")
+	var cam: CombatCamera = main.get("camera")
+	var rim: float = (main.get("arena") as Arena).radius
+	b.set_passive(true)
+	await ticks(320)                          # the intro plays out and the fight starts
+	b.global_position = Vector3.ZERO
+	var lens := PackedFloat32Array()
+	for k in 8:
+		var a := TAU * float(k) / 8.0 + 0.2
+		p.global_position = Combat.dir_of(a) * (rim - 0.7)
+		p.face_now(b.global_position)
+		p.locked = true
+		await ticks(90)
+		var shortest := 99.0
+		for _i in 12:
+			shortest = minf(shortest, cam.arm.get_hit_length())
+			await ticks(1)
+		lens.append(shortest)
+	var worst := 99.0
+	for l in lens:
+		worst = minf(worst, l)
+	print("  camera distance with your back to the fence, 8 places round the rim: %s" % " ".join(
+		Array(lens).map(func(l): return "%.2f" % l)))
+	check(worst >= 3.0, "at the rim the lock-on camera keeps its distance (shortest %.2f m, normal %.1f m)" % [worst, cam.distance])
+	# Walk away from him, into the wall, for a while: it still holds.
+	var far := 0.0
+	for k in 3:
+		var a := TAU * float(k) / 3.0 + 0.5
+		p.global_position = Combat.dir_of(a) * (rim - 3.0)
+		p.face_now(b.global_position)
+		p.bot_enabled = true
+		p.bot_move = Vector2(0, 1)
+		await ticks(360)
+		p.bot_move = Vector2.ZERO
+		far = maxf(far, Combat.flat(p.global_position).length())
+	check(far < rim - 0.1, "walking out against the wall keeps you inside the fence (%.2f m of %.1f)" % [far, rim])
+	# Shove him outward at the wall too.
+	var bfar := 0.0
+	for k in 3:
+		var a := TAU * float(k) / 3.0 + 1.1
+		b.global_position = Combat.dir_of(a) * (rim - 2.0)
+		p.global_position = Combat.dir_of(a) * (rim - 5.0)
+		for _i in 90:
+			b.push(Combat.dir_of(a) * 9.0)
+			await ticks(1)
+		await ticks(30)
+		bfar = maxf(bfar, Combat.flat(b.global_position).length())
+	check(bfar < rim - 0.1, "shoving him out against the wall keeps him inside the fence (%.2f m of %.1f)" % [bfar, rim])
+	main.queue_free()
+	await ticks(2)
+	Game.camera = null
+	Game.hud = null
+	Game.player = null
+	Game.boss = null
+	Game.clear_time_effects()
+	Game.skip_title = bool(saved[0])
+	Game.start_phase = int(saved[1])
 
 
 ## A pad button press and release, as a pad sends them (device 0), a few frames apart.
@@ -1219,6 +1315,13 @@ func suite_inferno() -> void:
 		print("  inferno at %4.1f m %3.0f deg: passes %s, gaps %s" % [spot[0], spot[1], str(r["pass_rel"]), str(gaps)])
 	check(worst_gap < 0.12, "the beat holds wherever you stand: %.1f, %.1f, then %.2f s (off by at most %.2f s)" % [
 		Inferno.GAP, Inferno.GAP, Inferno.GAP_FAST, worst_gap])
+	# His posture holds through it: you can't touch him for its ~12 s (your sword glances off
+	# the flames), so what you'd built doesn't drain away while you survive it.
+	r = await _inferno_run(Vector3(0, 0, -2.0), Vector3(0, 0, 8.0), "jump", {"posture": 240.0})
+	print("  inferno from 240 posture: %.1f when he hands back after %.1f s" % [r["posture_handback"], r["inferno_s"]])
+	check(absf(float(r["posture_handback"]) - 240.0) < 0.5 and float(r["inferno_s"]) > 8.0,
+		"his posture holds through the Inferno (240 before, %.1f when he hands back %.1f s later)" % [
+			r["posture_handback"], r["inferno_s"]])
 	# ...even while you walk round him (the turn is steered to keep the beat)
 	r = await _inferno_run(Vector3(0, 0, -2.0), Vector3(0, 0, 7.0), "jump_strafe")
 	var sg: Array = r["gaps"]
@@ -1324,13 +1427,15 @@ func _inferno_run(boss_at: Vector3, player_at: Vector3, mode: String, opts := {}
 	var out := {"blast_hit": false, "blast_out": 0.0, "passes": 0, "hits": 0, "guarded": 0, "hit_pass": -1, "gaps": [],
 		"pass_rel": [], "spent": false, "landed_off": 99.0, "after_hit": 99.0, "closest": 99.0, "burns": 0,
 		"slashes": 0, "slash_hits": 0, "boss_hp_lost": 0.0, "boss_posture": 0.0, "punished": 0,
-		"erupt_hits": 0, "erupt_after_burn": 99.0}
+		"erupt_hits": 0, "erupt_after_burn": 99.0, "posture_handback": -1.0, "inferno_s": 0.0}
 	var burned := [0]
 	var hp_prev := [player.hp]
 	boss.struck.connect(func(res: int, _p: Vector3):
 		out["slashes"] = int(out["slashes"]) + 1
 		if res == Combat.RESULT_HIT and boss.state == Boss.S.INFERNO:
 			out["slash_hits"] = int(out["slash_hits"]) + 1)
+	if opts.has("posture"):
+		boss.posture = float(opts["posture"])
 	boss.begin_inferno()
 	var inf := boss.inferno
 	var st := {"jumped": [-1], "last_hit_t": -1.0, "stood": false}
@@ -1354,6 +1459,9 @@ func _inferno_run(boss_at: Vector3, player_at: Vector3, mode: String, opts := {}
 		hp_prev[0] = player.hp
 		if boss.state == Boss.S.ATTACK and boss.anim.is_playing("b_fire_spent"):
 			seen_spent = true
+		if boss.state != Boss.S.INFERNO and float(out["posture_handback"]) < 0.0:
+			out["posture_handback"] = boss.posture
+			out["inferno_s"] = Game.clock - t0
 		# (closing in as soon as you've landed from the eruption, like a player going for the opening)
 		if mode == "punish" and (seen_spent or inf.erupt_time > 0.0 and Game.clock > inf.erupt_time + 0.45):
 			_inferno_close_in()

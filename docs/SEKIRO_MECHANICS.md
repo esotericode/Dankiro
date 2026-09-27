@@ -16,7 +16,7 @@ The automated checks in `tests/` (see the README) verify the rules marked **[tes
 | The penalty clears after **30 frames** without a quick press, and **immediately after a successful deflect**, so deflecting a fast flurry in rhythm works. | Same. **[tested]** |
 | Holding guard and releasing it just before pressing again also builds the penalty. | Same, because the penalty keys off the release. |
 | **Holding guard** when a blade lands outside the window **blocks**: no vitality damage, a large hit to *your* posture, and a dull, quiet clank with a small spark. | Block when the guard pose is up (held, or still settling after a tap). **[tested]** |
-| A full posture bar from blocking causes a **guard break**: you stagger and can be hit. | `_guard_break()` |
+| A full posture bar from blocking causes a **guard break**: you stagger and can be hit. Block is held, not toggled: still holding it when you recover, you're guarding again. | `_guard_break()`. The held button survives the break, so a guard still held when the stagger ends comes back up by itself, as a block (the press keeps its old time, so no free deflect). **[tested]** |
 | Getting hit by a **light** blow staggers Wolf only briefly, so you can raise your guard and block (or deflect) the rest of a string. Heavy blows (perilous attacks, big finishers) knock you down. | A light blow (up to 20 damage, or a shuriken) keeps your guard down for 0.12 s (`HIT_STUN_LIGHT`), a heavier one for 0.22 s (`HIT_STUN`). A held guard comes back up by itself after that, and a press during the stagger is kept, so after missing one deflect of the whirl, the jabs or a shuriken volley, holding guard blocks the rest. **[tested]** |
 | A **deflect** negates the damage, adds a *small* amount of your posture, and **can never break your posture**. | `add_posture(x, false)` clamps below max. **[tested]** |
 | A deflect deals **large posture damage to the attacker**. Deflecting a combo's last hit staggers them briefly, giving you an opening. | `boss_posture` per hit, a ×1.35 bonus on a combo's final hit, and a `b_recoil` opening. |
@@ -119,6 +119,10 @@ still in the air then, he breaks as he lands. **[tested]**
 - **Lower vitality means slower posture regeneration** for both fighters, so damaging him with
   hits makes the posture war winnable.
 - A full posture bar means a posture break: they drop, and you can **deathblow**.
+- Dankiro: his posture **holds through the Inferno**. You can't touch him for its ~12 s (your
+  sword glances off the flames), so there's no pressure you could keep up, and letting it
+  recover would take back what you'd built for surviving it. It recovers again, after the usual
+  delay, once he hands back into his spent window. **[tested]**
 - Bosses have several lives (Sekiro's deathblow marks). Sojin has three, one per phase.
 
 ## 5. Readability (why the fight is fair)

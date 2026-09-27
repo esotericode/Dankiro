@@ -45,7 +45,7 @@ func _ready() -> void:
 	arm = SpringArm3D.new()
 	arm.spring_length = distance
 	arm.margin = 0.25
-	arm.collision_mask = 1
+	arm.collision_mask = Combat.LAYER_WORLD     # not the plaza's wall (Combat.LAYER_BOUNDARY)
 	arm.position = Vector3(shoulder, 0.0, 0.0)
 	add_child(arm)
 	var probe := SphereShape3D.new()

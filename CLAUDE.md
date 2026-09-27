@@ -28,8 +28,9 @@ the script backs off and retries, so let it run. For another version, set
 - Combat lab (headless, about 6 min for everything, exits 0 when all checks pass; any engine or
   script error during the run also fails it):
   `godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--verbose]`
-  Suites: reach, tells, deflect, flurry, punish, loop, phases, menu, spam, mikiri, dodge, sweep,
-  shuriken, attack, cancel, inferno, soak. `menu` drives the real menus with simulated gamepad input
+  Suites: reach, tells, deflect, flurry, punish, loop, phases, menu, camera, spam, mikiri, dodge,
+  sweep, shuriken, attack, cancel, inferno, soak. `camera` loads the real arena (main.tscn), like
+  `menu`. `menu` drives the real menus with simulated gamepad input
   (`Input.parse_input_event`); it sets `Game.save_enabled = false` so tests never overwrite the
   saved options.
 - Rendered frames (to actually *see* a change), using Movie Maker with software Vulkan:
@@ -44,7 +45,8 @@ the script backs off and retries, so let it run. For another version, set
   `[rendering]` `textures/default_filters/anisotropic_filtering_level=0` to `override.cfg` cuts a
   third while iterating. `override.cfg` is git-ignored. The shots are
   the `shot_*` functions in `tests/capture.gd`; `-- attack <clip> [distance]` films any boss
-  attack from the lock-on camera, `diagnostics` shows the hitbox overlay, `deathblow [final]` a
+  attack from the lock-on camera, `diagnostics` shows the hitbox overlay, `edge` the lock-on camera
+  with your back to the fence round the rim, `deathblow [final]` a
   posture break and the kill (the camera's deathblow shot, blood, 忍殺), `help` and
   `menu_controls` the controls sheet, and `inferno`
   (`stand`, `wide`) films phase 2's fire move (about 16 s: render it at 640x360 to iterate). Contact-sheet the
@@ -193,5 +195,9 @@ godot --headless --editor --quit               # import
   projection (`PROJECTION_MATRIX[3][3]`) and drop every other shadow-map texel there (the clumps
   also get gaps), so tree crowns cast a light dappled shade on the plaza instead of dark smears.
   An orthographic camera would see the crowns the same way.
+- Physics layers (`Combat.LAYER_*`): 1 is the world (the floor), 2 the invisible wall round the
+  plaza, which only the fighters collide with. The camera's spring arm only hits layer 1, so at
+  the rim it swings out over the fence instead of being squeezed onto your back; foliage and bark
+  it comes close to out there dissolve (`shaders/near_fade.gdshaderinc`, not in the shadow pass).
 - The combat camera frames deathblows itself (`CombatCamera.play_deathblow`, called by the
   player): it swings beside the fighters while the kill plays out, then eases back.

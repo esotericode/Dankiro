@@ -8,6 +8,8 @@ render_mode diffuse_burley, specular_schlick_ggx;
 // the shadow map, which the shadow filter smooths into half strength), so a tree's shadow on the
 // plaza is a dappled shade like foliage's rather than one solid blot. The trunks cast in full.
 
+#include "res://shaders/near_fade.gdshaderinc"
+
 uniform sampler2D leaf_tex : source_color, filter_linear_mipmap, repeat_enable;   // alpha = coverage
 uniform float leaf_period = 1.6;        // metres per tile of the leaf texture
 uniform float brightness = 1.0;        // the leaf card's colour is the albedo; this scales it
@@ -57,6 +59,9 @@ vec4 triplanar(sampler2D tex, vec3 p, vec3 w) {
 }
 
 void fragment() {
+	if (near_fade_discard(VERTEX, FRAGCOORD.xy, PROJECTION_MATRIX)) {
+		discard;
+	}
 	// An orthographic projection is the moon's shadow map (the cameras are all perspective).
 	if (PROJECTION_MATRIX[3][3] > 0.5) {
 		float gaps = vnoise(opos * 1.25 + seed * 17.0) * 0.65 + vnoise(opos * 3.4) * 0.35;

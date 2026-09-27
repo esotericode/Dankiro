@@ -2,7 +2,7 @@ extends Node
 ## Scripted capture director for visual checks with Godot's Movie Maker:
 ##   godot --write-movie out/frame.png --fixed-fps 30 res://tests/capture.tscn -- <shot>
 ## Shots: overview, deflect, deflect_offcenter, block, mikiri, thrust_backstep, sweep, sweep_flee, whirl, shuriken,
-## shuriken5, charge, slashes, parried, deathblow [final], inferno [stand|wide|spin|plunge|plunge_stand], attack <clip> [distance], recovery <clip>, diagnostics, the menus
+## shuriken5, charge, slashes, parried, deathblow [final], edge, inferno [stand|wide|spin|plunge|plunge_stand], attack <clip> [distance], recovery <clip>, diagnostics, the menus
 ## (menu_title, menu_options, menu_controls, menu_start, menu_pause, help), and art checks: model (orbit), model_head, model_face, model_face_p2, model_combo,
 ## model_flourish, player_model, player_head, player_face, player_moves, fire_staff [level], fire_combo, floor [overview|centre|medallion|puddle|moss|broken|rim|low|sweep],
 ## scenery [torii|gate|south|east|west|high|lantern].
@@ -509,6 +509,21 @@ func shot_menu_controls() -> void:
 			if (b as Button).text == "Controls":
 				(b as Button).pressed.emit())
 	_end_at = 1.6
+
+
+## The lock-on camera with your back to the fence, at eight places round the rim, a second each:
+## it keeps its distance, swinging out over the fence (the fighters' wall doesn't stop it).
+func shot_edge() -> void:
+	_stage(6.0)
+	var rim: float = (main.get("arena") as Arena).radius
+	for k in 8:
+		var a := TAU * float(k) / 8.0 + 0.2
+		at(0.2 + 1.0 * k, func():
+			boss.global_position = Vector3.ZERO
+			player.global_position = Combat.dir_of(a) * (rim - 0.7)
+			player.face_now(boss.global_position)
+			player.locked = true)
+	_end_at = 8.2
 
 
 ## In the fight, F1: the controls sheet over the fight.

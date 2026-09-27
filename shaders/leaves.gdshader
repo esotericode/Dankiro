@@ -7,6 +7,8 @@ render_mode diffuse_burley, specular_schlick_ggx, cull_disabled, alpha_to_covera
 // shades as one mass with the clumps behind. UV2.x: baked occlusion, UV2.y: the clump's tone.
 // In the moon's shadow pass the cards are only half there, like the clumps (foliage.gdshader).
 
+#include "res://shaders/near_fade.gdshaderinc"
+
 uniform sampler2D leaf_tex : source_color, filter_linear_mipmap_anisotropic;   // a spray, alpha = coverage
 uniform float card_size = 1.0;
 uniform float brightness = 1.0;
@@ -52,6 +54,9 @@ void vertex() {
 }
 
 void fragment() {
+	if (near_fade_discard(VERTEX, FRAGCOORD.xy, PROJECTION_MATRIX)) {
+		discard;
+	}
 	// An orthographic projection is the moon's shadow map (the cameras are all perspective).
 	if (PROJECTION_MATRIX[3][3] > 0.5 && mod(floor(FRAGCOORD.x) + floor(FRAGCOORD.y), 2.0) < 1.0) {
 		discard;

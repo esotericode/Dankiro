@@ -856,7 +856,8 @@ func _guard_break() -> void:
 	Game.hitstop(Combat.HITSTOP_POSTURE_BREAK)
 	Game.shake(0.45, 0.3)
 	Game.rumble(0.6, 1.0, 0.3)
-	guard_held = false
+	# guard_held stays as the button is: a guard still held when the stagger ends comes back up
+	# by itself (_to_neutral), as a block, since the press keeps its old time.
 
 
 func _do_hit(info: Dictionary, attacker: Combatant, pos: Vector3) -> void:

@@ -296,7 +296,12 @@ func _physics_process(delta: float) -> void:
 	planar += root_motion_velocity(delta)
 	apply_motion(delta, planar)
 	_update_glow(delta)
-	if state != S.STAGGER and state != S.DEATHBLOWN and state != S.DEAD:
+	if state == S.INFERNO:
+		# His posture holds through the Inferno: your sword can't touch him for its ~12 s, so
+		# letting it drain would take back what you'd built for surviving it. It starts
+		# recovering again the usual delay after he hands back (into his spent punish window).
+		_since_posture_hit = 0.0
+	elif state != S.STAGGER and state != S.DEATHBLOWN and state != S.DEAD:
 		tick_posture(delta, 0.3 + 0.7 * (hp / max_hp))
 	_footsteps()
 
