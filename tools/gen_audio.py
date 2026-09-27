@@ -281,7 +281,7 @@ def decay(x, tau, hold=0.0):
 
 def repitch(x, ratio):
     """Plays `x` at `ratio` times the speed (pitch up and shorter above 1), band-limited."""
-    fr = Fraction(ratio).limit_denominator(96)
+    fr = Fraction(ratio).limit_denominator(500)
     if fr == 1:
         return x.copy()
     return signal.resample_poly(x, fr.denominator, fr.numerator, axis=0)
@@ -441,14 +441,22 @@ def loop_xfade(x, xf):
 # dies fast; the block is a damped, lower clunk with no ring to speak of. Tell them apart
 # without looking.
 
-# (anvil hit, its pitch, the blade's ring, the sparkle's source)
+# The deflect has a voice of its own, in two layers. The strike (deflect_N, positional): an anvil
+# crack, a hiss of steel on steel, a crackle of sparks, a thump. The ring (deflect_ring_N, stereo,
+# played flat on top): one bright, pure note, the same in every variation, so the ear learns it
+# (that's the sound of getting it right), with its shimmer spread wide, its reverberation and
+# sparks scattered across the speakers. The game ducks everything else under both (Sfx), and a
+# flurry's rings climb a pentatonic scale from this note, so overlapping rings stay in tune.
+DEFLECT_NOTE = 1976.0          # B6
+
+# (anvil hit, its pitch, which knife slice)
 DEFLECTS = [
-    ("anvil_23", 0.86, 1245.0, "finger_cymbal"),
-    ("anvil_33", 0.80, 1397.0, "splash_hard"),
-    ("anvil_13", 0.70, 1175.0, "finger_cymbal"),
-    ("anvil_22", 0.84, 1319.0, "cym_bell"),
-    ("anvil_32", 0.92, 1480.0, "splash_hard"),
-    ("anvil_12", 0.76, 1109.0, "finger_cymbal"),
+    ("anvil_23", 0.86, 1),
+    ("anvil_33", 0.80, 2),
+    ("anvil_13", 0.74, 1),
+    ("anvil_22", 0.84, 2),
+    ("anvil_32", 0.92, 1),
+    ("anvil_12", 0.78, 2),
 ]
 
 
@@ -457,18 +465,76 @@ def sparkle(key, dur=0.5, tau=0.07):
     return decay(highpass(S(key, dur=dur), 5200, order=4), tau)
 
 
+def sparks(dur, count, seed, spread=0.0):
+    """Sparks flying off a clash: sharp little crackles above 4 kHz, thinning out fast. With
+    `spread`, stereo, each spark somewhere between the speakers."""
+    rng = np.random.default_rng(seed)
+    n = int(dur * SR)
+    out = np.zeros((n, 2))
+    for _ in range(count):
+        t = rng.exponential(dur * 0.2)
+        if t >= dur:
+            continue
+        k = max(8, int(rng.uniform(0.0004, 0.0025) * SR))
+        pop = rng.standard_normal(k) * np.exp(-np.arange(k) / (k * 0.3))
+        pop *= rng.uniform(0.25, 1.0) * math.exp(-t / (dur * 0.35))
+        i = int(t * SR)
+        m = min(k, n - i)
+        pan = 0.5 + spread * rng.uniform(-0.5, 0.5)
+        out[i:i + m, 0] += pop[:m] * math.sqrt(1 - pan)
+        out[i:i + m, 1] += pop[:m] * math.sqrt(pan)
+    out = highpass(out, 4000, order=4)
+    return out if spread else out.mean(axis=1)
+
+
+def deflect_note(f, dur, seed=0):
+    """The deflect's note: a bright ring with a faint twin beating slowly against it (the
+    shimmer), the blade's upper modes dying fast, and a short lower tone under the strike for
+    weight, over a real finger cymbal tuned to the same note (its partials make it metal, not a
+    beep). Faded out well before `dur`."""
+    t = t_axis(dur)
+    ph = np.random.default_rng(seed).uniform(0, 2 * math.pi, 6)
+    x = np.sin(2 * math.pi * f * t + ph[0]) * np.exp(-t / 0.28)
+    x += 0.25 * np.sin(2 * math.pi * f * 1.0016 * t + ph[1]) * np.exp(-t / 0.26)
+    x += 0.15 * np.sin(2 * math.pi * 2 * f * 1.0007 * t + ph[2]) * np.exp(-t / 0.12)
+    x += 0.18 * np.sin(2 * math.pi * 2.756 * f * t + ph[3]) * np.exp(-t / 0.09)
+    x += 0.08 * np.sin(2 * math.pi * 5.404 * f * t + ph[4]) * np.exp(-t / 0.03)
+    x += 0.35 * np.sin(2 * math.pi * f / 2 * t + ph[5]) * np.exp(-t / 0.08)
+    x *= 1 - np.exp(-t / 0.0006)
+    zill = decay(repitch(S("finger_cymbal", dur=3.0), f / 3173.5), 0.26)       # its main partial: 3173.5 Hz
+    x = mix(x * 0.75, zill * 0.55, dur=dur)
+    return fade(x, 0.0, dur * 0.35)
+
+
 def deflect(i):
-    anvil, r, ring_f, spk = DEFLECTS[i]
-    dur = 1.1
-    clack = highpass(S("brake_%d" % (1 + i % 5), dur=0.03), 1200) * 0.7
-    core = decay(repitch(S(anvil, dur=1.4), r), 0.2, 0.01)
+    """The strike: no note in it (the ring layer carries that)."""
+    anvil, r, knife = DEFLECTS[i]
+    dur = 0.8
+    tsh = decay(highpass(S("knife_slice_%d" % knife, dur=0.12), 2500), 0.022) * 0.8     # steel on steel
+    crack = highpass(S(anvil, dur=0.02), 900) * 0.8
+    core = decay(repitch(S(anvil, dur=1.0), r), 0.1, 0.008)
     core = hshelf(peq(highpass(core, 500), 3500, -6.0, 0.9), 9000, -4.0)
-    body = decay(lowpass(repitch(S("brake_%d" % (1 + (i + 2) % 5), dur=0.2), 0.5), 1400), 0.035) * 0.8
-    ring = blade_ring(ring_f, dur, tau=0.22, bright=0.8, seed=10 + i)
-    ring += 0.45 * blade_ring(ring_f * 1.19, dur, tau=0.14, bright=0.6, seed=20 + i)   # the other blade
+    body = decay(lowpass(repitch(S("brake_%d" % (1 + (i + 2) % 5), dur=0.2), 0.5), 1400), 0.035) * 0.7
     thump = decay(lowpass(repitch(S("frame_muted", dur=0.3), 1.5), 500), 0.05) * 0.8
-    x = mix(sat(mix(clack, core, body), 1.4), ring * 0.3, sparkle(spk) * 0.35, thump, dur=dur)
-    return reverb(x, 0.6, 0.1, bright=8000, seed=30 + i)
+    x = mix(sat(mix(crack, core, body), 1.4), tsh, sparks(0.35, 30, 70 + i) * 0.5, thump, dur=dur)
+    return reverb(x, 0.5, 0.08, bright=8000, seed=30 + i)
+
+
+def deflect_ring(i):
+    """The ring (stereo): the note in the middle, its octave shimmering apart left and right, its
+    reverberation, and sparks scattered across the speakers."""
+    f = DEFLECT_NOTE
+    dur = 1.4
+    t = t_axis(dur)
+    note = deflect_note(f, dur, seed=10 + i)
+    wet = reverb_st(note, 1.1, 0.45, predelay=0.012, bright=9000, seed=80 + i)
+    shimmer = np.stack([np.sin(2 * math.pi * 2 * f * 0.9994 * t), np.sin(2 * math.pi * 2 * f * 1.0006 * t + 1.0)], axis=1)
+    shimmer *= (np.exp(-t / 0.22) * (1 - np.exp(-t / 0.004)))[:, None] * 0.12
+    out = wet.copy()
+    out[:len(t)] += shimmer
+    sp = sparks(0.4, 45, 90 + i, spread=1.0) * 0.6
+    out[:len(sp)] += sp
+    return out
 
 
 def boss_parry(i):
@@ -547,7 +613,10 @@ def build(only=None):
     # --- blade contact
     if want("deflect"):
         for i in range(len(DEFLECTS)):
-            out("deflect_%d" % (i + 1), deflect(i), -9.5)
+            out("deflect_%d" % (i + 1), deflect(i), -10.0)
+    if want("deflect_ring"):
+        for i in range(len(DEFLECTS)):
+            out("deflect_ring_%d" % (i + 1), deflect_ring(i), -12.0, stereo=True)
     if want("boss_parry"):
         for i in range(3):
             out("boss_parry_%d" % (i + 1), boss_parry(i), -10.5)

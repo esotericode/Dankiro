@@ -4,9 +4,16 @@ extends Node
 ## the same one never plays twice in a row and each comes round before any repeats, with a small
 ## random pitch offset on top: repeated deflects never sound machine-gunned. The randomness is
 ## Sfx's own, off the game's RNG (the lab seeds that one and the AI draws from it).
+##
+## The deflect is the one sound that must stand apart: play_deflect() plays it in two layers (the
+## positional strike and a flat, wide ring carrying its note) on a bus of its own, "Deflect", and
+## the SFX and Ambience buses duck under it (sidechain compressors), so for a moment it's all you
+## hear.
 
 const BANKS := {
 	"deflect": ["deflect_1", "deflect_2", "deflect_3", "deflect_4", "deflect_5", "deflect_6"],
+	"deflect_ring": ["deflect_ring_1", "deflect_ring_2", "deflect_ring_3", "deflect_ring_4",
+		"deflect_ring_5", "deflect_ring_6"],
 	"boss_parry": ["boss_parry_1", "boss_parry_2", "boss_parry_3"],
 	"block": ["block_1", "block_2", "block_3", "block_4", "block_5"],
 	"hit": ["hit_1", "hit_2", "hit_3", "hit_4"],
@@ -52,6 +59,9 @@ const BANKS := {
 }
 
 const POOL_3D := 24
+## The deflect's note, climbing through a flurry: up the major pentatonic (root, 2nd, 3rd, 5th),
+## so rings that overlap stay in tune with each other.
+const DEFLECT_STEPS := [1.0, 1.125, 1.25, 1.5]
 const POOL_2D := 8
 
 var _streams: Dictionary = {}     ## bank -> Array[AudioStream]
@@ -107,25 +117,52 @@ func _setup_buses() -> void:
 		# Headroom: at 0 dB a close deflect peaked ~4 dB over the master limiter, which flattened
 		# its snap. The limiter is only a safety net now.
 		AudioServer.set_bus_volume_db(idx, -4.0)
-		var rev := AudioEffectReverb.new()
-		rev.room_size = 0.62
-		rev.damping = 0.55
-		rev.spread = 0.9
-		rev.predelay_msec = 28.0
-		rev.wet = 0.13
-		rev.dry = 1.0
-		AudioServer.add_bus_effect(idx, rev)
+		AudioServer.add_bus_effect(idx, _room())
+		AudioServer.add_bus_effect(idx, _ducker())
 	if AudioServer.get_bus_index("Ambience") == -1:
 		AudioServer.add_bus()
 		var idx2 := AudioServer.bus_count - 1
 		AudioServer.set_bus_name(idx2, "Ambience")
 		AudioServer.set_bus_send(idx2, "Master")
+		AudioServer.add_bus_effect(idx2, _ducker())
+	# After the others, so it's mixed first and their duckers hear it in the same block.
+	if AudioServer.get_bus_index("Deflect") == -1:
+		AudioServer.add_bus()
+		var idx3 := AudioServer.bus_count - 1
+		AudioServer.set_bus_name(idx3, "Deflect")
+		AudioServer.set_bus_send(idx3, "Master")
+		AudioServer.set_bus_volume_db(idx3, -4.0)
+		AudioServer.add_bus_effect(idx3, _room())
 	var master := AudioServer.get_bus_index("Master")
 	if AudioServer.get_bus_effect_count(master) == 0 and ClassDB.class_exists("AudioEffectHardLimiter"):
 		var lim := ClassDB.instantiate("AudioEffectHardLimiter") as AudioEffect
 		if lim != null:
 			lim.set("ceiling_db", -0.5)
 			AudioServer.add_bus_effect(master, lim)
+
+
+## The plaza's air: a short, open reverb.
+func _room() -> AudioEffectReverb:
+	var rev := AudioEffectReverb.new()
+	rev.room_size = 0.62
+	rev.damping = 0.55
+	rev.spread = 0.9
+	rev.predelay_msec = 28.0
+	rev.wet = 0.13
+	rev.dry = 1.0
+	return rev
+
+
+## Ducks a bus under the deflect: up to ~7 dB on its strike, let go over a quarter second.
+func _ducker() -> AudioEffectCompressor:
+	var c := AudioEffectCompressor.new()
+	c.sidechain = &"Deflect"
+	c.threshold = -16.0
+	c.ratio = 3.0
+	c.attack_us = 300.0
+	c.release_ms = 260.0
+	c.gain = 0.0
+	return c
 
 
 ## The next variation of `bank`: dealt from a shuffled deck, reshuffled when it runs out (never
@@ -157,8 +194,16 @@ func _jitter(pitch: float, jitter: float) -> float:
 	return maxf(0.05, pitch * (1.0 + _rng.randf_range(-jitter, jitter)))
 
 
+## Your deflect: the strike at `pos` and the ring over it, on the Deflect bus, which ducks
+## everything else. `chain` counts the deflects of a flurry (1 for the first): the note climbs.
+func play_deflect(pos: Vector3, chain := 1) -> void:
+	play("deflect", pos, 4.0, 1.0, 0.03, &"Deflect")
+	play_ui("deflect_ring", 0.0, DEFLECT_STEPS[clampi(chain - 1, 0, DEFLECT_STEPS.size() - 1)], 0.0, &"Deflect")
+
+
 ## Positional one-shot.
-func play(bank: String, pos: Vector3, volume_db := 0.0, pitch := 1.0, jitter := 0.04) -> void:
+func play(bank: String, pos: Vector3, volume_db := 0.0, pitch := 1.0, jitter := 0.04,
+		bus: StringName = &"SFX") -> void:
 	var st := _pick(bank)
 	if st == null:
 		return
@@ -166,6 +211,7 @@ func play(bank: String, pos: Vector3, volume_db := 0.0, pitch := 1.0, jitter := 
 	_next3d = (_next3d + 1) % _pool3d.size()
 	p.stop()
 	p.stream = st
+	p.bus = bus
 	p.global_position = pos
 	p.volume_db = volume_db
 	p.pitch_scale = _jitter(pitch, jitter)
@@ -173,7 +219,8 @@ func play(bank: String, pos: Vector3, volume_db := 0.0, pitch := 1.0, jitter := 
 
 
 ## Non-positional one-shot (UI and feedback that must always be heard clearly).
-func play_ui(bank: String, volume_db := 0.0, pitch := 1.0, jitter := 0.0) -> void:
+func play_ui(bank: String, volume_db := 0.0, pitch := 1.0, jitter := 0.0,
+		bus: StringName = &"SFX") -> void:
 	var st := _pick(bank)
 	if st == null:
 		return
@@ -181,6 +228,7 @@ func play_ui(bank: String, volume_db := 0.0, pitch := 1.0, jitter := 0.0) -> voi
 	_next2d = (_next2d + 1) % _pool2d.size()
 	p.stop()
 	p.stream = st
+	p.bus = bus
 	p.volume_db = volume_db
 	p.pitch_scale = _jitter(pitch, jitter)
 	p.play()

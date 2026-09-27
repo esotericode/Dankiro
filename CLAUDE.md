@@ -223,7 +223,11 @@ godot --headless --editor --quit               # import
   `audio/CREDITS.md`. Each sound is set to a loudness target (`save(name, x, lufs)`), so tune its
   level there and keep the volumes in code for mixing. You can't listen here: judge a sound by its
   log-frequency spectrogram and envelope, and Movie Maker captures write the game's mix to a WAV
-  next to the frames. Sfx's randomness is its own RNG, like `Fx._rand`.
+  next to the frames. Sfx's randomness is its own RNG, like `Fx._rand`. The deflect
+  (`Sfx.play_deflect`) is two layers, the strike (`deflect_N`, positional) and the ring
+  (`deflect_ring_N`, flat stereo, pitched up `Sfx.DEFLECT_STEPS` through a flurry), on the
+  "Deflect" bus, which the SFX and Ambience buses duck under (sidechain compressors): keep other
+  sounds off that bus, and keep the note out of the strike (two notes a jitter apart go sour).
 - Physics layers (`Combat.LAYER_*`): 1 is the world (the floor), 2 the invisible wall round the
   plaza, which only the fighters collide with. The camera's spring arm only hits layer 1, so at
   the rim it swings out over the fence instead of being squeezed onto your back; foliage and bark

@@ -403,11 +403,14 @@ footsteps, cloth, steel draws and knife slices; wind, fire, fuses and flares fro
 filtered and layered with synthesized parts by `tools/gen_audio.py` (credits in
 `audio/CREDITS.md`).
 
-- **Deflect**: six variations of a hard anvil strike under a short, pure blade ring and a burst of
-  cymbal sparks, with a low thump for weight. Its 2.5 to 4.5 kHz presence is held down and the
-  sparkle dies in a tenth of a second, so it cuts through without grating. The deflects of a
-  flurry climb a little in pitch (half a semitone each, up to four), so a clean exchange rings out
-  as a rhythm.
+- **Deflect**: it has a voice of its own, in two layers. The strike (six variations: an anvil
+  crack, a real knife's hiss of steel on steel, a crackle of sparks, a thump) plays where the
+  blades meet. Over it, a wide stereo ring carries the deflect's note, a bright, pure B6 over a
+  finger cymbal tuned to it, the same every time so you learn it as the sound of getting it
+  right, with its shimmer and sparks spread across the speakers. It plays on its own bus, and
+  everything else (swings, fire, wind) ducks under it for a moment. A flurry's rings climb the
+  major pentatonic (root, 2nd, 3rd, 5th), so a clean exchange rings out as a rising phrase and
+  overlapping rings stay in tune.
 - **Block**: five damped brake-drum clunks, lower and duller, with no ring to speak of, 8 dB under
   the deflect: you can tell them apart without looking. His parry of your blade is its own
   heavier, lower clang.

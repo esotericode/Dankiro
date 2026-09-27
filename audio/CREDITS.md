@@ -64,7 +64,6 @@ By the freesound.org authors below, <https://github.com/sonic-pi-net/sonic-pi/tr
 - `ambi_swoosh.flac`, by Halgrimm, CC0 1.0, <https://freesound.org/s/169867/>
 - `bd_boom.flac`, by Snapper4298, CC0 1.0, <https://freesound.org/s/157245/>
 - `drum_heavy_kick.flac`, by Zajo, CC0 1.0, <https://freesound.org/s/4832/>
-- `drum_splash_hard.flac`, by menegass, CC0 1.0, <https://freesound.org/s/100060/>
 - `perc_impact1.flac`, by hullum, CC0 1.0, <https://freesound.org/s/415578/>
 - `perc_impact2.flac`, by hullum, CC0 1.0, <https://freesound.org/s/415581/>
 - `perc_swash.flac`, by qubodup, CC0 1.0, <https://freesound.org/s/60009/>
@@ -108,7 +107,6 @@ By Versilian Studios and contributors, <https://github.com/sgossner/VCSL>. Licen
 - `Idiophones/Struck Idiophones/Gong 1/gong_scrape_mf.wav`, CC0 1.0
 - `Idiophones/Struck Idiophones/Hand Bells, Nepalese/HB_2.wav`, CC0 1.0
 - `Idiophones/Struck Idiophones/Mark Trees/Legacy/windchimes_desc1.wav`, CC0 1.0
-- `Idiophones/Struck Idiophones/Suspended Cymbal 1/susCymb1_hit_bell_fff1.wav`, CC0 1.0
 - `Idiophones/Struck Idiophones/Triangles/Legacy/1/triangle1_hit_mp_muted1.wav`, CC0 1.0
 - `Idiophones/Struck Idiophones/Tubular Bells 1/chimes_C3_f_rr1.wav`, CC0 1.0
 - `Idiophones/Struck Idiophones/Tubular Bells 1/chimes_C4_ff_rr2.wav`, CC0 1.0
