@@ -2,13 +2,13 @@
 
 importer="wav"
 type="AudioStreamWAV"
-uid="uid://cc31whw6tupmj"
-path="res://.godot/imported/boss_parry.wav-76e19ea0f8e4834466da953782996e5b.sample"
+uid="uid://ddyyol80cn0ge"
+path="res://.godot/imported/step_6.wav-82f0380bc2be88d90176d17f17cb31d6.sample"
 
 [deps]
 
-source_file="res://audio/boss_parry.wav"
-dest_files=["res://.godot/imported/boss_parry.wav-76e19ea0f8e4834466da953782996e5b.sample"]
+source_file="res://audio/step_6.wav"
+dest_files=["res://.godot/imported/step_6.wav-82f0380bc2be88d90176d17f17cb31d6.sample"]
 
 [params]
 

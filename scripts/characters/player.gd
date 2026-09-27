@@ -840,7 +840,9 @@ func _do_deflect(info: Dictionary, attacker: Combatant, dt: float) -> void:
 	if Game.camera is Node3D:
 		cam_dir = ((Game.camera as Node3D).global_position - pos).normalized()
 	Fx.sparks(get_parent(), pos, (cam_dir + Vector3.UP * 0.5).normalized(), Fx.SPARK_DEFLECT)
-	Sfx.play("deflect", pos, 4.0, 1.0, 0.06)
+	# A flurry's deflects climb a little in pitch (about half a semitone each, up to the fifth):
+	# the rhythm of a clean exchange rings out instead of the same clang over and over.
+	Sfx.play("deflect", pos, 4.0, 1.0 + 0.03 * float(mini(deflect_chain - 1, 4)), 0.02)
 	Game.hitstop(Combat.HITSTOP_DEFLECT)
 	Game.shake(0.22, 0.16)
 	Game.rumble(0.25, 0.55, 0.1)

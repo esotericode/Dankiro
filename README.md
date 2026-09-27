@@ -321,7 +321,7 @@ shaders/                   night sky, flagstones, mortar bed, puddle, fire, and 
 data/                      rigs.json, animations.json, models.json (generated, see below)
 models/                    player.glb, player_katana.glb, boss.glb, boss_staff.glb + ribbon textures,
                            arena_floor.glb, scenery/*.glb (generated with Blender)
-audio/, textures/, fonts/  generated sound effects, brush kanji, floor and scenery textures, UI fonts (OFL)
+audio/, textures/, fonts/  sound effects (+ CREDITS.md), brush kanji, floor and scenery textures, UI fonts (OFL)
 tools/                     Python content pipeline + previewers (ignored by Godot)
   model3d/                 scripted Blender modelling: mesh builders, pattern, floor and scenery textures, baking
 ```
@@ -341,7 +341,7 @@ models, the floor or the scenery also needs Blender as a Python module: `pip ins
 | Arena floor (flagstones, textures) | `tools/build_arena_floor.py`, `tools/model3d/floor_textures.py`, `shaders/flagstones.gdshader` | `python3 tools/build_arena_floor.py` (~3 min with the AO bake; `--no-bake` for quick layout changes, `--textures` for the tiling textures only), then `godot --headless --editor --quit` to import | `tools/preview_out/floor_ao.png` shows the plan and the baked occlusion; in the engine, the capture shots `floor overview`, `floor centre`, `floor puddle`, ... |
 | The world round the plaza (trees, torii, shrine, lanterns, fence, terrain, mountains) | `tools/build_scenery.py`, `tools/model3d/scenery_textures.py`, `scripts/world/scenery.gd` (placement, and the material table that maps each model material to a shader) | `python3 tools/build_scenery.py` (about a minute; `--only trees torii props approach backdrop textures` for some, `--no-bake` to skip the occlusion bakes), then `godot --headless --editor --quit` to import | `--preview` renders `tools/preview_out/scenery_*.png`; in the engine, the capture shots `scenery torii`, `scenery vista`, `scenery grove`, ... |
 | The fighters' materials, ribbons (scarves, sashes, hair, headband tails) and the gourd | `tools/build_models.py` | `python3 tools/build_models.py` | |
-| Sound effects | `tools/gen_audio.py` | `python3 tools/gen_audio.py [name]` | |
+| Sound effects | `tools/gen_audio.py` (the recipes), `tools/audio_sources.py` (the recordings: where each comes from, its author and licence) | `python3 tools/gen_audio.py [name]` (needs `ffmpeg`; the first run fetches the recordings from pinned commits into `tools/.cache/audio_src/`; a full build rewrites `audio/CREDITS.md`), then `godot --headless --editor --quit` to import new files | every sound is set to a loudness (K-weighted, the loudest 100 ms) and peak-limited, so the volumes the game plays them at mean the same for all |
 | Effect textures: the noise the fire, weapon trails and dust scroll through, and the blood splatter | `tools/gen_fx_textures.py` | `python3 tools/gen_fx_textures.py` | the capture shots `fire_staff 0.3`, `fire_staff 1`, `fire_combo`, `inferno spin`, `deathblow` |
 | Kanji + UI fonts | `tools/gen_textures.py` | `python3 tools/gen_textures.py` | |
 | GDScript sanity | | | `python3 tools/check_gdscript.py` cross-checks member and function names and call arity across the scripts |
@@ -396,7 +396,29 @@ This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (7
 a full-fight soak), the game boots and runs with no script errors, and every change to the
 visuals was checked on frames rendered with Movie Maker.
 
-**Latest: two sets of shuriken in phases 2 and 3.** From phase 2 on, his shuriken volleys come
+**Latest: new sound.** Every sound effect is rebuilt from real recordings instead of pure
+synthesis: CC0 and CC BY material (the Versilian Community Sample Library's anvil, brake drum,
+gongs, cymbals, bells and drums; freesound recordings from Sonic Pi's sample set; Kenney's
+footsteps; wind, fire, fuses and flares from Blanket, Minetest Game and Veloren), cut, pitched,
+filtered and layered with synthesized parts by `tools/gen_audio.py` (credits in
+`audio/CREDITS.md`).
+
+- **Deflect**: six variations of a hard anvil strike under a short, pure blade ring and a burst of
+  cymbal sparks, with a low thump for weight. Its 2.5 to 4.5 kHz presence is held down and the
+  sparkle dies in a tenth of a second, so it cuts through without grating. The deflects of a
+  flurry climb a little in pitch (half a semitone each, up to four), so a clean exchange rings out
+  as a rhythm.
+- **Block**: five damped brake-drum clunks, lower and duller, with no ring to speak of, 8 dB under
+  the deflect: you can tell them apart without looking. His parry of your blade is its own
+  heavier, lower clang.
+- **Perilous**: a taiko-like drum, a gong, an anvil sting and two tubular bells a tritone apart.
+- Hits, the katana's and the staff's swings, the mikiri stomp, posture and guard breaks, the
+  deathblow, footsteps, the gourd, the Inferno's fire and a real wind recording for the night
+  air are all new too.
+- A bank now deals its variations like a shuffled deck (never the same one twice in a row) from
+  Sfx's own random numbers, so sounds no longer draw on the game's RNG. The wind loops seamlessly.
+
+**Before that: two sets of shuriken in phases 2 and 3.** From phase 2 on, his shuriken volleys come
 twice: he leaps back and throws the first set as before (3 in the air + 1 delayed, or 5 in the
 air), then comes up from the landing into a low stance, his throwing hand glints, and he throws
 the same set again from the ground, 0.4 to 0.55 s after the first. Blocking a shuriken now costs
@@ -621,4 +643,9 @@ and a settings menu.
 - Fonts: *Jost* (the UI's text), *Cormorant Garamond* (titles and names) and *Yuji Boku* (used
   to render the kanji textures). All are SIL Open Font License 1.1, and the license texts are in
   `fonts/` and `textures/`.
-- Everything else (code, meshes, animations, sounds, shaders) was made for this project.
+- Sounds: built by `tools/gen_audio.py` from recordings that are CC0 or public domain (the
+  Versilian Community Sample Library, Sonic Pi's freesound samples, Kenney, Blanket's wind and
+  fireplace, Minetest Game's fuse, flare and metal sounds) or CC BY (Minetest Game's fire by
+  Dynamicell, CC BY 3.0, and Veloren's fire by riccifl0w, CC BY 4.0), all of them modified. The
+  full list, with links and licences, is `audio/CREDITS.md`.
+- Everything else (code, meshes, animations, shaders) was made for this project.

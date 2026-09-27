@@ -216,6 +216,14 @@ godot --headless --editor --quit               # import
   projection (`PROJECTION_MATRIX[3][3]`) and drop every other shadow-map texel there (the clumps
   also get gaps), so tree crowns cast a light dappled shade on the plaza instead of dark smears.
   An orthographic camera would see the crowns the same way.
+- Sounds are built by `tools/gen_audio.py` from recordings listed in `tools/audio_sources.py`
+  (pinned commits on GitHub/GitLab, fetched into `tools/.cache/audio_src/`; freesound, OpenGameArt
+  and Kenney's site are blocked here, so new sources have to come from repos). Only CC0, public
+  domain or CC BY: add each file's author and licence to the table, and a full build rewrites
+  `audio/CREDITS.md`. Each sound is set to a loudness target (`save(name, x, lufs)`), so tune its
+  level there and keep the volumes in code for mixing. You can't listen here: judge a sound by its
+  log-frequency spectrogram and envelope, and Movie Maker captures write the game's mix to a WAV
+  next to the frames. Sfx's randomness is its own RNG, like `Fx._rand`.
 - Physics layers (`Combat.LAYER_*`): 1 is the world (the floor), 2 the invisible wall round the
   plaza, which only the fighters collide with. The camera's spring arm only hits layer 1, so at
   the rim it swings out over the fence instead of being squeezed onto your back; foliage and bark
