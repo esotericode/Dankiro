@@ -4,7 +4,7 @@ extends Node
 ## Shots: overview, deflect, deflect_offcenter, block, mikiri, thrust_backstep, sweep, sweep_flee, whirl, shuriken,
 ## shuriken5, charge, slashes, parried, deathblow [final], inferno [stand|wide|spin|plunge|plunge_stand], attack <clip> [distance], recovery <clip>, diagnostics, the menus
 ## (menu_title, menu_options, menu_controls, menu_start, menu_pause, help), and art checks: model (orbit), model_head, model_face, model_face_p2, model_combo,
-## model_flourish, fire_staff [level], fire_combo, floor [overview|centre|medallion|puddle|moss|broken|rim|low|sweep],
+## model_flourish, player_model, player_head, player_face, player_moves, fire_staff [level], fire_combo, floor [overview|centre|medallion|puddle|moss|broken|rim|low|sweep],
 ## scenery [torii|gate|south|east|west|high|lantern].
 ## Loads the real game scene (arena, lighting, HUD, lock-on camera), skips the intro, stages
 ## the fighters and drives the player with a bot that reacts to the boss's hit windows.
@@ -22,6 +22,7 @@ var _steps: Array = []          ## [time, Callable]
 var _end_at := 4.0
 var _orbit_cam: Camera3D        ## art-check camera orbiting the boss
 var _orbit := {"radius": 2.8, "height": 1.45, "look_y": 1.3, "speed": 90.0, "start": 0.0}
+var _orbit_on: Combatant           ## who the art camera orbits (the boss unless a shot says)
 
 
 func _ready() -> void:
@@ -99,9 +100,10 @@ func auto_guard(lead := 0.05, hold := 0.12) -> void:
 
 func _process(_delta: float) -> void:
 	if _orbit_cam != null and boss != null:
+		var subject: Combatant = _orbit_on if _orbit_on != null else boss
 		var a := deg_to_rad(float(_orbit["start"]) + t * float(_orbit["speed"]))
-		var c := boss.global_position
-		var fwd := boss.forward()
+		var c := subject.global_position
+		var fwd := subject.forward()
 		var right := fwd.cross(Vector3.UP)
 		var off := (fwd * cos(a) + right * sin(a)) * float(_orbit["radius"])
 		_orbit_cam.global_position = c + off + Vector3.UP * float(_orbit["height"])
@@ -428,6 +430,50 @@ func shot_model_face_p2() -> void:
 	boss._enter_phase(2)
 	_art_camera(1.0, 1.70, 1.84, 25.0, -50.0)
 	_end_at = 4.0
+
+
+## The shinobi (tools/build_player_model.py): an orbit round him in his stance.
+func shot_player_model() -> void:
+	_stage(6.0)
+	_orbit_on = player
+	_art_camera(2.7, 1.3, 1.0, 90.0)
+	_end_at = 4.0
+
+
+## Close orbit round the shinobi's head.
+func shot_player_head() -> void:
+	_stage(6.0)
+	_orbit_on = player
+	_art_camera(0.95, 1.64, 1.6, 90.0)
+	_end_at = 4.0
+
+
+## The shinobi's face from the front, sweeping from his left to his right.
+func shot_player_face() -> void:
+	_stage(6.0)
+	_orbit_on = player
+	_art_camera(0.8, 1.62, 1.61, 25.0, -50.0)
+	_end_at = 4.0
+
+
+## The shinobi moving, from a fixed 3/4 front view: his slash string, a step back, a jump and
+## a drink from the gourd.
+func shot_player_moves() -> void:
+	_stage(6.0)
+	_orbit_on = player
+	_art_camera(3.6, 1.35, 1.0, 0.0, 35.0)
+	player.hp = player.max_hp * 0.5
+	for k in 3:
+		var tt := 0.3 + 0.42 * k
+		at(tt, func(): player.press_action("attack", Game.clock))
+	at(1.9, func():
+		player.bot_move = Vector2(0, 1)
+		player.press_action("dodge", Game.clock))
+	at(1.96, func(): player.release_dodge())
+	at(2.2, func(): player.bot_move = Vector2.ZERO)
+	at(2.6, func(): player.press_action("jump", Game.clock))
+	at(3.7, func(): player.press_action("heal", Game.clock))
+	_end_at = 5.4
 
 
 ## The title menu as the game boots (his idle behind it, the camera orbiting slowly).

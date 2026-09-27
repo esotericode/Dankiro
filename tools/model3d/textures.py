@@ -263,7 +263,7 @@ def tsukamaki(w=128, h=64, silk=(0.52, 0.06, 0.05), under=(0.05, 0.04, 0.04)):
     return result(c, rough, np.zeros((h, w)))
 
 
-def hamon(w=128, h=512, seed=81):
+def hamon(w=128, h=512, seed=81, steel=(0.30, 0.32, 0.36), groove=True):
     """Blade steel along v (0 = base, 1 = tip), across u (0 = spine, 1 = edge): polished dark
     steel, a groove (bo-hi) near the spine, a frosted wavy temper line and a hazy edge.
     Also returns "glow": an emission mask that lights the cutting edge."""
@@ -271,12 +271,13 @@ def hamon(w=128, h=512, seed=81):
     u, v = coords(h, w)
     ph = rng.uniform(0, 6.28)
     line = 0.66 + 0.05 * np.sin(v * 2 * math.pi * 7 + ph) + 0.02 * np.sin(v * 2 * math.pi * 19 + ph * 2)
-    steel = np.array([0.30, 0.32, 0.36])
+    steel = np.asarray(steel, dtype=float)
     c = steel[None, None, :] * (0.85 + 0.15 * noise(h, w, 6, seed=82)[..., None])
     frost = smoothstep_np(line - 0.03, line + 0.04, u)
     c = c * (1 - frost[..., None]) + np.array([0.78, 0.79, 0.80]) * frost[..., None] * (0.9 + 0.1 * noise(h, w, 2, seed=83)[..., None])
-    groove = (np.abs(u - 0.2) < 0.045) & (v < 0.72)
-    c[groove] *= 0.45
+    if groove:
+        g = (np.abs(u - 0.2) < 0.045) & (v < 0.72)
+        c[g] *= 0.45
     rough = 0.16 + 0.22 * frost
     metal = np.full((h, w), 1.0)
     glow = np.clip(smoothstep_np(0.55, 0.95, u) * (0.6 + 0.4 * v), 0, 1)
@@ -304,3 +305,87 @@ def sash(w=64, h=256, silk=(0.56, 0.06, 0.05)):
     fringe = v > 0.86
     c[fringe] *= (0.75 + 0.25 * ((u * 40) % 1.0 < 0.5))[fringe][:, None]
     return result(c, np.full((h, w), 0.6), np.where(band, 1.0, 0.0))
+
+
+# ------------------------------------------------------------------ the shinobi
+def sashiko(size=256, color=(0.11, 0.14, 0.24), thread=(0.58, 0.60, 0.66), cells=6, seed=91):
+    """Indigo cotton quilted with jujizashi sashiko: running stitches along a square grid whose
+    dashes cross at the grid points, leaving a field of small pale crosses. Faded (lighter)
+    in patches, as indigo wears."""
+    h = w = size
+    u, v = coords(h, w)
+    n = noise(h, w, size / 5, seed=seed)
+    fine = noise(h, w, 1.5, seed=seed + 1, octaves=1)
+    base = np.asarray(color, dtype=float)
+    c = mix(col(base, h, w), col(base * 1.4 + 0.02, h, w), np.clip((n - 0.45) * 2.0, 0, 1))
+    x, y = np.mgrid[0:h, 0:w]
+    wv = ((x // 2 + y // 2) % 2).astype(float)
+    c *= ((0.93 + 0.07 * wv) * (0.92 + 0.16 * fine))[..., None]
+    fu = u * cells - np.round(u * cells)            # -0.5..0.5 from the nearest grid line
+    fv = v * cells - np.round(v * cells)
+    arm, half = 0.21, 0.04                          # dash half length and half thickness (cells)
+    horiz = (np.abs(fv) < half) & (np.abs(fu) < arm)
+    vert = (np.abs(fu) < half) & (np.abs(fv) < arm)
+    st = horiz | vert
+    lit = 0.8 + 0.2 * np.cos(np.clip(np.where(horiz, fv, fu) / half, -1, 1) * math.pi / 2)
+    tcol = np.asarray(thread)[None, None, :] * (lit * (0.9 + 0.2 * n))[..., None]
+    c = np.where(st[..., None], tcol, c)
+    return result(c, np.where(st, 0.75, 0.92), np.zeros((h, w)))
+
+
+def iron(size=128, color=(0.15, 0.15, 0.16), rust=(0.26, 0.14, 0.07), seed=95, rough=0.36, metal=0.9):
+    """Blackened iron: hammer marks, a little rust where the noise is low."""
+    h = w = size
+    n = noise(h, w, size / 8, seed=seed)
+    dents = noise(h, w, 3, seed=seed + 1)
+    c = col(color, h, w) * ((0.8 + 0.35 * n) * (0.9 + 0.2 * dents))[..., None]
+    r = np.clip((0.36 - n) * 4.0, 0, 1) * 0.55
+    c = mix(c, col(rust, h, w), r)
+    return result(c, rough + 0.3 * r + 0.1 * (dents - 0.5), metal * (1.0 - 0.8 * r))
+
+
+def wrap(size=128, color=(0.47, 0.45, 0.41), turns=4, seed=97):
+    """Cloth strips wound round a limb (u around, v along; one tile holds `turns` strips). A
+    strip drifts one strip width across the tile, so the winding tiles; its edge tucks under
+    the next strip in a dark crease."""
+    h = w = size
+    u, v = coords(h, w)
+    f = (v * turns + u) % 1.0
+    prof = 0.72 + 0.28 * np.sin(np.clip(f, 0, 1) * math.pi) ** 0.5
+    crease = np.clip(1.0 - f / 0.07, 0, 1)
+    n = noise(h, w, size / 6, seed=seed)
+    fine = noise(h, w, 1.2, seed=seed + 1, octaves=1)
+    x, y = np.mgrid[0:h, 0:w]
+    wv = ((x + y) % 3 == 0).astype(float)
+    c = col(color, h, w) * (prof * (1.0 - 0.45 * crease) * (0.82 + 0.3 * n) * (0.94 + 0.1 * fine - 0.04 * wv))[..., None]
+    grime = np.clip((0.42 - n) * 3.0, 0, 1) * 0.3
+    c = mix(c, col((0.24, 0.21, 0.17), h, w), grime)
+    return result(c, np.full((h, w), 0.95), np.zeros((h, w)))
+
+
+def obi(w=128, h=64, color=(0.36, 0.05, 0.045), line=(0.60, 0.46, 0.22)):
+    """Silk obi (u along the band in tiles, v across it 0..1): fine twill, a thin gilt line
+    near each edge."""
+    u, v = coords(h, w)
+    tw = (((u * 32 + v * 16) % 1.0) < 0.5).astype(float)
+    n = noise(h, w, 12, seed=98)
+    c = np.asarray(color)[None, None, :] * ((0.9 + 0.1 * tw) * (0.85 + 0.3 * n))[..., None]
+    c *= (0.8 + 0.2 * np.sin(v * math.pi) ** 0.5)[..., None]
+    gl = (np.abs(v - 0.16) < 0.025) | (np.abs(v - 0.84) < 0.025)
+    c[gl] = np.asarray(line)
+    return result(c, np.where(gl, 0.45, 0.7), np.where(gl, 0.8, 0.0))
+
+
+def scarf(w=64, h=256, silk=(0.44, 0.055, 0.05), seed=99):
+    """A cloth ribbon for the spring chains (u across, v along from the knot): twill, darker
+    hems, worn patches and a frayed end."""
+    u, v = coords(h, w)
+    tw = (((u * 12 + v * 48) % 1.0) < 0.5).astype(float)
+    n = noise(h, w, 10, seed=seed)
+    c = np.asarray(silk)[None, None, :] * ((0.9 + 0.1 * tw) * (0.78 + 0.44 * n))[..., None]
+    c *= (0.78 + 0.22 * np.sin(u * math.pi))[..., None]
+    hem = (u < 0.07) | (u > 0.93)
+    c[hem] *= 0.7
+    fray = (v > 0.9) & ((u * 23) % 1.0 > 0.55)
+    c[fray] *= 0.35
+    return result(c, np.full((h, w), 0.8), np.zeros((h, w)))

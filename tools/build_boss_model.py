@@ -22,12 +22,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import bpy  # noqa: E402
 import numpy as np  # noqa: E402
-from mathutils import Matrix  # noqa: E402
 
 from model3d import bakemat as BM  # noqa: E402
 from model3d import blender_io as B  # noqa: E402
 from model3d import geo as G  # noqa: E402
 from model3d import textures as T  # noqa: E402
+from model3d.blades import blade_mesh  # noqa: E402
+from model3d.charkit import Part, add_helper_bones, bake_pose, band, part_object, ring_dims, w_chain  # noqa: E402
 from model3d.boss_spec import BODY_GLB, HAIR_PNG, HELPERS, SASH_PNG, STAFF_GLB  # noqa: E402
 from model3d.geo import Mesh, smoothstep  # noqa: E402
 
@@ -61,12 +62,6 @@ def material_table():
     }
 
 
-class Part:
-    def __init__(self, name, mesh, mat, uv="tile", solidify=0.0, bevel=0.0, subsurf=0, smooth=40.0):
-        self.name, self.mesh, self.mat = name, mesh, mat
-        self.uv, self.solidify, self.bevel, self.subsurf, self.smooth = uv, solidify, bevel, subsurf, smooth
-
-
 PARTS = []      # baked into the atlas
 EXTRAS = []     # own materials: ember, hair
 
@@ -77,41 +72,6 @@ def add(name, mesh, mat, **kw):
 
 def add_extra(name, mesh, mat, **kw):
     EXTRAS.append(Part(name, mesh, mat, **kw))
-
-
-# ================================================================ weights
-def w_chain(v, bones, joints):
-    """bones top to bottom; joints [(y, blend)] between consecutive bones (rest pose, Y up)."""
-    y = v[:, 1]
-    out = {}
-    carry = np.ones(len(y))
-    for i, b in enumerate(bones):
-        t = smoothstep(joints[i][0] + joints[i][1], joints[i][0] - joints[i][1], y) if i < len(joints) else np.zeros(len(y))
-        out[b] = out.get(b, 0.0) + carry * (1.0 - t)
-        carry = carry * t
-    return out
-
-
-def rigid(bone):
-    return lambda v: {bone: np.ones(len(v))}
-
-
-# ================================================================ shapes
-def band(a0, a1, y_bot, y_top, r_bot, r_top, segs=10, center=(0, 0, 0), sz=1.0, mid=0.0):
-    """A lame: a narrow revolved band from (r_bot, y_bot) up to (r_top, y_top), UV v normalised
-    0 (bottom) .. 1 (top), u in metres. mid bulges the middle outward."""
-    ym = 0.5 * (y_bot + y_top)
-    prof = [(r_bot, y_bot), (0.5 * (r_bot + r_top) + mid, ym), (r_top, y_top)]
-    m = G.revolve(prof, a0, a1, segs, 1.0, sz, center)
-    y = m.v[:, 1]
-    m.uv[:, 1] = (y - y_bot) / (y_top - y_bot)
-    return m
-
-
-def ring_dims(table, y):
-    """Interpolates (a, b_front, b_back) from [(y, a, bf, bb), ...]."""
-    t = np.asarray(table, dtype=float)
-    return [float(np.interp(y, t[:, 0], t[:, k])) for k in (1, 2, 3)]
 
 
 # ================================================================ body
@@ -606,36 +566,6 @@ def build_hair_tuft():
 
 
 # ================================================================ staff (weapon space)
-def blade_mesh(y0=0.905, length=0.70, w0=0.074, w1=0.080, thick=0.014, curve=0.10, kissaki=0.2, steps=22):
-    """Curved naginata blade along +Y from y0: edge toward -Z, tip curving toward +Z (the rig's
-    blade polylines). Cross-section: edge, ridge line, spine corners. UV u: spine (0) .. edge (1),
-    v: base (0) .. tip (1)."""
-    sec = [(0.5, 0.0, 1.0), (-0.06, 0.5, 0.45), (-0.5, 0.34, 0.0), (-0.5, -0.34, 0.0), (-0.06, -0.5, 0.45), (0.5, 0.0, 1.0)]
-    rows = []
-    uvs = []
-    for i in range(steps + 1):
-        u = i / steps
-        y = y0 + u * length
-        spine_z = curve * u * u
-        w = w0 + (w1 - w0) * u
-        th = thick * (1.0 - 0.3 * u)
-        tip0 = 1.0 - kissaki
-        if u > tip0:
-            k = (u - tip0) / kissaki
-            w *= math.sqrt(max(0.0, 1.0 - k * k)) * (1.0 - 0.02) + 0.02 * (1 - k)
-            th *= (1.0 - 0.85 * k)
-        t = G.unit([0.0, 1.0, 2.0 * curve * u / length])
-        n = np.array([0.0, 0.0, -1.0])
-        n = G.unit(n - t * np.dot(n, t))
-        b = np.cross(n, t)
-        center = np.array([0.0, y, spine_z])
-        rows.append([center + n * (sx * w) + b * (sy * th) for sx, sy, _ in sec])
-        uvs.append([[su, u] for _, _, su in sec])
-    m = G.surface(np.array(rows), np.array(uvs, dtype=float))
-    G.fan_cap(m, list(range(0, len(sec) - 1)), np.array(rows[0][:-1]).mean(axis=0), (0, -1, 0))
-    return m
-
-
 def staff_end():
     """One end of the staff (upper): gold ferrule, horned guard, collar and blade."""
     parts = []
@@ -692,69 +622,7 @@ def build_staff():
 
 
 # ================================================================ Blender assembly
-def add_helper_bones(arm):
-    B.activate(arm)
-    bpy.ops.object.mode_set(mode="EDIT")
-    eb = arm.data.edit_bones
-    for name, h in HELPERS.items():
-        b = eb.new(name)
-        p = np.array(h["pivot"], dtype=float)
-        b.head = B.to_bl(p)
-        b.tail = B.to_bl(p + np.array([0.0, -0.1, 0.0]))
-        b.parent = eb[h["a"]]
-    bpy.ops.object.mode_set(mode="OBJECT")
-
-
-def part_object(p, mats, table):
-    m = p.mesh
-    uv = m.uv.copy()
-    if p.mat in table:
-        tu, tv = table[p.mat][1]
-        if p.uv == "tile":
-            uv = uv / np.array([tu, tv])
-        elif p.uv == "lame":
-            uv[:, 0] = uv[:, 0] / tu
-    groups = {k: w for k, w in m.w.items()}
-    obj = B.mesh_object(p.name, m.v, m.f, uv, "pattern", groups, p.smooth, mats[p.mat])
-    if p.subsurf:
-        mod = obj.modifiers.new("sub", "SUBSURF")
-        mod.levels = p.subsurf
-        mod.render_levels = p.subsurf
-    if p.solidify:
-        mod = obj.modifiers.new("solid", "SOLIDIFY")
-        mod.thickness = p.solidify
-        mod.offset = -1.0
-        mod.use_even_offset = True
-    if p.bevel:
-        mod = obj.modifiers.new("bevel", "BEVEL")
-        mod.width = p.bevel
-        mod.segments = 1
-        mod.limit_method = "ANGLE"
-        mod.angle_limit = math.radians(50)
-    B.apply_modifiers(obj)
-    return obj
-
-
-def bake_pose(arm, on=True):
-    """Arms out and legs apart while baking, so occlusion isn't baked into the flanks."""
-    C = Matrix(((1, 0, 0), (0, 0, -1), (0, 1, 0)))
-    B.activate(arm)
-    bpy.ops.object.mode_set(mode="POSE")
-    for pb in arm.pose.bones:
-        pb.matrix_basis = Matrix.Identity(4)
-    if on:
-        bpy.context.view_layer.update()
-        for s, sx in SIDES:
-            for bone, deg in (("upper_arm_" + s, 38.0), ("thigh_" + s, 7.0), ("x_sode_" + s, 20.0)):
-                pb = arm.pose.bones[bone]
-                piv = pb.bone.head_local
-                Rg = Matrix(G.rot("z", -deg * (-sx)).tolist())       # rotate outward about the front axis
-                Rb = (C @ Rg @ C.transposed()).to_4x4()
-                M = Matrix.Translation(piv) @ Rb @ Matrix.Translation(-piv) @ pb.bone.matrix_local
-                pb.matrix = M
-                bpy.context.view_layer.update()
-    bpy.ops.object.mode_set(mode="OBJECT")
-    bpy.context.view_layer.update()
+BAKE_SPREAD = [("upper_arm_", 38.0), ("thigh_", 7.0), ("x_sode_", 20.0)]
 
 
 def build_body(args):
@@ -764,7 +632,7 @@ def build_body(args):
     for key, (tex, tile, params, _) in table.items():
         mats[key] = BM.pattern_material(key, tex, **params)
     arm, _ = B.make_armature(RIG, "Skeleton")
-    add_helper_bones(arm)
+    add_helper_bones(arm, HELPERS)
     build_torso()
     build_kusazuri()
     build_legs()
@@ -813,7 +681,7 @@ def build_body(args):
     mask_orm = B.new_image("boss_mask_orm", 512)
     mask_orm.colorspace_settings.name = "Non-Color"
     if not args.no_bake:
-        bake_pose(arm, True)
+        bake_pose(arm, BAKE_SPREAD, True)
         BM.set_mode(list(mats.values()), 0)
         B.bake_emit(body, color, "atlas", margin=8, samples=args.samples)
         B.bake_emit(mask, mask_color, "atlas", margin=8, samples=args.samples)
@@ -822,7 +690,7 @@ def build_body(args):
         B.bake_emit(body, orm, "atlas", margin=4, samples=1)
         B.bake_emit(mask, mask_orm, "atlas", margin=4, samples=1)
         print("orm baked %.1fs" % (time.time() - t0))
-        bake_pose(arm, False)
+        bake_pose(arm, BAKE_SPREAD, False)
     os.makedirs(PREVIEW_DIR, exist_ok=True)
     B.save_image(color, os.path.join(PREVIEW_DIR, "boss_atlas.png"))
     B.save_image(orm, os.path.join(PREVIEW_DIR, "boss_atlas_orm.png"))
