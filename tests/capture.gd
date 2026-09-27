@@ -268,18 +268,25 @@ func shot_attack() -> void:
 	_end_at = 0.3 + AnimLibrary.get_clip(clip).length + 0.2
 
 
+## His shuriken volley, 3 in the air + 1 delayed, every one deflected. `-- shuriken double`: the
+## phase-two volley, two sets, the second thrown from the ground straight after the first.
 func shot_shuriken() -> void:
+	var args := OS.get_cmdline_user_args()
+	var double := args.size() > 1 and args[1] == "double"
 	_stage(2.6)
 	auto_guard(0.06, 0.05)
-	at(0.3, func(): boss_string(["b_shuriken_4"]))
-	_end_at = 2.7
+	at(0.3, func(): boss_string(["b_shuriken_4x2" if double else "b_shuriken_4"]))
+	_end_at = 4.0 if double else 2.7
 
 
+## The same with 5 in the air (`-- shuriken5 double`: then 5 more from the ground).
 func shot_shuriken5() -> void:
+	var args := OS.get_cmdline_user_args()
+	var double := args.size() > 1 and args[1] == "double"
 	_stage(2.6)
 	auto_guard(0.06, 0.05)
-	at(0.3, func(): boss_string(["b_shuriken_5"]))
-	_end_at = 2.6
+	at(0.3, func(): boss_string(["b_shuriken_5x2" if double else "b_shuriken_5"]))
+	_end_at = 3.6 if double else 2.6
 
 
 ## He runs at you from across the arena and flows into the running cut.

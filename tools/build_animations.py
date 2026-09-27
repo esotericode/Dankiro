@@ -1082,12 +1082,16 @@ def build_boss():
     # ---- Shuriken volley: a quick tell (crouch, left hand to the belt with a glint of steel),
     # a leap backwards, a beat hanging at the top of the jump with the throwing arm cocked, then
     # throws from the left hand. Two patterns: 3 in the air + 1 delayed (the last one after
-    # landing, from a visible wind-up), or 5 in the air.
-    def shuriken_clip(name, throws, land_t, end_t, apex_h=1.95, back=4.2, apex_t=0.50, float_t=0.66):
+    # landing, from a visible wind-up), or 5 in the air. `ground`: a second set straight after
+    # the first, thrown from the ground (phase 2 on, Boss.DOUBLE_VOLLEY): he comes up from the
+    # landing into a low throwing stance, a glint of steel, and throws again.
+    def shuriken_clip(name, throws, land_t, end_t, apex_h=1.95, back=4.2, apex_t=0.50, float_t=0.66, ground=()):
         staff = S.copy()                            # carried level in the right hand, pointing ahead
         place(staff, [0.34, 1.10, 0.02], unit([0.08, 0.22, -1.0]), [0, -1, 0], 0.0, 0.3, S["weapon_rot"])
         air_throws = [tt for tt, _ in throws if tt < land_t]
         drop_t = max(air_throws) + 0.03 if air_throws else float_t
+        throws = list(throws) + list(ground)
+        low = {"hips_pos": [0, 0.95, 0.04], "chest": [-8, -16, 0], "spine": [-5, -6, 0]}   # throwing from the ground
 
         def height(t):
             # 0..1 of the jump: rise (easing out) -> hang at the top -> a slow sink while he
@@ -1129,6 +1133,19 @@ def build_boss():
                 if hy < 1.0:
                     pose["foot_l"][1] = 0.08
                     pose["foot_r"][1] = 0.08
+            elif ground and t <= ground[-1][0] + 0.12:
+                # up from the landing crouch into the low throwing stance, held for the second set
+                land = min(1.0, (t - land_t) / 0.12)
+                u = smooth(min(1.0, max(0.0, t - land_t - 0.12) / 0.25))
+                hy = 0.84 + (1.0 - land) * 0.1 if land < 1.0 else 0.84 + (low["hips_pos"][1] - 0.84) * u
+                pose = {"hips_pos": [0, hy, 0.04], "chest": lerp3([-14, -10, 0], low["chest"], u),
+                        "spine": lerp3([-8, 0, 0], low["spine"], u), "root": [0, 0, back], "foot_l": S["foot_l"], "foot_r": S["foot_r"]}
+            elif ground:
+                t0 = ground[-1][0] + 0.12
+                u = smooth(min(1.0, (t - t0) / max(0.01, end_t - t0)))
+                pose = {"hips_pos": [0, low["hips_pos"][1] + (S["hips_pos"][1] - low["hips_pos"][1]) * u, 0.04],
+                        "chest": lerp3(low["chest"], S["chest"], u), "spine": lerp3(low["spine"], S["spine"], u),
+                        "root": [0, 0, back + 0.05 * u], "foot_l": S["foot_l"], "foot_r": S["foot_r"]}
             else:
                 u = smooth(min(1.0, (t - land_t) / max(0.01, end_t - land_t)))
                 land = min(1.0, (t - land_t) / 0.12)
@@ -1184,12 +1201,21 @@ def build_boss():
                   {"t": 0.24, "type": "sfx", "name": "leap"}, {"t": apex_t + 0.02, "type": "glint"},
                   {"t": land_t, "type": "sfx", "name": "land"}]
         events += [{"t": tt, "type": "throw", "index": i} for i, (tt, _) in enumerate(throws)]
+        if ground:                                  # the second set's tell
+            g0 = round(ground[0][0] - ground[0][1] - 0.14, 3)
+            events += [{"t": g0, "type": "glint"}, {"t": g0, "type": "sfx", "name": "draw"}]
         clip(name, "boss", keys, chain=end_t - 0.25, vuln=[end_t - 0.4, end_t], tags=["ranged"],
              track=[[0.0, end_t, 560]], events=events)
 
-    shuriken_clip("b_shuriken_4", [(0.70, 0.09), (0.83, 0.08), (0.96, 0.08), (1.52, 0.28)], land_t=1.20, end_t=1.92)
-    shuriken_clip("b_shuriken_5", [(0.70, 0.09), (0.825, 0.08), (0.95, 0.08), (1.075, 0.08), (1.20, 0.08)],
-                  land_t=1.42, end_t=1.98, apex_h=2.15)
+    set4 = [(0.70, 0.09), (0.83, 0.08), (0.96, 0.08), (1.52, 0.28)]
+    set5 = [(0.70, 0.09), (0.825, 0.08), (0.95, 0.08), (1.075, 0.08), (1.20, 0.08)]
+    shuriken_clip("b_shuriken_4", set4, land_t=1.20, end_t=1.92)
+    shuriken_clip("b_shuriken_5", set5, land_t=1.42, end_t=1.98, apex_h=2.15)
+    # Phase 2 on: two sets, the second from the ground straight after the first (0.4 to 0.55 s).
+    shuriken_clip("b_shuriken_4x2", set4, land_t=1.20, end_t=3.14,
+                  ground=[(1.92, 0.12), (2.05, 0.08), (2.18, 0.08), (2.74, 0.28)])
+    shuriken_clip("b_shuriken_5x2", set5, land_t=1.42, end_t=2.80, apex_h=2.15,
+                  ground=[(1.74, 0.12), (1.865, 0.08), (1.99, 0.08), (2.115, 0.08), (2.24, 0.08)])
 
     # =========================================================== REACTIONS
     rec = S.copy()

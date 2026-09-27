@@ -62,6 +62,9 @@ const MOVES := {
 }
 ## Specials he opens with after repositioning, by distance.
 const SPECIALS := ["leap", "thrust", "shuriken_4", "shuriken_5", "charge"]
+## Phase 2 on, his shuriken volleys come in two sets: the second from the ground straight after
+## the first (0.4 to 0.55 s), with a glint of steel as its tell.
+const DOUBLE_VOLLEY := {"b_shuriken_4": "b_shuriken_4x2", "b_shuriken_5": "b_shuriken_5x2"}
 
 ## What changes when he rises into a phase (phase 1 is his base setup). Everything that
 ## checks `phase >= 2` applies to phase 3 as well. Phase 3 is a copy of phase 2 for now.
@@ -545,6 +548,8 @@ func _choose(options: String) -> String:
 
 
 func _play_attack(clip_name: String, start: float) -> void:
+	if phase >= 2:
+		clip_name = DOUBLE_VOLLEY.get(clip_name, clip_name)
 	state = S.ATTACK
 	state_time = 0.0
 	_end_perilous()
@@ -1081,7 +1086,9 @@ func _throw_shuriken(index: int) -> void:
 	var aim := opponent.global_position + Vector3(0, 1.05, 0)
 	var flight := from.distance_to(aim) / Shuriken.SPEED
 	aim += Combat.flat(opponent.velocity) * flight * 0.6
-	var info := {"kind": "projectile", "dir": "mid", "dmg": 8, "posture_block": 12, "posture_deflect": 3,
+	# Blocking one costs you 9 posture: a whole double volley (phase 2) blocked from a fresh
+	# guard costs 90 of your 100, so holding guard still gets you through it, just.
+	var info := {"kind": "projectile", "dir": "mid", "dmg": 8, "posture_block": 9, "posture_deflect": 3,
 		"boss_posture": 4, "clip": anim.clip.name if anim.clip != null else "", "index": index}
 	Shuriken.throw(get_parent(), from, aim, self, opponent as Player, info)
 	Sfx.play("throw", from, 0.0, 1.0, 0.06)

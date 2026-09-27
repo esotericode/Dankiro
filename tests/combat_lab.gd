@@ -193,6 +193,7 @@ func contact_times(clip: String, dist: float) -> Array:
 	await setup(dist)
 	var t0 := boss_attack(clip)
 	await run_until_boss_done()
+	await ticks(60)                       # shuriken still in flight when he's done
 	var out: Array = []
 	for r in _results:
 		out.append({"rel": float(r["t"]) - t0, "index": int((r["info"] as Dictionary).get("index", 0)),
@@ -337,7 +338,7 @@ func suite_deflect() -> void:
 ## the first blow lands, holding guard blocks (or deflects) everything that follows, and
 ## spamming guard through a string never lets a blow through.
 func suite_flurry() -> void:
-	for clip in ["b_whirl", "b_jab", "b_shuriken_4", "b_shuriken_5"]:
+	for clip in ["b_whirl", "b_jab", "b_shuriken_4", "b_shuriken_5", "b_shuriken_4x2", "b_shuriken_5x2"]:
 		var cts := await contact_times(clip, 2.4)
 		if cts.size() < 2:
 			check(false, "%s: expected several blows against a still player (%d)" % [clip, cts.size()])
@@ -596,15 +597,26 @@ func suite_sweep() -> void:
 	check(boss.posture >= Combat.KICK_POSTURE, "kicking off him during the sweep deals posture (%.0f)" % boss.posture)
 
 
-## Shuriken volleys: he leaps back and throws 3 fast + 1 delayed, or 5 fast. Every throw can
-## be deflected (no posture to him, as in Sekiro) or blocked, and hits if ignored.
+## Shuriken volleys: he leaps back and throws 3 fast + 1 delayed, or 5 fast; from phase 2 on,
+## two sets, the second from the ground straight after the first. Every throw can be deflected
+## (a little posture to him) or blocked, and hits if ignored.
 func suite_shuriken() -> void:
-	for clip in ["b_shuriken_4", "b_shuriken_5"]:
-		var n_throws := 4 if clip == "b_shuriken_4" else 5
+	# Phase 1 throws one set; phase 2 on, the same volleys come twice.
+	for ph in [1, 2, 3]:
+		await setup(3.0)
+		boss.phase = ph
+		var picked := []
+		for seq in ["shuriken_4", "shuriken_5"]:
+			boss._start_sequence(seq)
+			picked.append(boss.anim.clip.name)
+		var want := ["b_shuriken_4", "b_shuriken_5"] if ph == 1 else ["b_shuriken_4x2", "b_shuriken_5x2"]
+		check(picked == want, "phase %d: his volleys are %s (%s)" % [ph, "one set" if ph == 1 else "two sets", str(picked)])
+	for clip in ["b_shuriken_4", "b_shuriken_5", "b_shuriken_4x2", "b_shuriken_5x2"]:
+		var n_throws: int = {"b_shuriken_4": 4, "b_shuriken_5": 5, "b_shuriken_4x2": 8, "b_shuriken_5x2": 10}[clip]
 		# Arrival times against a player standing still.
 		await setup(3.0)
 		var t0 := boss_attack(clip)
-		await run_until_boss_done(3.0)
+		await run_until_boss_done(4.0)
 		await ticks(60)
 		var arrivals: Array = []
 		for r in _results:
@@ -616,23 +628,32 @@ func suite_shuriken() -> void:
 		check(arrivals.size() == n_throws, "%s: all %d shuriken reach a still player (%d)" % [clip, n_throws, arrivals.size()])
 		if arrivals.size() != n_throws:
 			continue
-		if clip == "b_shuriken_4":
-			check(float(gaps[0]) < 0.22 and float(gaps[1]) < 0.22 and float(gaps[2]) > 0.3,
-				"b_shuriken_4 is 3 fast + 1 delayed (gaps %s)" % str(gaps))
+		if clip.begins_with("b_shuriken_4"):
+			for k in range(0, gaps.size(), 4):
+				check(float(gaps[k]) < 0.22 and float(gaps[k + 1]) < 0.22 and float(gaps[k + 2]) > 0.3,
+					"%s: set %d is 3 fast + 1 delayed (gaps %s)" % [clip, k / 4 + 1, str(gaps.slice(k, k + 3))])
 		else:
-			for g in gaps:
-				check(float(g) < 0.22, "b_shuriken_5 throws come fast (gap %.2f)" % float(g))
+			for k in gaps.size():
+				if k != 4:
+					check(float(gaps[k]) < 0.22, "%s throws come fast (gap %.2f)" % [clip, float(gaps[k])])
+		if n_throws > 5:
+			# The second set comes straight after the first: a short pause, not a new attack.
+			var between := float(gaps[3 if n_throws == 8 else 4])
+			check(between > 0.2 and between < 0.65,
+				"%s: the second set follows straight after the first (%.2f s)" % [clip, between])
 		check(float(arrivals[0]) > 0.6, "the first shuriken arrives after a readable tell (%.2f s)" % float(arrivals[0]))
-		# Deflect each one 80 ms before it lands (tap): each costs him a little posture, and he
-		# doesn't flinch.
+		# Deflect each one as it reaches you (a tap 80 ms before, as a player reacting to it): each
+		# costs him a little posture, and he doesn't flinch.
 		await setup(3.0)
 		t0 = boss_attack(clip)
-		_deflect_arrivals(t0, arrivals)
+		var answered := {}
+		var release_at := -1.0
 		var peak := 0.0
 		var reacted := false
-		var t_end := Game.clock + 3.0
+		var t_end := Game.clock + 4.0
 		while Game.clock < t_end:
 			await ticks(1)
+			release_at = _tap_incoming(answered, release_at)
 			peak = maxf(peak, boss.posture)
 			reacted = reacted or boss.state == Boss.S.REACT or boss.state == Boss.S.STAGGER
 		var got := _results.map(func(r): return res_name(int(r["res"])))
@@ -667,11 +688,32 @@ func suite_shuriken() -> void:
 		await setup(3.0)
 		t0 = boss_attack(clip)
 		at(t0 + 0.1, func(): player.press_guard(t0 + 0.1))
-		await run_until_boss_done(3.0)
+		await run_until_boss_done(4.0)
 		await ticks(60)
 		got = _results.map(func(r): return res_name(int(r["res"])))
 		check(got.count("BLOCK") == n_throws, "%s: holding guard blocks every throw (%s)" % [clip, str(got)])
 		player.release_guard(Game.clock)
+
+
+## Taps guard 80 ms before each shuriken in flight reaches you, releasing 40 ms later, as a
+## player reacting to them would (a schedule measured against a player standing still drifts
+## over a long volley, since each deflect moves you a little). `answered`: the ones already
+## met; returns when to release.
+func _tap_incoming(answered: Dictionary, release_at: float, lead := 0.08) -> float:
+	if release_at > 0.0 and Game.clock >= release_at:
+		player.release_guard(Game.clock)
+		release_at = -1.0
+	for n in player.get_parent().get_children():
+		if n is Shuriken and (n as Shuriken)._flying and not answered.has(n.get_instance_id()):
+			var cap := player.hurt_capsule()
+			var q := Geometry3D.get_closest_point_to_segment(n.global_position, cap[0], cap[1])
+			if (q.distance_to(n.global_position) - float(cap[2])) / Shuriken.SPEED <= lead:
+				answered[n.get_instance_id()] = true
+				if player.guard_held:
+					player.release_guard(Game.clock)
+				player.press_guard(Game.clock)
+				release_at = Game.clock + 0.04
+	return release_at
 
 
 ## Taps guard 80 ms before each shuriken lands (`arrivals` from the throw at `t0`).

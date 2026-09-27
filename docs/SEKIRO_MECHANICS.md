@@ -66,7 +66,10 @@ deflecting them doesn't damage the thrower's posture. Dankiro's shuriken are def
 clang), blocked or hit like blades too, but on posture it departs from Sekiro by design: each
 deflected shuriken costs him a little (4 of his 300, against 7 to 16 for a deflected blade),
 with no flinch and no deflect-chain bonus. Like any posture damage it can break him; if he's
-still in the air then, he breaks as he lands. **[tested]**
+still in the air then, he breaks as he lands. Blocking one costs you 9 posture. From phase 2 on
+his volleys come in two sets, the second thrown from the ground 0.4 to 0.55 s after the first
+(a glint of steel as its tell): blocked in full from a fresh guard that's 90 of your 100, so
+deflecting is the real answer. **[tested]**
 
 ### Mikiri Counter
 

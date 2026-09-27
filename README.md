@@ -219,7 +219,7 @@ every 40 s; phase three has it too).
 | Perilous Sweep 危 | Slides his grip to the staff's end, sinks low and coils to his left | Jump, then kick |
 | Whirling Fangs | Raises the staff level overhead with a whoosh, then cocks it at his side and the windmill spins up | Deflect each blade as it comes down on you (4 chops, one every 0.375 s, each with a whoosh that peaks on contact), then the finishing cut after a pause |
 | Inferno 危 (phase two) | Leaps to the middle of the arena and drives his staff into the stones; the floor glows out to the blast radius | Get out of the glow before the blast. Then jump each arm of fire: three on an even beat, a faster fourth. Then he raises the staff over his head and plunges it into the floor: jump as the arena erupts. Hit him while he's spent |
-| Shuriken volley | Quick crouch, hand to his belt with a glint of steel, leaps back and hangs for a beat at the top, throwing hand glinting | Deflect each glowing star as it reaches you: **3 in the air + 1 delayed**, or **5 in the air** |
+| Shuriken volley | Quick crouch, hand to his belt with a glint of steel, leaps back and hangs for a beat at the top, throwing hand glinting | Deflect each glowing star as it reaches you: **3 in the air + 1 delayed**, or **5 in the air**. From phase 2 on, **a second set** straight after, thrown from the ground (another glint first) |
 | Running Cut | Runs at you, staff swinging up behind his shoulder | Deflect (it tracks hard) |
 | Falling Crescent | Crouches at range, leaps with the staff overhead | Deflect on landing (high) |
 | Parry Counter | Deflects your attack | Guard right away |
@@ -253,18 +253,19 @@ godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--v
 | `mikiri` | Only a neutral step from the release on counters the thrust; during the pull-back is too early; forward-held and side steps never counter. Backstepping (once or twice), an early side step, or a backstep into a sprint all still get stabbed, from 2.4 to 4.4 m |
 | `dodge` | Steps are short (1.5 m, 1.1 m for the neutral step) and have Sekiro's i-frames (0.2 s, 0.3 s forward, forward not against thrusts) |
 | `sweep` | Guarding and dodge i-frames fail against the sweep, and so does getting away (stepping back or aside, two backsteps, sprinting or walking away, from 1.5 to 3.4 m); jumping clears it, and the kick deals posture |
-| `shuriken` | Volley rhythms (3 in the air + 1 delayed, 5 in the air), a readable tell before the first, every throw deflectable (4 posture to him each; one that fills his posture in mid-air breaks him as he lands) or blockable |
+| `shuriken` | Volley rhythms (3 in the air + 1 delayed, 5 in the air), a readable tell before the first; from phase 2 on two sets, the second 0.4 to 0.55 s after the first; every throw deflectable (4 posture to him each; one that fills his posture in mid-air breaks him as he lands) or blockable, a whole double volley included |
 | `attack` | Slash reach, and that mashing is rate-limited (no two hits within 0.38 s) |
 | `cancel` | Guard cancels a slash only in the early wind-up and in the recovery; a guard tap let go of long before the recovery doesn't come up in it, while one just before it does, and so does a tap during hit-stun (as the stun ends); a lost dodge release cannot leave sprint held |
 | `inferno` | Phase 2 opens with the Inferno (starting there, or rising into it); he lands in the middle of the arena; the blast misses you outside its radius, knocks you down and throws you out of it inside, and walking away locked on from right beside him gets clear in time (stepping through it doesn't); jumping each arm clears all four from 4 to 14 m out, the beat holds (1.5, 1.5, 1.0 s) wherever you stand and while you walk round him; standing, guarding and dodging get burned by every arm and by the eruption; jumping on the beat gets caught by the fourth; one jump timed to the eruption clears it (in the air you're clear), earlier or later burns (it prints the window), and it rolls outward, reaching the wall a moment after it bursts beside him; after a burn the next arm, or the eruption, waits until you can jump it; the ring stops you and burns; your sword glances off him; his posture holds through it; he's open afterwards; he uses it again once it's off cooldown |
 | `soak` | A full fight against the real AI (charges, repositioning, volleys) with a bot player that reacts to the blade and to incoming shuriken: deflects, blocks, posture breaks, deathblows (each signalling 忍殺 once, the last as the final one), the next phase and the Inferno it opens with |
 
-The run exits with code 0 when every check passes (705 checks, including the soak). It also
+The run exits with code 0 when every check passes (734 checks, including the soak). It also
 fails if the engine or a script reports any error during the run (it listens through a
 `Logger`), so runtime errors can't hide behind passing gameplay checks.
 
 **Captures**: `tests/capture.tscn` stages shots (`overview`, `deflect`, `deflect_offcenter`,
-`block`, `mikiri`, `thrust_backstep`, `sweep`, `sweep_flee`, `whirl`, `shuriken`, `shuriken5`,
+`block`, `mikiri`, `thrust_backstep`, `sweep`, `sweep_flee`, `whirl`, `shuriken`, `shuriken5` (`double` for
+phase 2's two sets),
 `charge`, `slashes`, `parried`, `edge` (the lock-on camera with your back to the fence at eight
 places round the rim), `ribbons` for cloth and hair in motion (`ribbons close` behind you, `ribbons boss`
 behind him through his combo), `deathblow` (a posture break and the kill; `deathblow final`
@@ -391,11 +392,19 @@ How the boss model is built (PS2-style: ~25k triangles, one 2048 px atlas with b
 
 ## Status
 
-This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (705 checks, including
+This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (734 checks, including
 a full-fight soak), the game boots and runs with no script errors, and every change to the
 visuals was checked on frames rendered with Movie Maker.
 
-**Latest: calmer cloth and hair, bolder bars.**
+**Latest: two sets of shuriken in phases 2 and 3.** From phase 2 on, his shuriken volleys come
+twice: he leaps back and throws the first set as before (3 in the air + 1 delayed, or 5 in the
+air), then comes up from the landing into a low stance, his throwing hand glints, and he throws
+the same set again from the ground, 0.4 to 0.55 s after the first. Blocking a shuriken now costs
+you 9 posture (it was 12), so a whole double volley blocked from a fresh guard costs 90 of your
+100: you get through it, just, but deflecting them is the real answer. The capture shots
+`shuriken double` and `shuriken5 double` film it.
+
+**Before that: calmer cloth and hair, bolder bars.**
 
 - **Ribbons and his mane** ([before and after](docs/ribbons_before_after.png)): your scarf and
   headband tails, his horsehair mane, his sashes and the staff's tassels buzzed at 5 to 9 Hz and
