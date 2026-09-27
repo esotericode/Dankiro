@@ -46,6 +46,7 @@ var spam_level := 0
 var _last_guard_release := -99.0
 var _last_press_deflected := false
 var _pending_guard := false
+var _guard_pressed_at := -INF         ## when the queued guard was pressed (see _guard_queued)
 var _buffer: Dictionary = {}          ## action -> game time of press
 var _dodge_held_since := -1.0
 var _combo_queued := false
@@ -141,6 +142,7 @@ func press_guard(now: float) -> void:
 		_begin_guard(now)
 	else:
 		_pending_guard = true
+		_guard_pressed_at = now
 
 
 func release_guard(now: float) -> void:
@@ -148,9 +150,16 @@ func release_guard(now: float) -> void:
 		return
 	guard_held = false
 	_last_guard_release = now
-	# A guard queued during a committed move only comes up if the button is still held.
-	# Otherwise a brief tap would create a new deflect window much later in recovery.
-	_pending_guard = false
+
+
+## A guard pressed while it couldn't come up (mid-swing, hit-stun, a dodge's early frames...):
+## held, it waits until it can; let go, it keeps only for the input buffer, like the other
+## actions. So a tap a moment before you can guard still comes up, but a stale one can't open a
+## deflect window long after the press.
+func _guard_queued() -> bool:
+	if _pending_guard and not guard_held and Game.clock - _guard_pressed_at > BUFFER_TIME:
+		_pending_guard = false
+	return _pending_guard
 
 
 func press_action(action: String, now: float) -> void:
@@ -204,9 +213,10 @@ func _physics_process(delta: float) -> void:
 
 
 func _update_state(delta: float) -> Vector3:
-	# A guard held while it couldn't come up (mid-swing, hit-stun, a dodge's early frames...)
-	# comes up the moment it can; its deflect window starts then.
-	if _pending_guard and _can_guard_now() and state != S.MOVE and state != S.GUARD \
+	# A guard pressed while it couldn't come up (mid-swing, hit-stun, a dodge's early frames...)
+	# comes up the moment it can if it's still held or was tapped within the input buffer
+	# (_guard_queued); its deflect window starts then.
+	if _guard_queued() and _can_guard_now() and state != S.MOVE and state != S.GUARD \
 			and state != S.DEFLECT and state != S.BLOCK:
 		_begin_guard(Game.clock)
 		return Vector3.ZERO
@@ -295,7 +305,7 @@ func _start_state(s: int) -> void:
 func _to_neutral() -> void:
 	# Stay guarding while the button is held or a tapped guard is still up (a re-press during a
 	# deflect / block reaction must keep its window when that reaction animation ends).
-	if guard_held or _pending_guard or Game.clock - guard_start < Combat.GUARD_MIN_TIME:
+	if guard_held or _guard_queued() or Game.clock - guard_start < Combat.GUARD_MIN_TIME:
 		_start_state(S.GUARD)
 		if _pending_guard:
 			_begin_guard(Game.clock)
@@ -374,7 +384,7 @@ func _wish_dir() -> Vector3:
 
 
 func _state_move(delta: float) -> Vector3:
-	if _pending_guard and _can_guard_now():
+	if _guard_queued() and _can_guard_now():
 		_begin_guard(Game.clock)
 	if state == S.GUARD and not guard_held and Game.clock - guard_start >= Combat.GUARD_MIN_TIME:
 		_start_state(S.MOVE)
@@ -457,7 +467,7 @@ func _state_attack(delta: float) -> Vector3:
 		if not _try_deathblow():
 			_start_attack(combo_next)
 		return Vector3.ZERO
-	if _pending_guard and _can_guard_now():
+	if _guard_queued() and _can_guard_now():
 		_begin_guard(Game.clock)
 		return Vector3.ZERO
 	if anim.time >= combo_at and _buffered("attack"):
@@ -589,7 +599,7 @@ func can_mikiri(attacker: Node3D, release_time: float) -> bool:
 func _state_dodge(_delta: float) -> Vector3:
 	if state_time > 0.3 and _try_actions(["attack", "jump"]):
 		return Vector3.ZERO
-	if _pending_guard and _can_guard_now():
+	if _guard_queued() and _can_guard_now():
 		_begin_guard(Game.clock)
 		return Vector3.ZERO
 	if anim.finished:

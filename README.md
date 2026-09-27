@@ -112,7 +112,9 @@ The input map is registered in code (`scripts/autoload/game_input.gd`); actions 
   Mashing attack can't go faster than that.
 - **Guard can cancel a slash only at the very start of the wind-up or in the recovery** after
   the blade has passed. Held during the committed swing, the guard comes up (with its deflect
-  window) as soon as the recovery opens. Releasing it before then cancels the queued guard.
+  window) as soon as the recovery opens. A tap you've already let go of comes up then only if it
+  was within the input buffer (0.22 s, as for attacks and dodges), so a stale tap can't open a
+  late deflect window.
 - When he blocks a slash, your sword bounces and the next one comes a beat later. Keep hitting
   his guard and he **parries** you, knocking your sword away, then counters, and often keeps
   pressing after the counter.
@@ -253,11 +255,11 @@ godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--v
 | `sweep` | Guarding and dodge i-frames fail against the sweep, and so does getting away (stepping back or aside, two backsteps, sprinting or walking away, from 1.5 to 3.4 m); jumping clears it, and the kick deals posture |
 | `shuriken` | Volley rhythms (3 in the air + 1 delayed, 5 in the air), a readable tell before the first, every throw deflectable (4 posture to him each; one that fills his posture in mid-air breaks him as he lands) or blockable |
 | `attack` | Slash reach, and that mashing is rate-limited (no two hits within 0.38 s) |
-| `cancel` | Guard cancels a slash only in the early wind-up and in the recovery; a released queued guard cannot deflect later, and a lost dodge release cannot leave sprint held |
+| `cancel` | Guard cancels a slash only in the early wind-up and in the recovery; a guard tap let go of long before the recovery doesn't come up in it, while one just before it does, and so does a tap during hit-stun (as the stun ends); a lost dodge release cannot leave sprint held |
 | `inferno` | Phase 2 opens with the Inferno (starting there, or rising into it); he lands in the middle of the arena; the blast misses you outside its radius, knocks you down and throws you out of it inside, and walking away locked on from right beside him gets clear in time (stepping through it doesn't); jumping each arm clears all four from 4 to 14 m out, the beat holds (1.5, 1.5, 1.0 s) wherever you stand and while you walk round him; standing, guarding and dodging get burned by every arm and by the eruption; jumping on the beat gets caught by the fourth; one jump timed to the eruption clears it (in the air you're clear), earlier or later burns (it prints the window), and it rolls outward, reaching the wall a moment after it bursts beside him; after a burn the next arm, or the eruption, waits until you can jump it; the ring stops you and burns; your sword glances off him; his posture holds through it; he's open afterwards; he uses it again once it's off cooldown |
 | `soak` | A full fight against the real AI (charges, repositioning, volleys) with a bot player that reacts to the blade and to incoming shuriken: deflects, blocks, posture breaks, deathblows (each signalling 忍殺 once, the last as the final one), the next phase and the Inferno it opens with |
 
-The run exits with code 0 when every check passes (701 checks, including the soak). It also
+The run exits with code 0 when every check passes (705 checks, including the soak). It also
 fails if the engine or a script reports any error during the run (it listens through a
 `Logger`), so runtime errors can't hide behind passing gameplay checks.
 
@@ -389,7 +391,7 @@ How the boss model is built (PS2-style: ~25k triangles, one 2048 px atlas with b
 
 ## Status
 
-This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (701 checks, including
+This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (705 checks, including
 a full-fight soak), the game boots and runs with no script errors, and every change to the
 visuals was checked on frames rendered with Movie Maker.
 

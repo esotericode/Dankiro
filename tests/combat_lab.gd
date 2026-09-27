@@ -1359,12 +1359,12 @@ func suite_cancel() -> void:
 		await ticks(90)
 		check(player.state == Player.S.GUARD, "queued guard comes up after the slash (%s)" % Player.S.keys()[player.state])
 		player.release_guard(Game.clock)
-	# A tap released during the committed swing must not open a fresh deflect window
-	# much later in recovery, when the guard button is already up.
+	# A tap released early in the committed swing must not open a fresh deflect window in the
+	# recovery 0.3 s later, when the button has long been up (it outlives the input buffer)...
 	await setup(3.5)
 	boss.set_facing(PI)
 	player.press_action("attack", Game.clock)
-	await ticks(24)
+	await ticks(12)
 	check(player.state == Player.S.ATTACK and not player._can_guard_now(),
 		"guard-release probe begins in the committed swing")
 	player.press_guard(Game.clock)
@@ -1372,7 +1372,36 @@ func suite_cancel() -> void:
 	player.release_guard(Game.clock)
 	await ticks(38)
 	check(not player._pending_guard and player.state != Player.S.GUARD,
-		"a released queued guard does not appear during recovery (%s)" % Player.S.keys()[player.state])
+		"a tap long before the recovery doesn't come up in it (%s)" % Player.S.keys()[player.state])
+	# ...but one a moment before the recovery opens still comes up with it (input buffer).
+	await setup(3.5)
+	boss.set_facing(PI)
+	player.press_action("attack", Game.clock)
+	await ticks(36)
+	check(player.state == Player.S.ATTACK and not player._can_guard_now(),
+		"late-tap probe begins in the committed swing")
+	player.press_guard(Game.clock)
+	await ticks(2)
+	player.release_guard(Game.clock)
+	await ticks(16)
+	check(player.state == Player.S.GUARD,
+		"a tap just before the recovery comes up with it (%s)" % Player.S.keys()[player.state])
+	# A quick deflect tap during a light hit's stun (released before the stun ends) still comes
+	# up the moment it can: a tap a moment too early mustn't just vanish.
+	await setup(3.5)
+	boss.set_facing(PI)
+	var hit_at := Game.clock
+	player.receive_attack({"dmg": 12.0, "kind": "normal", "time": Game.clock}, boss)
+	check(player.state == Player.S.HIT, "hit-stun probe: a light hit flinches you (%s)" % Player.S.keys()[player.state])
+	await ticks(5)
+	player.press_guard(Game.clock)
+	await ticks(5)
+	player.release_guard(Game.clock)
+	await ticks(14)
+	var late := player.guard_start - (hit_at + Combat.HIT_STUN_LIGHT)
+	check(player.state == Player.S.GUARD and late >= 0.0 and late < 0.02,
+		"a deflect tap during hit-stun comes up as the stun ends (%s, %.0f ms after)" % [
+		Player.S.keys()[player.state], late * 1000.0])
 	# Release events can be missed while paused or focus changes. The device's current state
 	# must clear the held-dodge sprint after play resumes.
 	await setup(3.5)
