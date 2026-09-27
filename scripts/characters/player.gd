@@ -148,6 +148,9 @@ func release_guard(now: float) -> void:
 		return
 	guard_held = false
 	_last_guard_release = now
+	# A guard queued during a committed move only comes up if the button is still held.
+	# Otherwise a brief tap would create a new deflect window much later in recovery.
+	_pending_guard = false
 
 
 func press_action(action: String, now: float) -> void:
@@ -182,6 +185,8 @@ func _physics_process(delta: float) -> void:
 		move_input = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 		if guard_held and not Input.is_action_pressed("guard"):
 			release_guard(Game.clock)   # release event lost (focus change etc.)
+		if _dodge_held_since >= 0.0 and not Input.is_action_pressed("dodge"):
+			release_dodge()            # don't keep sprinting after a lost release
 	if Game.camera != null and Game.camera.has_method("get_yaw"):
 		camera_yaw = float(Game.camera.call("get_yaw"))
 	if lock_target == null or (lock_target is Boss and (lock_target as Boss).is_dead()):
@@ -199,7 +204,7 @@ func _physics_process(delta: float) -> void:
 
 
 func _update_state(delta: float) -> Vector3:
-	# A guard pressed while it couldn't come up (mid-swing, hit-stun, a dodge's early frames...)
+	# A guard held while it couldn't come up (mid-swing, hit-stun, a dodge's early frames...)
 	# comes up the moment it can; its deflect window starts then.
 	if _pending_guard and _can_guard_now() and state != S.MOVE and state != S.GUARD \
 			and state != S.DEFLECT and state != S.BLOCK:

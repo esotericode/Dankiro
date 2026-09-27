@@ -1338,7 +1338,7 @@ func suite_attack() -> void:
 
 
 ## Guard cancel: guard during the wind-up start or the recovery takes effect at once; guard
-## during the committed swing is queued until the recovery.
+## held during the committed swing is queued until the recovery.
 func suite_cancel() -> void:
 	var c := AnimLibrary.get_clip("p_attack_1")
 	var wins: Array = c.raw.get("guard_cancel", [])
@@ -1359,6 +1359,30 @@ func suite_cancel() -> void:
 		await ticks(90)
 		check(player.state == Player.S.GUARD, "queued guard comes up after the slash (%s)" % Player.S.keys()[player.state])
 		player.release_guard(Game.clock)
+	# A tap released during the committed swing must not open a fresh deflect window
+	# much later in recovery, when the guard button is already up.
+	await setup(3.5)
+	boss.set_facing(PI)
+	player.press_action("attack", Game.clock)
+	await ticks(24)
+	check(player.state == Player.S.ATTACK and not player._can_guard_now(),
+		"guard-release probe begins in the committed swing")
+	player.press_guard(Game.clock)
+	await ticks(2)
+	player.release_guard(Game.clock)
+	await ticks(38)
+	check(not player._pending_guard and player.state != Player.S.GUARD,
+		"a released queued guard does not appear during recovery (%s)" % Player.S.keys()[player.state])
+	# Release events can be missed while paused or focus changes. The device's current state
+	# must clear the held-dodge sprint after play resumes.
+	await setup(3.5)
+	player.bot_enabled = false
+	Input.action_press("dodge")
+	player.press_action("dodge", Game.clock)
+	await ticks(2)
+	Input.action_release("dodge")
+	await ticks(2)
+	check(player._dodge_held_since < 0.0, "a lost dodge release cannot leave sprint latched")
 
 
 ## Full fight against the real boss AI with a bot that plays like a decent player: deflects
