@@ -38,6 +38,9 @@ func _ready() -> void:
 	Game.debug = shot == "diagnostics"
 	main = (load("res://scenes/main.tscn") as PackedScene).instantiate()
 	add_child(main)
+	var flat := OS.get_environment("DANKIRO_FLAT")
+	if flat != "":
+		_flat_background(flat)
 	await get_tree().physics_frame
 	if shot.begins_with("menu"):
 		call("shot_" + shot)
@@ -56,6 +59,24 @@ func _ready() -> void:
 	boss.anim.play_locomotion(Boss.LOCO, 0.0)
 	_stage(2.4)
 	call("shot_" + shot)
+
+
+## UI work: with DANKIRO_FLAT=<png> the 3D world isn't drawn; that still picture of it (a
+## plate, see shot_plate_fight / shot_menu_plate) stands behind the live UI instead, so a frame
+## takes a moment instead of 20 s at 1920x1080.
+func _flat_background(path: String) -> void:
+	get_viewport().disable_3d = true
+	var img := Image.load_from_file(path)
+	var layer := CanvasLayer.new()
+	layer.layer = -100
+	var tr := TextureRect.new()
+	tr.texture = ImageTexture.create_from_image(img)
+	tr.set_anchors_preset(Control.PRESET_FULL_RECT)
+	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	tr.stretch_mode = TextureRect.STRETCH_SCALE
+	tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(tr)
+	add_child(layer)
 
 
 func _stage(dist: float, boss_pos := Vector3(0, 0, -1.0)) -> void:
@@ -509,6 +530,88 @@ func shot_menu_controls() -> void:
 			if (b as Button).text == "Controls":
 				(b as Button).pressed.emit())
 	_end_at = 1.6
+
+
+## UI work: the fight from the lock-on camera with the HUD hidden (a plate for DANKIRO_FLAT).
+## The fighters stand as in shot_ui_hud.
+func shot_plate_fight() -> void:
+	_stage(3.0)
+	Game.hud.visible = false
+	_end_at = 0.6
+
+
+## UI work: the title screen without the menu (a plate for DANKIRO_FLAT).
+func shot_menu_plate() -> void:
+	at(0.1, func(): (main.get("menu") as GameMenu).visible = false)
+	_end_at = 1.1
+
+
+## The fight's HUD with both fighters hurt, his posture building and one gourd left.
+func shot_ui_hud() -> void:
+	_stage(3.0)
+	at(0.2, func():
+		player.hp = player.max_hp * 0.55
+		boss.hp = boss.max_hp * 0.7
+		player.heal_charges = 1
+		player.heal_charges_changed.emit(1)
+		player.add_posture(player.max_posture * 0.45, false)
+		boss.add_posture(boss.max_posture * 0.6, false))
+	_end_at = 1.4
+
+
+## The HUD as the fight starts: full bars, three gourds, no posture.
+func shot_ui_hud_fresh() -> void:
+	_stage(3.0)
+	_end_at = 0.6
+
+
+## The HUD with his posture nearly broken and the gourd empty.
+func shot_ui_hud_low() -> void:
+	_stage(3.0)
+	at(0.2, func():
+		player.hp = player.max_hp * 0.2
+		boss.hp = boss.max_hp * 0.35
+		boss.lives_left = 2
+		player.heal_charges = 0
+		player.heal_charges_changed.emit(0)
+		player.add_posture(player.max_posture * 0.8, false)
+		boss.add_posture(boss.max_posture * 0.93, false))
+	_end_at = 1.4
+
+
+## UI work: one of the HUD's moments over the fight, `-- ui_moment <what>`: namecard (as the fight
+## begins), callout (MIKIRI COUNTER), deathblow (his posture broken: the red mark and the
+## prompt), execution (忍殺), death, victory or help (F1).
+func shot_ui_moment() -> void:
+	var args := OS.get_cmdline_user_args()
+	var what: String = args[1] if args.size() > 1 else "namecard"
+	_stage(3.0)
+	_end_at = 1.6
+	match what:
+		"namecard":
+			at(0.1, func():
+				(Game.hud.get("_namecard") as Control).visible = true
+				Game.hud.call("show_namecard"))
+			_end_at = 3.4
+		"callout":
+			at(0.1, func(): Game.hud.call("show_callout", "Mikiri counter"))
+			_end_at = 1.4
+		"deathblow":
+			at(0.1, func():
+				player.global_position = boss.global_position + Vector3(0, 0, 2.0)
+				player.locked = true
+				boss._posture_break())
+		"execution":
+			at(0.1, func(): Game.hud.call("show_execution"))
+		"death":
+			at(0.1, func(): Game.hud.call("show_death"))
+			_end_at = 2.2
+		"victory":
+			at(0.1, func(): Game.hud.call("show_victory"))
+			_end_at = 2.2
+		"help":
+			at(0.1, func(): Game.hud.set_panel_visible(true))
+			_end_at = 0.8
 
 
 ## The lock-on camera with your back to the fence, at eight places round the rim, a second each:

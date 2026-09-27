@@ -18,7 +18,7 @@ The boss up close: [docs/boss_model.png](docs/boss_model.png), and
 ## Running it
 
 1. Install Godot **4.7** (standard build, no C# needed; 4.7.2 is what it's tested on).
-2. Open `project.godot` in the editor. The first open imports the audio, textures and font.
+2. Open `project.godot` in the editor. The first open imports the audio, textures and fonts.
 3. Press **F5**. The game opens on the title menu: **Start fight**, **Options**, **Controls**
    and **Quit**. Use the mouse, or the arrows and Enter, or a gamepad (D-pad or left stick,
    A to select, B to go back).
@@ -244,7 +244,7 @@ godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--v
 | `punish` | Deflect an attack, then mash attack: he reels from at most a few hits, then stops it (guards, parries or hits back) |
 | `phases` | Three lives, one per phase: the starting-phase option starts a fight in phase 2 or 3 with the earlier lives taken, each deathblow raises him into the next phase, the last one ends the fight |
 | `camera` | In the real arena: with your back to the fence anywhere round the rim, the lock-on camera keeps its full distance (the wall that keeps the fighters in doesn't squeeze it onto your back), and that wall still stops both fighters |
-| `menu` | The menus with a gamepad only (simulated pad input through Godot's input pipeline): D-pad and stick move one row per push, A selects, left / right change options, B goes back, Start pauses and A on Resume carries on; a closed menu lets go of its highlight |
+| `menu` | The menus with a gamepad only (simulated pad input through Godot's input pipeline): D-pad and stick move one row per push, A selects, left / right change options, B goes back, Start pauses and A on Resume carries on; a closed menu lets go of its highlight; the hints show the keyboard's keys until the pad is used, then its buttons |
 | `loop` | Two 90 s fights against bots that deflect everything, one hitting him only when he's open and one hitting whenever he's in reach: no more than 3 hits leave him reeling between his attacks, and he rarely reopens with the attack he was just punished for |
 | `spam` | The window shrinks 200/133/100/67/0 ms when mashing, clears after 0.5 s and on a deflect |
 | `mikiri` | Only a neutral step from the release on counters the thrust; during the pull-back is too early; forward-held and side steps never counter. Backstepping (once or twice), an early side step, or a backstep into a sprint all still get stabbed, from 2.4 to 4.4 m |
@@ -256,7 +256,7 @@ godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--v
 | `inferno` | Phase 2 opens with the Inferno (starting there, or rising into it); he lands in the middle of the arena; the blast misses you outside its radius, knocks you down and throws you out of it inside, and walking away locked on from right beside him gets clear in time (stepping through it doesn't); jumping each arm clears all four from 4 to 14 m out, the beat holds (1.5, 1.5, 1.0 s) wherever you stand and while you walk round him; standing, guarding and dodging get burned by every arm and by the eruption; jumping on the beat gets caught by the fourth; one jump timed to the eruption clears it (in the air you're clear), earlier or later burns (it prints the window), and it rolls outward, reaching the wall a moment after it bursts beside him; after a burn the next arm, or the eruption, waits until you can jump it; the ring stops you and burns; your sword glances off him; his posture holds through it; he's open afterwards; he uses it again once it's off cooldown |
 | `soak` | A full fight against the real AI (charges, repositioning, volleys) with a bot player that reacts to the blade and to incoming shuriken: deflects, blocks, posture breaks, deathblows (each signalling 忍殺 once, the last as the final one), the next phase and the Inferno it opens with |
 
-The run exits with code 0 when every check passes (691 checks, including the soak). It also
+The run exits with code 0 when every check passes (693 checks, including the soak). It also
 fails if the engine or a script reports any error during the run (it listens through a
 `Logger`), so runtime errors can't hide behind passing gameplay checks.
 
@@ -268,8 +268,10 @@ for his last life, then the victory screen), `inferno` for his fire move (`infer
 arms, `inferno wide` from high above the arena, `inferno spin` straight to the arms of fire, `inferno plunge`
 straight to the finisher), `attack <clip> [distance]` for any single boss attack from
 the lock-on camera, `recovery <clip>` for one attack played to the end from a fixed 3/4 view,
-`fire_staff [level]` and `fire_combo` for the fire on his staff, `diagnostics` for the overlay, the menus `menu_title`, `menu_options`, `menu_controls` and `menu_start` (boot,
-then press Start), `help` for the controls sheet (F1) over the fight, the model close-ups `model`, `model_head`, `model_face`,
+`fire_staff [level]` and `fire_combo` for the fire on his staff, `diagnostics` for the overlay, the menus `menu_title`, `menu_options`, `menu_controls`, `menu_pause` and `menu_start` (boot,
+then press Start), `help` for the controls sheet (F1) over the fight, the HUD `ui_hud`, `ui_hud_fresh` and
+`ui_hud_low` (both fighters hurt, the fight's start, nearly finished), `ui_moment <what>` for one of its
+moments (`namecard`, `callout`, `deathblow`, `execution`, `death`, `victory`, `help`), the model close-ups `model`, `model_head`, `model_face`,
 `model_face_p2`, `model_combo`, `model_flourish`, `player_model`, `player_head`, `player_face`,
 `player_moves` (the shinobi: an orbit, his head and face, and his slashes, a backstep, a jump and
 the gourd), `floor <view>` for the plaza from fixed
@@ -287,6 +289,11 @@ To record at a smaller size, put an `override.cfg` with
 `window/size/window_width_override` / `window_height_override` under `[display]` in the
 project folder (it's git-ignored). Without a GPU, this works under `xvfb-run` with Mesa's
 lavapipe Vulkan driver.
+
+For UI work there's a flat mode: with `DANKIRO_FLAT=<png>` set, the 3D world isn't drawn and
+that still picture stands behind the live HUD or menu instead. Render the picture once with the
+shot `plate_fight` (the fight, HUD hidden) or `menu_plate` (the title screen without its menu);
+after that a 1920x1080 frame of any UI shot takes a moment instead of 20 s.
 
 ## Project layout
 
@@ -309,7 +316,7 @@ shaders/                   night sky, flagstones, mortar bed, puddle, fire, and 
 data/                      rigs.json, animations.json, models.json (generated, see below)
 models/                    player.glb, player_katana.glb, boss.glb, boss_staff.glb + ribbon textures,
                            arena_floor.glb, scenery/*.glb (generated with Blender)
-audio/, textures/, fonts/  generated sound effects, brush kanji, floor and scenery textures, UI font (OFL)
+audio/, textures/, fonts/  generated sound effects, brush kanji, floor and scenery textures, UI fonts (OFL)
 tools/                     Python content pipeline + previewers (ignored by Godot)
   model3d/                 scripted Blender modelling: mesh builders, pattern, floor and scenery textures, baking
 ```
@@ -331,7 +338,7 @@ models, the floor or the scenery also needs Blender as a Python module: `pip ins
 | The fighters' materials, ribbons (scarves, sashes, hair, headband tails) and the gourd | `tools/build_models.py` | `python3 tools/build_models.py` | |
 | Sound effects | `tools/gen_audio.py` | `python3 tools/gen_audio.py [name]` | |
 | Effect textures: the noise the fire, weapon trails and dust scroll through, and the blood splatter | `tools/gen_fx_textures.py` | `python3 tools/gen_fx_textures.py` | the capture shots `fire_staff 0.3`, `fire_staff 1`, `fire_combo`, `inferno spin`, `deathblow` |
-| Kanji + UI font | `tools/gen_textures.py` | `python3 tools/gen_textures.py` | |
+| Kanji + UI fonts | `tools/gen_textures.py` | `python3 tools/gen_textures.py` | |
 | GDScript sanity | | | `python3 tools/check_gdscript.py` cross-checks member and function names and call arity across the scripts |
 
 How the animation system works:
@@ -380,11 +387,33 @@ How the boss model is built (PS2-style: ~25k triangles, one 2048 px atlas with b
 
 ## Status
 
-This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (691 checks, including
+This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (693 checks, including
 a full-fight soak), the game boots and runs with no script errors, and every change to the
 visuals was checked on frames rendered with Movie Maker.
 
-**Latest: the shinobi.** You were the last thing left as primitives bolted to the joints. You're
+**Latest: a new UI.** The HUD, the menus and the overlays are redesigned in one quiet style
+([before and after](docs/ui_before_after.png)): ink and ivory, with vermilion kept for what
+matters (damage, his deathblow marks, the deathblow, death), thin flat shapes, and no frames or
+ornament.
+
+- **HUD**: Sekiro's layout (his vitality and deathblow marks top left, his posture top centre,
+  yours bottom centre, your vitality and the gourd bottom left) as thin ivory bars on dark
+  tracks. Damage shows as a vermilion chip that drains a moment later. Posture fills from the
+  centre, amber turning vermilion and glowing as it nears breaking, with ticks at the centre and
+  where it breaks. Your bar turns vermilion and breathes when a blow or two from death.
+- **Its moments**: his name as the fight begins, like a film's title card; MIKIRI COUNTER with a
+  vermilion line drawn out under it; a red mark on him and a DEATHBLOW prompt with the button to
+  press; 忍殺 and 死 over the scene blurred and drained of colour, with what you can do next.
+- **Menus**: words on the left and no boxes. A vermilion line glides to the highlighted item,
+  which eases to the right; options show their value at the right, with arrows while
+  highlighted. The pause menu and the Controls page sit over the fight, blurred.
+- **Prompts that follow your device**: keys, mouse buttons and pad buttons are drawn as glyphs
+  (a mouse with the button to press lit, the face buttons in their colours), and the hints and
+  the deathblow prompt switch between keyboard and gamepad with whichever you last pressed.
+- **Type**: Jost, a geometric sans, for text and numbers; Cormorant Garamond for names and
+  titles. Both are variable fonts, installed by `tools/gen_textures.py`.
+
+**Before that: the shinobi.** You were the last thing left as primitives bolted to the joints. You're
 now a skinned, textured model built by a Blender script like the boss
 ([before and after](docs/player_before_after.png)):
 
@@ -560,6 +589,7 @@ and a settings menu.
 
 ## Credits
 
-- Fonts: *Cormorant Garamond* (UI) and *Yuji Boku* (used to render the kanji textures).
-  Both are SIL Open Font License 1.1, and the license texts are in `fonts/` and `textures/`.
+- Fonts: *Jost* (the UI's text), *Cormorant Garamond* (titles and names) and *Yuji Boku* (used
+  to render the kanji textures). All are SIL Open Font License 1.1, and the license texts are in
+  `fonts/` and `textures/`.
 - Everything else (code, meshes, animations, sounds, shaders) was made for this project.

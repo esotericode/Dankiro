@@ -1,7 +1,8 @@
 class_name PostureBar
 extends Control
-## Sekiro-style posture gauge: fills from the centre outward, shifts from amber to an angry
-## red as it nears breaking, pulses when close, flashes white on a break. Fades out when empty.
+## Posture, as in Sekiro: fills from the centre outward, amber turning vermilion as it nears
+## breaking, glowing when close. Ticks mark the centre and the ends (where it breaks). Flashes
+## white on a break, and fades away while empty.
 
 var ratio := 0.0
 var shown := 0.0
@@ -39,23 +40,21 @@ func _draw() -> void:
 	var h := size.y
 	var cx := w * 0.5
 	var a := _alpha
-	HudStyle.frame(self, w, h, a)
-	# fill from the centre
+	draw_rect(Rect2(Vector2(-1, -1), Vector2(w + 2, h + 2)), Color(UiTheme.TRACK, UiTheme.TRACK.a * a))
 	var half := cx * shown
-	var low := Color(1.0, 0.78, 0.25)
-	var high := Color(1.0, 0.22, 0.05)
-	var col := low.lerp(high, smoothstep(0.35, 0.95, shown))
-	if shown > 0.8:
-		var pulse := 0.5 + 0.5 * sin(_t * 14.0)
-		col = col.lerp(Color(1.0, 0.9, 0.7), pulse * 0.35)
+	var col := UiTheme.AMBER.lerp(UiTheme.ACCENT, smoothstep(0.45, 0.95, shown))
+	var glow := smoothstep(0.72, 1.0, shown) * (0.7 + 0.3 * sin(_t * 12.0))
 	if _flash > 0.0:
-		col = col.lerp(Color.WHITE, _flash)
+		col = col.lerp(Color(1.0, 0.97, 0.92), _flash)
 		half = cx
-	HudStyle.fill(self, Rect2(Vector2(cx - half, 0), Vector2(half * 2.0, h)), col, a)
-	# centre diamond
-	var d := h * 0.9
-	var pts := PackedVector2Array([Vector2(cx, -d * 0.4), Vector2(cx + d * 0.5, h * 0.5), Vector2(cx, h + d * 0.4),
-		Vector2(cx - d * 0.5, h * 0.5)])
-	draw_colored_polygon(pts, Color(HudStyle.BACK, 0.9 * a))
-	pts.append(pts[0])
-	draw_polyline(pts, Color(HudStyle.GILT, a), 1.4, true)
+		glow = maxf(glow, _flash)
+	if glow > 0.01 and half > 0.5:
+		for i in 3:
+			var g := 2.0 + 3.0 * i
+			draw_rect(Rect2(Vector2(cx - half - g, -g), Vector2(half * 2.0 + g * 2.0, h + g * 2.0)),
+				Color(col, 0.11 * glow * a))
+	if half > 0.25:
+		draw_rect(Rect2(Vector2(cx - half, 0), Vector2(half * 2.0, h)), Color(col, a))
+	draw_rect(Rect2(Vector2(cx - 0.5, -4), Vector2(1, h + 8)), Color(UiTheme.TEXT, 0.6 * a))
+	for x in [-1.0, w]:
+		draw_rect(Rect2(Vector2(x, -3), Vector2(1, h + 6)), Color(UiTheme.TEXT, 0.4 * a))

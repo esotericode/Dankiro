@@ -56,6 +56,27 @@ the script backs off and retries, so let it run. For another version, set
   `menu_*` shots boot to the menu like the game. Options live in `user://settings.cfg`.
 - Quick script-error check: `godot --headless --quit-after 600`.
 
+## The UI (built in code)
+
+- `scripts/ui/`: `Hud` (the fight's HUD and its overlays), `GameMenu` (title, pause, Options,
+  Controls), `ControlsSheet` (bindings + how to fight), `VitalityBar`, `PostureBar`, and `UiTheme`,
+  which holds the look: the colours, the two fonts (`UiTheme.sans(weight, tracking)` is Jost,
+  `serif()` Cormorant Garamond, both variable: `FontVariation`s cached by weight and tracking),
+  label and placement helpers, the blurred backdrop (`shaders/ui_backdrop.gdshader`), and the key
+  and button glyphs (`UiTheme.chip`, `HintBar`). Keep new UI in that style: ink and ivory, vermilion
+  only for what matters, thin flat shapes, no frames.
+- Prompts follow `GameInput.gamepad` (the device you last pressed; `device_changed` fires when it
+  flips). The menu marks its navigation events handled in `_input`, before the autoload's `_input`
+  sees them, so it calls `GameInput.notice(event)` itself.
+- The lab's `menu` suite finds menu items by their text ("Start fight", "Options", "Starting
+  phase"...): an option's value is a child label, so the button's text stays the option's name.
+- Iterate in flat mode: `DANKIRO_FLAT=<png>` makes `tests/capture.gd` skip the 3D world and put
+  that still picture behind the live UI. Render the plate once at 1920x1080 (shots `plate_fight`,
+  `menu_plate`), then `ui_hud`, `ui_hud_low`, `ui_moment <namecard|callout|deathblow|execution|death|victory|help>`,
+  `menu_title`, `menu_options`, `menu_controls`, `menu_pause` take about 15 s each. The HUD's
+  animations cap a frame's time at 0.1 s, so render at 10 fps or more to see them at speed. Check
+  the result on real 3D frames too (the blur reads the screen).
+
 ## The boss model (Blender, scripted)
 
 The boss is `models/boss.glb` (skinned) + `models/boss_staff.glb`, built by

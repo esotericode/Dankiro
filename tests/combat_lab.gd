@@ -686,6 +686,7 @@ func _deflect_arrivals(t0: float, arrivals: Array) -> void:
 ## title menu boots with an item highlighted, the D-pad and the left stick move one row per
 ## press, A presses, left / right change an option, B goes back, Start pauses the fight and A on
 ## Resume carries on. Closing a menu lets go of the highlight so A in the fight can't press it.
+## The hint bar shows the keyboard's keys until a pad is used, then the pad's buttons.
 func suite_menu() -> void:
 	var saved := [Game.start_phase, Game.debug, Game.save_enabled]
 	Game.save_enabled = false
@@ -695,6 +696,7 @@ func suite_menu() -> void:
 	if world != null:
 		world.queue_free()
 		world = null
+	GameInput.gamepad = false
 	var main: Node = (load("res://scenes/main.tscn") as PackedScene).instantiate()
 	add_child(main)
 	await ticks(10)
@@ -703,8 +705,11 @@ func suite_menu() -> void:
 		var f := get_viewport().gui_get_focus_owner()
 		return (f as Button).text if f is Button else "(none)"
 	check(menu.is_open() and str(focus.call()) == "Start fight", "title menu opens with Start fight highlighted (%s)" % focus.call())
+	check("Enter" in _hint_keys(menu), "the hints show the keyboard's keys (%s)" % [_hint_keys(menu)])
 	await _pad_button(JOY_BUTTON_DPAD_DOWN)
 	check(str(focus.call()) == "Options", "D-pad down highlights Options (%s)" % focus.call())
+	check(GameInput.gamepad and "A" in _hint_keys(menu) and not "Enter" in _hint_keys(menu),
+		"once a pad is used, the hints show its buttons (%s)" % [_hint_keys(menu)])
 	await _pad_stick(JOY_AXIS_LEFT_Y, [0.3, 0.7, 0.9, 1.0, 0.8, 0.2, 0.0])
 	check(str(focus.call()) == "Controls", "one push of the stick moves one row (%s)" % focus.call())
 	await _pad_stick(JOY_AXIS_LEFT_Y, [-0.5, -0.9, -1.0, -0.4, 0.0])
@@ -765,6 +770,7 @@ func suite_menu() -> void:
 	Game.start_phase = int(saved[0])
 	Game.debug = bool(saved[1])
 	Game.save_enabled = bool(saved[2])
+	GameInput.gamepad = false
 
 
 ## The lock-on camera at the plaza's rim, in the real arena: the invisible wall that keeps the
@@ -841,6 +847,15 @@ func suite_camera() -> void:
 
 
 ## A pad button press and release, as a pad sends them (device 0), a few frames apart.
+## The keys and buttons the menu's hint bar shows.
+func _hint_keys(menu: GameMenu) -> Array:
+	var keys := []
+	for c in (menu.get("_hints") as Node).find_children("*", "Control", true, false):
+		if c is UiTheme.Chip:
+			keys.append((c as UiTheme.Chip).key)
+	return keys
+
+
 func _pad_button(button: JoyButton) -> void:
 	for pressed in [true, false]:
 		var ev := InputEventJoypadButton.new()

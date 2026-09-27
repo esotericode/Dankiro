@@ -1,13 +1,15 @@
-"""Renders the brush kanji textures and installs the UI font.
+"""Renders the brush kanji textures and installs the UI fonts.
 
   textures/kanji_danger.png       危  perilous-attack warning (white, tinted in game)
-  textures/kanji_danger_icon.png  危  small red icon for the help panel
+  textures/kanji_danger_icon.png  危  small red icon for the controls sheet
   textures/kanji_death.png        死  death screen
   textures/kanji_execution.png    忍殺 victory ("shinobi execution")
-  fonts/ui_serif.ttf              Cormorant Garamond SemiBold (Latin), OFL
+  fonts/ui_sans.ttf               Jost, variable weight (Latin): the UI's text, OFL
+  fonts/ui_serif.ttf              Cormorant Garamond, variable weight (Latin): titles and names, OFL
 
-Fonts are fetched from the npm registry (fontsource packages, SIL OFL 1.1) into
-tools/.cache on first run. The kanji are rendered with Yuji Boku (OFL); only the
+Fonts are fetched into tools/.cache on first run (all SIL OFL 1.1): Yuji Boku from the npm
+registry (fontsource), Jost and Cormorant Garamond from the Google Fonts repository on GitHub,
+cut down to Latin with the weight axis kept. The kanji are rendered with Yuji Boku; only the
 rendered images ship with the game.
 """
 import io
@@ -16,6 +18,7 @@ import tarfile
 import urllib.request
 
 import numpy as np
+from fontTools import subset
 from fontTools.ttLib import TTFont
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
@@ -24,9 +27,15 @@ CACHE = os.path.join(ROOT, "tools", ".cache")
 PACKAGES = {
     "yuji-boku": ("https://registry.npmjs.org/@fontsource/yuji-boku/-/yuji-boku-5.3.0.tgz",
                   "package/files/yuji-boku-japanese-400-normal.woff"),
-    "cormorant-garamond": ("https://registry.npmjs.org/@fontsource/cormorant-garamond/-/cormorant-garamond-5.3.0.tgz",
-                           "package/files/cormorant-garamond-latin-600-normal.woff"),
 }
+GOOGLE_FONTS = "https://raw.githubusercontent.com/google/fonts/main/ofl/"
+VARIABLE = {        # name: (font, license) under GOOGLE_FONTS
+    "jost": ("jost/Jost%5Bwght%5D.ttf", "jost/OFL.txt"),
+    "cormorant-garamond": ("cormorantgaramond/CormorantGaramond%5Bwght%5D.ttf", "cormorantgaramond/OFL.txt"),
+}
+# Basic Latin, Latin-1, general punctuation, arrows, the multiplication sign and a few shapes.
+LATIN = "U+0020-007E,U+00A0-00FF,U+0131,U+0152-0153,U+02C6,U+02DA,U+02DC,U+2010-2027,U+2030-203A,U+2044,U+20AC," \
+        "U+2122,U+2190-2193,U+2212,U+25A0-25CF"
 
 
 def fetch_font(name):
@@ -44,6 +53,31 @@ def fetch_font(name):
             f.write(tf.extractfile("package/LICENSE").read())
     font = TTFont(io.BytesIO(woff))
     font.flavor = None
+    font.save(ttf)
+    return ttf, lic
+
+
+def fetch_variable(name):
+    """A variable font from Google Fonts cut down to LATIN (weight axis and OpenType features kept)."""
+    os.makedirs(CACHE, exist_ok=True)
+    ttf = os.path.join(CACHE, name + "-var.ttf")
+    lic = os.path.join(CACHE, name + "-var-OFL.txt")
+    if os.path.exists(ttf):
+        return ttf, lic
+    font_path, lic_path = VARIABLE[name]
+    print("downloading", GOOGLE_FONTS + font_path)
+    data = urllib.request.urlopen(GOOGLE_FONTS + font_path).read()
+    with open(lic, "wb") as f:
+        f.write(urllib.request.urlopen(GOOGLE_FONTS + lic_path).read())
+    options = subset.Options()
+    options.layout_features = ["*"]
+    options.name_IDs = ["*"]
+    options.notdef_outline = True
+    options.glyph_names = False
+    font = TTFont(io.BytesIO(data))
+    sub = subset.Subsetter(options)
+    sub.populate(unicodes=subset.parse_unicodes(LATIN))
+    sub.subset(font)
     font.save(ttf)
     return ttf, lic
 
@@ -89,7 +123,6 @@ def render(text, font_path, size, canvas, glow=True, color=(255, 255, 255), glow
 
 def main():
     brush, brush_lic = fetch_font("yuji-boku")
-    serif, serif_lic = fetch_font("cormorant-garamond")
     tex = os.path.join(ROOT, "textures")
     os.makedirs(tex, exist_ok=True)
     render("危", brush, 400, (512, 512), glow_radius=22, glow_alpha=0.6).save(os.path.join(tex, "kanji_danger.png"))
@@ -99,10 +132,13 @@ def main():
         os.path.join(tex, "kanji_execution.png"))
     fonts = os.path.join(ROOT, "fonts")
     os.makedirs(fonts, exist_ok=True)
-    with open(serif, "rb") as src, open(os.path.join(fonts, "ui_serif.ttf"), "wb") as dst:
-        dst.write(src.read())
-    with open(serif_lic, "rb") as src, open(os.path.join(fonts, "OFL-CormorantGaramond.txt"), "wb") as dst:
-        dst.write(src.read())
+    for name, out, lic_out in [("jost", "ui_sans.ttf", "OFL-Jost.txt"),
+                               ("cormorant-garamond", "ui_serif.ttf", "OFL-CormorantGaramond.txt")]:
+        ttf, lic = fetch_variable(name)
+        with open(ttf, "rb") as src, open(os.path.join(fonts, out), "wb") as dst:
+            dst.write(src.read())
+        with open(lic, "rb") as src, open(os.path.join(fonts, lic_out), "wb") as dst:
+            dst.write(src.read())
     with open(brush_lic, "rb") as src, open(os.path.join(tex, "OFL-YujiBoku.txt"), "wb") as dst:
         dst.write(src.read())
     print("textures + fonts written")

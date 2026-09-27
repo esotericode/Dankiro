@@ -4,14 +4,39 @@ extends Node
 ##
 ## Keyboard/mouse follows Sekiro's PC defaults; gamepad follows the console layout.
 
+signal device_changed(gamepad: bool)
+
 const MOUSE_SENSITIVITY := 0.0026
 const STICK_SENSITIVITY := 3.2
 
+## The last thing you pressed was on a gamepad: prompts and hints show its buttons.
+var gamepad := false
+
 
 func _enter_tree() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS      # notices the device in the menus too
 	_movement()
 	_actions()
 	_menus()
+
+
+func _input(event: InputEvent) -> void:
+	notice(event)
+
+
+## Follows which device `event` came from. The menus call this too: their navigation events are
+## marked handled before they reach this node's `_input`.
+func notice(event: InputEvent) -> void:
+	var pad := gamepad
+	if event is InputEventJoypadButton:
+		pad = true
+	elif event is InputEventJoypadMotion:
+		pad = pad or absf((event as InputEventJoypadMotion).axis_value) > 0.5
+	elif event is InputEventKey or event is InputEventMouseButton:
+		pad = false
+	if pad != gamepad:
+		gamepad = pad
+		device_changed.emit(pad)
 
 
 func _movement() -> void:
