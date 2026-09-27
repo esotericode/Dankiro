@@ -79,7 +79,7 @@ func _ready() -> void:
 
 	player.died.connect(_on_player_died)
 	boss.defeated.connect(_on_boss_defeated)
-	boss.life_lost.connect(_on_boss_life_lost)
+	boss.executed.connect(_on_boss_executed)
 	Sfx.start_ambience()
 	if Game.skip_title:
 		Game.skip_title = false
@@ -183,9 +183,10 @@ func _on_player_died() -> void:
 	hud.show_death()
 
 
-func _on_boss_life_lost(lives_left: int) -> void:
-	if lives_left > 0:
-		hud.show_callout("SHINOBI EXECUTION")
+## A deathblow: 忍殺 on the screen (the last one gets the victory screen instead).
+func _on_boss_executed(final: bool) -> void:
+	if not final:
+		hud.show_execution()
 
 
 func _on_boss_defeated() -> void:

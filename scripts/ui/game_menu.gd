@@ -114,35 +114,15 @@ func _build() -> void:
 	_hint.offset_bottom = -30
 	_root.add_child(_hint)
 
-	_controls = PanelContainer.new()
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.03, 0.03, 0.04, 0.9)
-	sb.border_color = Color(0.7, 0.58, 0.36, 0.8)
-	sb.set_border_width_all(2)
-	sb.set_content_margin_all(24)
-	sb.set_corner_radius_all(4)
-	_controls.add_theme_stylebox_override("panel", sb)
+	_controls = ControlsSheet.new(_font)
 	_controls.anchor_left = 0.0
 	_controls.anchor_right = 0.0
 	_controls.anchor_top = 0.0
 	_controls.anchor_bottom = 0.0
-	_controls.offset_left = 800
+	_controls.offset_left = 500
 	_controls.offset_right = 1860
 	_controls.offset_top = 150
-	_controls.offset_bottom = 930
-	var rt := RichTextLabel.new()
-	rt.bbcode_enabled = true
-	rt.fit_content = true
-	rt.scroll_active = false
-	rt.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	rt.add_theme_font_size_override("normal_font_size", 20)
-	rt.add_theme_font_size_override("bold_font_size", 21)
-	rt.add_theme_color_override("default_color", Color(0.9, 0.87, 0.8))
-	var mono := SystemFont.new()
-	mono.font_names = PackedStringArray(["DejaVu Sans Mono", "Consolas", "Menlo", "Courier New", "monospace"])
-	rt.add_theme_font_override("normal_font", mono)
-	rt.text = Hud.CONTROLS_TEXT
-	_controls.add_child(rt)
+	_controls.offset_bottom = 830
 	_root.add_child(_controls)
 
 

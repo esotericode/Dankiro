@@ -2,8 +2,8 @@ extends Node
 ## Scripted capture director for visual checks with Godot's Movie Maker:
 ##   godot --write-movie out/frame.png --fixed-fps 30 res://tests/capture.tscn -- <shot>
 ## Shots: overview, deflect, deflect_offcenter, block, mikiri, thrust_backstep, sweep, sweep_flee, whirl, shuriken,
-## shuriken5, charge, slashes, parried, inferno [stand|wide|spin|plunge|plunge_stand], attack <clip> [distance], recovery <clip>, diagnostics, the menus
-## (menu_title, menu_options, menu_start, menu_pause), and art checks: model (orbit), model_head, model_face, model_face_p2, model_combo,
+## shuriken5, charge, slashes, parried, deathblow [final], inferno [stand|wide|spin|plunge|plunge_stand], attack <clip> [distance], recovery <clip>, diagnostics, the menus
+## (menu_title, menu_options, menu_controls, menu_start, menu_pause, help), and art checks: model (orbit), model_head, model_face, model_face_p2, model_combo,
 ## model_flourish, fire_staff [level], fire_combo, floor [overview|centre|medallion|puddle|moss|broken|rim|low|sweep],
 ## scenery [torii|gate|south|east|west|high|lantern].
 ## Loads the real game scene (arena, lighting, HUD, lock-on camera), skips the intro, stages
@@ -278,6 +278,23 @@ func shot_slashes() -> void:
 	_end_at = 2.6
 
 
+## Posture break and deathblow: his posture all but full, deflecting his cut breaks it, and the
+## player executes him (the camera's deathblow shot, blood, 忍殺). `-- deathblow final` makes it
+## his last life: he falls, then the victory screen.
+func shot_deathblow() -> void:
+	var final := OS.get_cmdline_user_args().has("final")
+	if final:
+		boss.lives_left = 1
+	auto_guard(0.05, 0.12)
+	at(0.2, func(): boss.add_posture(boss.max_posture - 5.0, false))
+	at(0.4, func(): boss_string(["b_combo_1"]))
+	for k in 24:
+		at(1.0 + 0.15 * k, func():
+			if boss.is_deathblow_ready() and player.distance_to_opponent() < 3.0:
+				player.press_action("attack", Game.clock))
+	_end_at = 8.0 if final else 5.6
+
+
 func shot_parried() -> void:
 	_stage(2.0)
 	boss._parry_threshold = 2
@@ -437,6 +454,22 @@ func shot_menu_options() -> void:
 			if (b as Button).text == "Options":
 				(b as Button).pressed.emit())
 	_end_at = 1.6
+
+
+## The title menu's Controls page.
+func shot_menu_controls() -> void:
+	at(0.3, func():
+		for b in (main.get("menu") as GameMenu).find_children("*", "Button", true, false):
+			if (b as Button).text == "Controls":
+				(b as Button).pressed.emit())
+	_end_at = 1.6
+
+
+## In the fight, F1: the controls sheet over the fight.
+func shot_help() -> void:
+	_stage(3.0)
+	at(0.1, func(): Game.hud.set_panel_visible(true))
+	_end_at = 0.8
 
 
 ## The diagnostics overlay during an exchange: hurtboxes, lit weapons, the guard ring and

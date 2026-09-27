@@ -16,6 +16,7 @@ signal life_lost(lives_left: int)
 signal defeated
 signal perilous_warning(kind: String)
 signal struck(result: int, point: Vector3)   ## the player's sword reached him: Combat.RESULT_* (hit, block, parry)
+signal executed(final: bool)                 ## a deathblow's blade went in (final: his last life)
 
 enum S { INTRO, NEUTRAL, ATTACK, GUARD, REACT, STAGGER, DEATHBLOWN, REVIVE, DEAD, INFERNO }
 
@@ -134,11 +135,11 @@ func _ready() -> void:
 		eye_light = lights[0]
 	for bname in ["upper", "lower"]:
 		var tr := WeaponTrail.new()
-		tr.setup(rig, bname, Color(1.0, 0.5, 0.26, 0.42))
-		tr.brightness = 1.15
+		tr.setup(rig, bname, WeaponTrail.EMBER)
+		tr.brightness = 1.2
 		tr.min_speed = 7.0
-		tr.life = 0.16
-		tr.inner = 0.4
+		tr.life = 0.13
+		tr.inner = 0.55
 		rig.add_child(tr)
 		trails.append(tr)
 	_build_aura()
@@ -921,7 +922,8 @@ func on_deathblow_stab(blade_pts: PackedVector3Array) -> void:
 	Fx.blood(get_parent(), chest.lerp(tip, 0.5), Combat.flat(tip - chest) + Vector3.UP * 0.2, 60, true)
 	Sfx.play_ui("deathblow", 2.0)
 	Game.hitstop(Combat.HITSTOP_DEATHBLOW)
-	Game.slowmo(0.7, 0.3)
+	Game.slowmo(0.9, 0.3)
+	executed.emit(lives_left <= 1)
 	Game.shake(0.45, 0.3)
 	Game.rumble(0.8, 1.0, 0.35)
 

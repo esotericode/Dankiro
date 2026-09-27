@@ -84,10 +84,10 @@ func _build_environment() -> void:
 	moon.light_color = Color(0.74, 0.8, 1.0)
 	moon.light_energy = 1.45
 	moon.shadow_enabled = true
-	moon.shadow_blur = 1.5
+	moon.shadow_blur = 0.7            # crisp enough that the trees' shadows read as trees
 	moon.directional_shadow_max_distance = 45.0
 	moon.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
-	moon.light_angular_distance = 0.6
+	moon.light_angular_distance = 0.2
 	moon.light_volumetric_fog_energy = 0.8
 	var el := deg_to_rad(moon_elevation_deg)
 	var az := deg_to_rad(moon_azimuth_deg)

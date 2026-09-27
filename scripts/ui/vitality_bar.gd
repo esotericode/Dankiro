@@ -33,9 +33,6 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	var w := size.x
 	var h := size.y
-	draw_rect(Rect2(Vector2(-3, -3), Vector2(w + 6, h + 6)), Color(0, 0, 0, 0.6))
-	draw_rect(Rect2(Vector2(-3, -3), Vector2(w + 6, h + 6)), Color(0.55, 0.47, 0.33, 0.55), false, 1.5)
-	draw_rect(Rect2(Vector2.ZERO, Vector2(w, h)), Color(0.06, 0.05, 0.05, 0.85))
-	draw_rect(Rect2(Vector2.ZERO, Vector2(w * chip, h)), Color(0.9, 0.82, 0.7, 0.8))
-	draw_rect(Rect2(Vector2.ZERO, Vector2(w * ratio, h)), fill_color)
-	draw_rect(Rect2(Vector2.ZERO, Vector2(w * ratio, h * 0.3)), Color(1, 1, 1, 0.15))
+	HudStyle.frame(self, w, h, 1.0)
+	draw_rect(Rect2(Vector2.ZERO, Vector2(w * chip, h)), Color(0.92, 0.84, 0.7, 0.72))
+	HudStyle.fill(self, Rect2(Vector2.ZERO, Vector2(w * ratio, h)), fill_color, 1.0)

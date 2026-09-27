@@ -5,6 +5,7 @@ render_mode diffuse_burley, specular_schlick_ggx, cull_disabled, alpha_to_covera
 // face the camera about its centre, a little bigger or smaller and rolled at random, so a
 // crown's outline is always made of sprays. Lit with the crown's bent normal (NORMAL) so it
 // shades as one mass with the clumps behind. UV2.x: baked occlusion, UV2.y: the clump's tone.
+// In the moon's shadow pass the cards are only half there, like the clumps (foliage.gdshader).
 
 uniform sampler2D leaf_tex : source_color, filter_linear_mipmap_anisotropic;   // a spray, alpha = coverage
 uniform float card_size = 1.0;
@@ -51,6 +52,10 @@ void vertex() {
 }
 
 void fragment() {
+	// An orthographic projection is the moon's shadow map (the cameras are all perspective).
+	if (PROJECTION_MATRIX[3][3] > 0.5 && mod(floor(FRAGCOORD.x) + floor(FRAGCOORD.y), 2.0) < 1.0) {
+		discard;
+	}
 	vec4 leaf = texture(leaf_tex, UV);
 	// keep far cards from thinning out as their mipmaps blur the alpha
 	float lod = log2(max(length(dFdx(UV)), length(dFdy(UV))) * float(textureSize(leaf_tex, 0).x));

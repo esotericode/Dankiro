@@ -40,7 +40,7 @@ sinh smoothstep snapped sqrt str tan tanh typeof wrapf wrapi len assert await
 ENGINE_SELF_FUNCS = set("""
 add_child get_tree get_parent queue_free create_tween get_viewport is_on_floor move_and_slide
 get_slide_collision_count get_slide_collision set_anchors_preset queue_redraw draw_rect draw_circle
-draw_arc draw_colored_polygon draw_line add_theme_font_override add_theme_font_size_override
+draw_arc draw_colored_polygon draw_line draw_polyline draw_polygon add_theme_font_override add_theme_font_size_override
 add_theme_color_override add_theme_constant_override add_theme_stylebox_override get_rid
 set_process set_physics_process look_at has_method call emit_signal is_inside_tree get_node
 """.split())

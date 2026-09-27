@@ -184,7 +184,9 @@ every 40 s; phase three has it too).
 - His posture recovers when you ease off, and it recovers more slowly as his vitality drops.
   Hitting him makes the posture war easier.
 - When his posture breaks (or his vitality empties), he drops to one knee under a red mark.
-  Press **Attack** close to him to perform a **deathblow**.
+  Press **Attack** close to him to perform a **deathblow**: the camera swings round beside the
+  two of you for the kill, time slows as the blade goes in, blood sprays across the stones and
+  忍殺 (shinobi execution) stamps onto the screen.
 - He has **three lives**, one per phase. After each deathblow he rises into the next phase.
   Phase two is faster, more aggressive and parries more, and he opens it with the Inferno.
   Phase three is the same as phase two for now (the Inferno included, but not as its opener);
@@ -247,20 +249,21 @@ godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--v
 | `attack` | Slash reach, and that mashing is rate-limited (no two hits within 0.38 s) |
 | `cancel` | Guard cancels a slash only in the early wind-up and in the recovery |
 | `inferno` | Phase 2 opens with the Inferno (starting there, or rising into it); he lands in the middle of the arena; the blast misses you outside its radius, knocks you down and throws you out of it inside, and walking away locked on from right beside him gets clear in time (stepping through it doesn't); jumping each arm clears all four from 4 to 14 m out, the beat holds (1.5, 1.5, 1.0 s) wherever you stand and while you walk round him; standing, guarding and dodging get burned by every arm and by the eruption; jumping on the beat gets caught by the fourth; one jump timed to the eruption clears it (in the air you're clear), earlier or later burns (it prints the window), and it rolls outward, reaching the wall a moment after it bursts beside him; after a burn the next arm, or the eruption, waits until you can jump it; the ring stops you and burns; your sword glances off him; he's open afterwards; he uses it again once it's off cooldown |
-| `soak` | A full fight against the real AI (charges, repositioning, volleys) with a bot player that reacts to the blade and to incoming shuriken: deflects, blocks, posture breaks, deathblows, the next phase and the Inferno it opens with |
+| `soak` | A full fight against the real AI (charges, repositioning, volleys) with a bot player that reacts to the blade and to incoming shuriken: deflects, blocks, posture breaks, deathblows (each signalling 忍殺 once, the last as the final one), the next phase and the Inferno it opens with |
 
-The run exits with code 0 when every check passes (684 checks, including the soak). It also
+The run exits with code 0 when every check passes (686 checks, including the soak). It also
 fails if the engine or a script reports any error during the run (it listens through a
 `Logger`), so runtime errors can't hide behind passing gameplay checks.
 
 **Captures**: `tests/capture.tscn` stages shots (`overview`, `deflect`, `deflect_offcenter`,
 `block`, `mikiri`, `thrust_backstep`, `sweep`, `sweep_flee`, `whirl`, `shuriken`, `shuriken5`,
-`charge`, `slashes`, `parried`, `inferno` for his fire move (`inferno stand` to take the
+`charge`, `slashes`, `parried`, `deathblow` (a posture break and the kill; `deathblow final`
+for his last life, then the victory screen), `inferno` for his fire move (`inferno stand` to take the
 arms, `inferno wide` from high above the arena, `inferno spin` straight to the arms of fire, `inferno plunge`
 straight to the finisher), `attack <clip> [distance]` for any single boss attack from
 the lock-on camera, `recovery <clip>` for one attack played to the end from a fixed 3/4 view,
-`fire_staff [level]` and `fire_combo` for the fire on his staff, `diagnostics` for the overlay, the menus `menu_title`, `menu_options` and `menu_start` (boot,
-then press Start), the model close-ups `model`, `model_head`, `model_face`,
+`fire_staff [level]` and `fire_combo` for the fire on his staff, `diagnostics` for the overlay, the menus `menu_title`, `menu_options`, `menu_controls` and `menu_start` (boot,
+then press Start), `help` for the controls sheet (F1) over the fight, the model close-ups `model`, `model_head`, `model_face`,
 `model_face_p2`, `model_combo`, `model_flourish`, `floor <view>` for the plaza from fixed
 cameras: `overview`, `centre`, `medallion`, `puddle`, `moss`, `broken`, `rim`, `low`, `sweep`, and
 `scenery <view>` for the world round it: `torii`, `gate`, `north`, `south`, `east`, `west`,
@@ -318,7 +321,7 @@ the floor or the scenery also needs Blender as a Python module: `pip install bpy
 | The world round the plaza (trees, torii, shrine, lanterns, fence, terrain, mountains) | `tools/build_scenery.py`, `tools/model3d/scenery_textures.py`, `scripts/world/scenery.gd` (placement, and the material table that maps each model material to a shader) | `python3 tools/build_scenery.py` (about a minute; `--only trees torii props approach backdrop textures` for some, `--no-bake` to skip the occlusion bakes), then `godot --headless --editor --quit` to import | `--preview` renders `tools/preview_out/scenery_*.png`; in the engine, the capture shots `scenery torii`, `scenery vista`, `scenery grove`, ... |
 | Player look, boss materials and ribbons | `tools/build_models.py` | `python3 tools/build_models.py` | `python3 tools/model_preview.py player` |
 | Sound effects | `tools/gen_audio.py` | `python3 tools/gen_audio.py [name]` | |
-| Fire noise (the flame shaders) | `tools/gen_fx_textures.py` | `python3 tools/gen_fx_textures.py` | the capture shots `fire_staff 0.3`, `fire_staff 1`, `fire_combo`, `inferno spin` |
+| Effect textures: the noise the fire, weapon trails and dust scroll through, and the blood splatter | `tools/gen_fx_textures.py` | `python3 tools/gen_fx_textures.py` | the capture shots `fire_staff 0.3`, `fire_staff 1`, `fire_combo`, `inferno spin`, `deathblow` |
 | Kanji + UI font | `tools/gen_textures.py` | `python3 tools/gen_textures.py` | |
 | GDScript sanity | | | `python3 tools/check_gdscript.py` cross-checks member and function names and call arity across the scripts |
 
@@ -368,11 +371,37 @@ How the boss model is built (PS2-style: ~25k triangles, one 2048 px atlas with b
 
 ## Status
 
-This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (685 checks, including
+This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (686 checks, including
 a full-fight soak), the game boots and runs with no script errors, and every change to the
 visuals was checked on frames rendered with Movie Maker.
 
-**Latest: the world round the plaza.** The trees, torii, shrine and mountains were primitives
+**Latest: the fight's finishing touches.** A polish pass on what you see while fighting him
+([before and after](docs/polish_before_after.png)):
+
+- **Deathblows** are staged: the camera swings round beside the two of you, low and close, and
+  pushes in while time slows as the blade goes in; blood sprays across the stones and 忍殺
+  (shinobi execution) stamps onto the screen above you. The camera eases back as he rises.
+- **Blood** is red streaking drops, a fine spray and a red haze (it was small black beads), and it
+  splatters the flagstones where it comes down, fading after a while.
+- **Weapon trails** are a crisp line of light along the blade's path with fine streaks behind it
+  (they were pale translucent sheets): steel-white for your sword, white-gold to ember red for
+  his burning blades.
+- **Dust** billows, its edges eaten by noise and lit by the scene (it was round soft blobs).
+- **Moon shadows**: the tree crowns cast a light, dappled shade on the plaza instead of dark
+  smears that read as dirt, and all shadows are crisper.
+- **HUD**: gilt-framed gauges with pointed end caps, fills lit from above, his lives as red beads,
+  a gourd icon with its uses, and bigger text.
+- **Controls** (F1, and the menus' Controls page): a laid-out sheet in the game's serif, with
+  keycaps for keyboard, mouse and gamepad beside how to fight (it was monospace text).
+- **Camera**: the lock-on camera sits lower and closer, so he looms over you and the shrine and
+  the trees fill the top of the screen rather than the floor.
+
+**Also: deflected shuriken chip his posture.** Each shuriken you deflect costs him 4 posture
+(of 300; a deflected blade does 7 to 16), with no flinch and no deflect-chain bonus, so a volley
+deflected in full is worth about two deflected blades. In Sekiro a deflected projectile costs
+the thrower nothing. If one fills his posture while he's in the air, he breaks as he lands.
+
+**Before that: the world round the plaza.** The trees, torii, shrine and mountains were primitives
 (cones on sticks, boxes, seven-sided pyramids); now they are models built by a Blender script,
 like the boss and the floor, with their own textures and shaders. A wood of Japanese cedars
 rings the plaza, with an old sacred cedar roped with a shimenawa beside the steps, black pines,
@@ -386,11 +415,6 @@ plaza and along the approach, and a granite and lacquer fence rings the plaza. T
 wood stops at a cliff a few metres past the fence, and the view opens over mist in the valley to
 three ranges of mountains, the farthest snow-capped, fading into the night sky
 ([close-ups](docs/scenery.png), [before and after](docs/scenery_before_after.png)).
-
-**Also: deflected shuriken chip his posture.** Each shuriken you deflect costs him 4 posture
-(of 300; a deflected blade does 7 to 16), with no flinch and no deflect-chain bonus, so a volley
-deflected in full is worth about two deflected blades. In Sekiro a deflected projectile costs
-the thrower nothing. If one fills his posture while he's in the air, he breaks as he lands.
 
 **Before that: new fire.** Every flame is now drawn by a shader instead of a painted sprite: tongues
 of fire that lick and flicker as noise scrolls up through them, white-yellow at the root, orange,

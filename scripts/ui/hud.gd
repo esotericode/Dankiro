@@ -3,30 +3,6 @@ extends CanvasLayer
 ## Fight HUD + overlays. Built in code; designed for a 1920x1080 canvas (stretch mode
 ## canvas_items), anchored so it adapts to other aspect ratios.
 
-const CONTROLS_TEXT := """[b]KEYBOARD / MOUSE[/b]                         [b]GAMEPAD[/b]
-Move ............ WASD                        Left stick
-Camera .......... Mouse                       Right stick
-Attack .......... Left mouse / J              RB
-Guard / Deflect . Right mouse / K             LB
-Dodge (hold: run) Shift                       B
-Jump ............ Space                       A
-Lock on ......... Q / Middle mouse            R3
-Heal (gourd) .... R                           X
-Pause ........... Esc                         Start
-Controls ........ F1                          Back
-Diagnostics ..... F3     Fullscreen .... F11
-
-[b]HOW TO FIGHT[/b]
-- Tap guard just before a blade lands to [color=#ffd27a]DEFLECT[/color] (0.2 s window). Re-pressing within
-  0.5 s of letting go shrinks the window; a clean deflect restores it. Holding guard only blocks.
-- Your slashes commit: guard can only cut in at the very start of a swing or after it.
-- Fill his posture bar with deflects, then press Attack on the red mark: [color=#ff5040]DEATHBLOW[/color].
-- [img=26x26]res://textures/kanji_danger_icon.png[/img] Perilous THRUST: he draws the staff back, holds... press Dodge with [i]no direction[/i]
-  as he RELEASES for a MIKIRI COUNTER. During the pull-back is too early. Deflecting works; blocking or backing off fails.
-- [img=26x26]res://textures/kanji_danger_icon.png[/img] Perilous SWEEP: low and long - you can't back out of it. JUMP, then jump again to kick.
-- Shuriken: he leaps back and throws 3 fast + 1 late, or 5 fast. Deflect each one.
-- His posture recovers when you back off, and faster while his vitality is high."""
-
 var player: Player
 var boss: Boss
 
@@ -39,6 +15,7 @@ var _marks: Control
 var _player_hp: VitalityBar
 var _player_posture: PostureBar
 var _heal_label: Label
+var _gourd: GourdIcon
 var _callout: Label
 var _prompt: Label
 var _reticle: Control
@@ -50,7 +27,9 @@ var _overlay: Control
 var _overlay_kanji: TextureRect
 var _overlay_title: Label
 var _overlay_sub: Label
-var _panel: PanelContainer
+var _execution: Control
+var _execution_kanji: TextureRect
+var _panel: ControlsSheet
 var _help_visible := false
 var _last_timing := "—"
 var _tex: Dictionary = {}
@@ -74,6 +53,7 @@ func _ready() -> void:
 	_build_boss_ui()
 	_build_player_ui()
 	_build_center()
+	_build_execution()
 	_build_overlay()
 	_build_panel()
 	Game.debug_toggled.connect(func(_on: bool): _debug_panel.visible = Game.debug)
@@ -83,8 +63,8 @@ func bind(p: Player, b: Boss) -> void:
 	player = p
 	boss = b
 	_boss_name.text = b.display_name
-	p.heal_charges_changed.connect(func(n: int): _heal_label.text = "Gourd  x%d" % n)
-	_heal_label.text = "Gourd  x%d" % p.heal_charges
+	p.heal_charges_changed.connect(_show_gourd)
+	_show_gourd(p.heal_charges)
 	p.deflect_timed.connect(_on_deflect_timed)
 	b.posture_broken.connect(func(): _boss_posture.flash())
 
@@ -139,14 +119,14 @@ func _build_vignette() -> void:
 
 func _build_boss_ui() -> void:
 	_marks = MarksDisplay.new()
-	_place(_marks, Vector2(0, 0), Vector2(56, 44), Vector2(22 * Combat.BOSS_LIVES + 16, 24))
+	_place(_marks, Vector2(0, 0), Vector2(54, 40), Vector2(28 * Combat.BOSS_LIVES + 12, 30))
 	_root.add_child(_marks)
-	_boss_name = _label("", 30, Color(0.92, 0.88, 0.8))
-	_place(_boss_name, Vector2(0, 0), Vector2(56 + 22 * Combat.BOSS_LIVES + 20, 36), Vector2(700, 40))
+	_boss_name = _label("", 34, Color(0.94, 0.9, 0.82))
+	_place(_boss_name, Vector2(0, 0), Vector2(62 + 28 * Combat.BOSS_LIVES + 14, 32), Vector2(700, 46))
 	_root.add_child(_boss_name)
 	_boss_hp = VitalityBar.new()
 	_boss_hp.fill_color = Color(0.66, 0.08, 0.06)
-	_place(_boss_hp, Vector2(0, 0), Vector2(60, 84), Vector2(560, 12))
+	_place(_boss_hp, Vector2(0, 0), Vector2(64, 88), Vector2(600, 13))
 	_root.add_child(_boss_hp)
 	_boss_posture = PostureBar.new()
 	_place(_boss_posture, Vector2(0.5, 0), Vector2(-300, 28), Vector2(600, 14))
@@ -156,10 +136,13 @@ func _build_boss_ui() -> void:
 func _build_player_ui() -> void:
 	_player_hp = VitalityBar.new()
 	_player_hp.fill_color = Color(0.72, 0.1, 0.08)
-	_place(_player_hp, Vector2(0, 1), Vector2(60, -64), Vector2(440, 14))
+	_place(_player_hp, Vector2(0, 1), Vector2(64, -64), Vector2(460, 14))
 	_root.add_child(_player_hp)
-	_heal_label = _label("Gourd  x3", 22, Color(0.9, 0.78, 0.55))
-	_place(_heal_label, Vector2(0, 1), Vector2(60, -108), Vector2(300, 32))
+	_gourd = GourdIcon.new()
+	_place(_gourd, Vector2(0, 1), Vector2(52, -150), Vector2(56, 70))
+	_root.add_child(_gourd)
+	_heal_label = _label("3", 40, Color(0.95, 0.84, 0.6))
+	_place(_heal_label, Vector2(0, 1), Vector2(106, -134), Vector2(120, 50))
 	_root.add_child(_heal_label)
 	_player_posture = PostureBar.new()
 	_place(_player_posture, Vector2(0.5, 1), Vector2(-210, -126), Vector2(420, 12))
@@ -210,6 +193,33 @@ func _build_center() -> void:
 	_root.add_child(_namecard)
 
 
+## The 忍殺 (shinobi execution) splash for a deathblow: the brush kanji over a darkened screen.
+func _build_execution() -> void:
+	_execution = Control.new()
+	_execution.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_execution.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_execution.visible = false
+	_root.add_child(_execution)
+	var shade := ColorRect.new()
+	shade.color = Color(0, 0, 0, 0.3)
+	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
+	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_execution.add_child(shade)
+	_execution_kanji = TextureRect.new()
+	_execution_kanji.texture = _tex.get("kanji_execution")
+	_execution_kanji.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_execution_kanji.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_execution_kanji.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_execution_kanji.modulate = Color(0.88, 0.07, 0.05)
+	# Above the two of you (the deathblow shot frames you in the middle), not over the kill.
+	_place(_execution_kanji, Vector2(0.5, 0.5), Vector2(-300, -470), Vector2(600, 330))
+	_execution_kanji.pivot_offset = Vector2(300, 165)
+	_execution.add_child(_execution_kanji)
+	var words := _label("SHINOBI EXECUTION", 36, Color(0.95, 0.9, 0.84), HORIZONTAL_ALIGNMENT_CENTER)
+	_place(words, Vector2(0.5, 0.5), Vector2(-600, -150), Vector2(1200, 50))
+	_execution.add_child(words)
+
+
 func _build_overlay() -> void:
 	_overlay = Control.new()
 	_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -236,31 +246,17 @@ func _build_overlay() -> void:
 
 
 func _build_panel() -> void:
-	_panel = PanelContainer.new()
-	_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.03, 0.03, 0.04, 0.88)
-	sb.border_color = Color(0.7, 0.58, 0.36, 0.8)
-	sb.set_border_width_all(2)
-	sb.set_content_margin_all(28)
-	sb.set_corner_radius_all(4)
-	_panel.add_theme_stylebox_override("panel", sb)
-	_place(_panel, Vector2(0.5, 0.5), Vector2(-560, -330), Vector2(1120, 660))
-	var rt := RichTextLabel.new()
-	rt.bbcode_enabled = true
-	rt.fit_content = true
-	rt.scroll_active = false
-	rt.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	rt.add_theme_font_size_override("normal_font_size", 21)
-	rt.add_theme_font_size_override("bold_font_size", 22)
-	rt.add_theme_color_override("default_color", Color(0.9, 0.87, 0.8))
-	var mono := SystemFont.new()
-	mono.font_names = PackedStringArray(["DejaVu Sans Mono", "Consolas", "Menlo", "Courier New", "monospace"])
-	rt.add_theme_font_override("normal_font", mono)
-	rt.text = CONTROLS_TEXT
-	_panel.add_child(rt)
+	_panel = ControlsSheet.new(_font)
+	_place(_panel, Vector2(0.5, 0.5), Vector2(-680, -340), Vector2(1360, 680))
 	_panel.visible = false
 	_root.add_child(_panel)
+
+
+func _show_gourd(n: int) -> void:
+	_heal_label.text = str(n)
+	_heal_label.modulate.a = 1.0 if n > 0 else 0.45
+	_gourd.full = n > 0
+	_gourd.queue_redraw()
 
 
 # ------------------------------------------------------------------------------ runtime
@@ -315,6 +311,21 @@ func show_callout(text: String) -> void:
 	tw.tween_property(_callout, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.chain().tween_interval(0.9)
 	tw.chain().tween_property(_callout, "modulate:a", 0.0, 0.4)
+
+
+## A deathblow lands: 忍殺 stamps onto the screen and fades (in real time, through the hit-stop).
+func show_execution() -> void:
+	_execution.visible = true
+	_execution.modulate.a = 0.0
+	_execution_kanji.scale = Vector2.ONE * 1.25
+	var tw := _execution.create_tween()
+	Fx._real_time(tw)
+	tw.set_parallel(true)
+	tw.tween_property(_execution, "modulate:a", 1.0, 0.1)
+	tw.tween_property(_execution_kanji, "scale", Vector2.ONE, 0.4).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
+	tw.chain().tween_interval(1.1)
+	tw.chain().tween_property(_execution, "modulate:a", 0.0, 0.6)
+	tw.chain().tween_callback(func(): _execution.visible = false)
 
 
 func show_namecard() -> void:
@@ -450,15 +461,54 @@ class MarksDisplay extends Control:
 	func _process(_d: float) -> void:
 		queue_redraw()
 
+	## His lives as beads: glossy red in a gilt setting, an empty dark socket once taken.
 	func _draw() -> void:
 		for i in total:
-			var c := Vector2(10 + i * 22, 12)
-			draw_circle(c, 8.0, Color(0, 0, 0, 0.6))
+			var c := Vector2(14 + i * 28, 15)
+			draw_circle(c + Vector2(0, 1.5), 11.0, Color(0, 0, 0, 0.45))
+			draw_circle(c, 10.5, Color(HudStyle.BACK, 0.92))
+			draw_arc(c, 10.5, 0.0, TAU, 28, Color(HudStyle.GILT, 0.85), 1.4, true)
 			if i < left:
-				draw_circle(c, 6.5, Color(0.85, 0.08, 0.05))
-				draw_circle(c + Vector2(-2, -2), 2.0, Color(1, 0.6, 0.5, 0.7))
+				draw_circle(c, 7.6, Color(0.5, 0.02, 0.02))
+				draw_circle(c + Vector2(0, -0.8), 6.6, Color(0.86, 0.1, 0.06))
+				draw_circle(c + Vector2(-2.3, -2.8), 2.6, Color(1.0, 0.62, 0.5, 0.75))
 			else:
-				draw_arc(c, 6.0, 0.0, TAU, 20, Color(0.5, 0.45, 0.4, 0.7), 1.5)
+				draw_arc(c, 6.0, 0.0, TAU, 20, Color(0.45, 0.38, 0.3, 0.6), 1.2, true)
+
+
+## The healing gourd: a lacquered double gourd with a stopper and a red cord at its waist,
+## dimmed when it's empty.
+class GourdIcon extends Control:
+	var full := true
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		var a := 1.0 if full else 0.4
+		var body := Color(0.8, 0.5, 0.17, a) if full else Color(0.45, 0.4, 0.35, a)
+		var dark := Color(0.16, 0.08, 0.03, a)
+		var cx := size.x * 0.5
+		var low := Vector2(cx, size.y * 0.66)
+		var high := Vector2(cx, size.y * 0.3)
+		var r_low := size.x * 0.34
+		var r_high := size.x * 0.22
+		# outline, then the two bulbs and the waist
+		draw_circle(low, r_low + 2.0, dark)
+		draw_circle(high, r_high + 2.0, dark)
+		draw_rect(Rect2(Vector2(cx - r_high * 0.55 - 2.0, high.y), Vector2(r_high * 1.1 + 4.0, low.y - high.y)), dark)
+		draw_circle(low, r_low, body)
+		draw_circle(high, r_high, body)
+		draw_rect(Rect2(Vector2(cx - r_high * 0.55, high.y), Vector2(r_high * 1.1, low.y - high.y)), body)
+		# stopper
+		draw_rect(Rect2(Vector2(cx - 3.5, high.y - r_high - 7.0), Vector2(7.0, 8.0)), Color(0.36, 0.22, 0.1, a))
+		# cord round the waist, its ends hanging
+		var wy := lerpf(high.y, low.y, 0.45)
+		draw_line(Vector2(cx - r_high * 0.7, wy), Vector2(cx + r_high * 0.7, wy), Color(0.8, 0.12, 0.08, a), 3.0)
+		draw_line(Vector2(cx + r_high * 0.5, wy), Vector2(cx + r_high * 0.9, wy + 12.0), Color(0.8, 0.12, 0.08, a), 2.0)
+		# gloss
+		draw_circle(low + Vector2(-r_low * 0.38, -r_low * 0.35), r_low * 0.26, Color(1.0, 0.85, 0.6, 0.45 * a))
+		draw_circle(high + Vector2(-r_high * 0.35, -r_high * 0.3), r_high * 0.25, Color(1.0, 0.85, 0.6, 0.4 * a))
 
 
 class ReticleDisplay extends Control:

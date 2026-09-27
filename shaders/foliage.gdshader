@@ -4,6 +4,9 @@ render_mode diffuse_burley, specular_schlick_ggx;
 // lumpy clumps whose normals are bent out from the middle of the crown, so a crown lights as
 // one soft mass; the cards of leaves over them (leaves.gdshader) make the outline. UV2.x is baked
 // ambient occlusion, UV2.y a random tone per clump. The leaf texture is projected in object space.
+// In the moon's shadow pass the mass is full of holes and only half there (every other texel of
+// the shadow map, which the shadow filter smooths into half strength), so a tree's shadow on the
+// plaza is a dappled shade like foliage's rather than one solid blot. The trunks cast in full.
 
 uniform sampler2D leaf_tex : source_color, filter_linear_mipmap, repeat_enable;   // alpha = coverage
 uniform float leaf_period = 1.6;        // metres per tile of the leaf texture
@@ -35,11 +38,32 @@ void vertex() {
 	VERTEX.xz += vec2(0.8, 0.6) * bend * sway * h * h;
 }
 
+float hash31(vec3 p) {
+	p = fract(p * 0.1031);
+	p += dot(p, p.zyx + 31.32);
+	return fract((p.x + p.y) * p.z);
+}
+
+float vnoise(vec3 p) {
+	vec3 i = floor(p);
+	vec3 f = fract(p);
+	f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(mix(hash31(i), hash31(i + vec3(1, 0, 0)), f.x), mix(hash31(i + vec3(0, 1, 0)), hash31(i + vec3(1, 1, 0)), f.x), f.y),
+		mix(mix(hash31(i + vec3(0, 0, 1)), hash31(i + vec3(1, 0, 1)), f.x), mix(hash31(i + vec3(0, 1, 1)), hash31(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+}
+
 vec4 triplanar(sampler2D tex, vec3 p, vec3 w) {
 	return texture(tex, p.zy) * w.x + texture(tex, p.xz) * w.y + texture(tex, p.xy) * w.z;
 }
 
 void fragment() {
+	// An orthographic projection is the moon's shadow map (the cameras are all perspective).
+	if (PROJECTION_MATRIX[3][3] > 0.5) {
+		float gaps = vnoise(opos * 1.25 + seed * 17.0) * 0.65 + vnoise(opos * 3.4) * 0.35;
+		if (gaps < 0.5 || mod(floor(FRAGCOORD.x) + floor(FRAGCOORD.y), 2.0) < 1.0) {
+			discard;
+		}
+	}
 	vec3 w = pow(abs(normalize(onrm)), vec3(4.0));
 	w /= w.x + w.y + w.z;
 	vec4 leaf = triplanar(leaf_tex, opos / leaf_period, w);

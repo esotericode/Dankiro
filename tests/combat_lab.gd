@@ -1062,6 +1062,7 @@ func suite_soak() -> void:
 		if not counts.has("first_break_s"):
 			counts["first_break_s"] = snappedf(Game.clock - t_start, 0.1))
 	boss.life_lost.connect(func(_l): bump.call("life_lost"))
+	boss.executed.connect(func(final: bool): bump.call("executed_final" if final else "executed"))
 	var over := [""]
 	boss.defeated.connect(func(): over[0] = "boss defeated")
 	player.died.connect(func(): over[0] = "player died")
@@ -1150,6 +1151,13 @@ func suite_soak() -> void:
 	check(int(counts.get("BLOCK", 0)) >= 1, "soak: early presses block")
 	check(int(counts.get("posture_break", 0)) >= 1, "soak: his posture breaks")
 	check(int(counts.get("life_lost", 0)) >= 1, "soak: a deathblow takes a life (phase two)")
+	# (The blade goes in two seconds before the life is taken: one may be under way at time-up.)
+	var execs := int(counts.get("executed", 0)) + int(counts.get("executed_final", 0))
+	var under_way := 1 if boss.state == Boss.S.DEATHBLOWN else 0
+	var finals := int(counts.get("executed_final", 0))
+	check(execs == int(counts.get("life_lost", 0)) + under_way and finals <= 1 and (finals == 1 or over[0] != "boss defeated"),
+		"soak: each deathblow's blade signals 忍殺 once, the last one as final (%d, final %d, lives taken %d)" % [execs,
+			finals, int(counts.get("life_lost", 0))])
 	if boss.phase >= 2:
 		check(boss.inferno_uses >= 1, "soak: he opens phase two with the Inferno (%d uses)" % boss.inferno_uses)
 

@@ -39,10 +39,7 @@ func _draw() -> void:
 	var h := size.y
 	var cx := w * 0.5
 	var a := _alpha
-	# frame
-	draw_rect(Rect2(Vector2(-3, -3), Vector2(w + 6, h + 6)), Color(0.0, 0.0, 0.0, 0.55 * a))
-	draw_rect(Rect2(Vector2(-3, -3), Vector2(w + 6, h + 6)), Color(0.72, 0.6, 0.38, 0.55 * a), false, 1.5)
-	draw_rect(Rect2(Vector2.ZERO, Vector2(w, h)), Color(0.08, 0.06, 0.05, 0.75 * a))
+	HudStyle.frame(self, w, h, a)
 	# fill from the centre
 	var half := cx * shown
 	var low := Color(1.0, 0.78, 0.25)
@@ -54,12 +51,11 @@ func _draw() -> void:
 	if _flash > 0.0:
 		col = col.lerp(Color.WHITE, _flash)
 		half = cx
-	col.a = a
-	draw_rect(Rect2(Vector2(cx - half, 0), Vector2(half * 2.0, h)), col)
-	# glossy top edge
-	draw_rect(Rect2(Vector2(cx - half, 0), Vector2(half * 2.0, h * 0.3)), Color(1, 1, 1, 0.18 * a))
+	HudStyle.fill(self, Rect2(Vector2(cx - half, 0), Vector2(half * 2.0, h)), col, a)
 	# centre diamond
 	var d := h * 0.9
-	var pts := PackedVector2Array([Vector2(cx, -d * 0.35), Vector2(cx + d * 0.5, h * 0.5), Vector2(cx, h + d * 0.35),
+	var pts := PackedVector2Array([Vector2(cx, -d * 0.4), Vector2(cx + d * 0.5, h * 0.5), Vector2(cx, h + d * 0.4),
 		Vector2(cx - d * 0.5, h * 0.5)])
-	draw_colored_polygon(pts, Color(0.85, 0.72, 0.45, a))
+	draw_colored_polygon(pts, Color(HudStyle.BACK, 0.9 * a))
+	pts.append(pts[0])
+	draw_polyline(pts, Color(HudStyle.GILT, a), 1.4, true)

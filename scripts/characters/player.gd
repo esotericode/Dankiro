@@ -95,7 +95,8 @@ func _ready() -> void:
 	if _gourd:
 		_gourd.visible = false
 	trail = WeaponTrail.new()
-	trail.setup(rig, "blade", Color(0.8, 0.88, 1.0, 0.8))
+	trail.setup(rig, "blade", WeaponTrail.STEEL)
+	trail.inner = 0.5
 	rig.add_child(trail)
 	anim.play_locomotion(LOCO, 0.0)
 	anim.update(0.0)
@@ -520,6 +521,8 @@ func _try_deathblow() -> bool:
 	face_now(boss.global_position)
 	boss.begin_deathblow(self)
 	anim.play("p_deathblow", 0.08)
+	if Game.camera is CombatCamera:
+		(Game.camera as CombatCamera).play_deathblow(self, boss)
 	reset_hits()
 	return true
 

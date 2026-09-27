@@ -9,11 +9,50 @@ extends RefCounted
 
 enum { SPARK_DEFLECT, SPARK_BLOCK, SPARK_PARRY, SPARK_MIKIRI, SPARK_BREAK, SPARK_GROUND }
 
+const SPLAT_TEXTURES := 3      ## textures/fx/blood_splat_*.png (tools/gen_fx_textures.py)
+const MAX_SPLATS := 36
+const SPLAT_LIFE := 12.0       ## seconds a splatter stays before it fades
+
+const PUFF_SHADER := """
+shader_type spatial;
+render_mode blend_mix, cull_disabled, depth_draw_never, shadows_disabled, @MODE@;
+
+uniform sampler2D noise_tex : filter_linear_mipmap, repeat_enable;
+
+varying float v_seed;
+varying vec4 v_col;
+
+void vertex() {
+@BILLBOARD@
+	v_seed = fract(float(INSTANCE_ID) * 0.618034 + 0.29);
+	v_col = COLOR;
+}
+
+void fragment() {
+	vec2 p = UV * 2.0 - 1.0;
+	vec2 q = UV * 0.5 + vec2(v_seed * 7.1, v_seed * 3.3 - TIME * 0.05);
+	float cells = texture(noise_tex, q).a;
+	float fine = texture(noise_tex, q * 2.3 + 0.5).g;
+	float edge = length(p) + (0.5 - cells) * 0.8 + (0.5 - fine) * 0.25;
+	float puff = 1.0 - smoothstep(0.3, 1.0, edge);
+	ALBEDO = v_col.rgb * (0.78 + 0.3 * (1.0 - UV.y) + 0.3 * (cells - 0.5));
+	ALPHA = clamp(puff * v_col.a, 0.0, 1.0);
+}
+"""
+
 static var _spark_mat: StandardMaterial3D
 static var _blood_mat: StandardMaterial3D
-static var _dust_mat: StandardMaterial3D
 static var _star_mat: StandardMaterial3D
 static var _textures: Dictionary = {}
+static var _splats: Array = []                        ## live blood decals, oldest first
+static var _seed := 7                                 ## cosmetic randomness (see _rand), off the game's RNG
+
+
+## Cosmetic randomness in [a, b), from its own generator: the game's RNG drives the AI, and the
+## splatter comes out the same every run, so captures reproduce.
+static func _rand(a := 0.0, b := 1.0) -> float:
+	_seed = (_seed * 1103515245 + 12345) & 0x7fffffff
+	return a + (b - a) * float(_seed) / 2147483648.0
 
 
 static func _spark_material() -> StandardMaterial3D:
@@ -242,104 +281,207 @@ static func light_pulse(parent: Node, pos: Vector3, color: Color, energy: float,
 	tw.tween_callback(l.queue_free)
 
 
+## Blood: a spray of drops that stretch along their flight, a fine mist of droplets and a red
+## haze where it bursts out, then splatter on the flagstones where it comes down (decals that
+## fade after a while). `dir` is the way it's thrown; `big` for deathblows.
 static func blood(parent: Node, pos: Vector3, dir: Vector3, amount := 40, big := false) -> void:
-	if _blood_mat == null:
-		_blood_mat = StandardMaterial3D.new()
-		_blood_mat.albedo_color = Color(0.32, 0.01, 0.01)
-		_blood_mat.roughness = 0.3
-		_blood_mat.metallic_specular = 0.8
-		_blood_mat.vertex_color_use_as_albedo = true
+	if parent == null or not parent.is_inside_tree():
+		return
+	var d := dir.normalized() if dir.length() > 0.001 else Vector3.UP
 	var p := CPUParticles3D.new()
 	p.one_shot = true
-	p.explosiveness = 0.92
+	p.explosiveness = 0.9
 	p.amount = amount
-	p.lifetime = 0.9
+	p.lifetime = 0.75
 	p.local_coords = false
-	p.direction = dir.normalized() + Vector3(0, 0.35, 0)
-	p.spread = 40.0 if not big else 65.0
-	p.initial_velocity_min = 2.0
-	p.initial_velocity_max = 6.5 if not big else 9.0
-	p.gravity = Vector3(0, -12.0, 0)
-	p.damping_min = 0.5
-	p.damping_max = 2.0
-	p.scale_amount_min = 0.5
-	p.scale_amount_max = 1.6
-	p.scale_amount_curve = _curve([Vector2(0, 1), Vector2(0.7, 0.8), Vector2(1, 0)])
-	var s := SphereMesh.new()
-	s.radius = 0.016
-	s.height = 0.032
-	s.radial_segments = 6
-	s.rings = 3
-	p.mesh = s
-	p.material_override = _blood_mat
-	p.color_ramp = _ramp([Color(0.55, 0.02, 0.02), Color(0.3, 0.0, 0.0)], [0.0, 1.0])
+	p.direction = d + Vector3(0, 0.25, 0)
+	p.spread = 32.0 if not big else 50.0
+	p.initial_velocity_min = 2.5
+	p.initial_velocity_max = 6.5 if not big else 9.5
+	p.gravity = Vector3(0, -13.0, 0)
+	p.damping_min = 0.3
+	p.damping_max = 1.2
+	p.particle_flag_align_y = true
+	p.preprocess = 0.02
+	p.scale_amount_min = 0.6
+	p.scale_amount_max = 1.5 if not big else 1.9
+	p.scale_amount_curve = _curve([Vector2(0, 1.0), Vector2(0.65, 0.8), Vector2(1, 0.0)])
+	var drop := CylinderMesh.new()   # a teardrop streak, stretched along its velocity
+	drop.top_radius = 0.004
+	drop.bottom_radius = 0.01
+	drop.height = 0.075
+	drop.radial_segments = 5
+	drop.rings = 1
+	p.mesh = drop
+	p.material_override = _blood_material()
+	p.color_ramp = _ramp([Color(0.66, 0.035, 0.03), Color(0.5, 0.012, 0.012), Color(0.34, 0.0, 0.0, 0.0)], [0.0, 0.6, 1.0])
 	_emit_at(parent, p, pos)
-	_free_later(p, 1.3)
-	# mist
+	_free_later(p, 1.1)
+	# Fine spray: many tiny droplets, faster and shorter-lived.
+	var f := CPUParticles3D.new()
+	f.one_shot = true
+	f.explosiveness = 1.0
+	f.amount = int(amount * 1.2)
+	f.lifetime = 0.45
+	f.local_coords = false
+	f.direction = d
+	f.spread = 28.0 if not big else 40.0
+	f.initial_velocity_min = 3.5
+	f.initial_velocity_max = 9.0 if not big else 12.0
+	f.gravity = Vector3(0, -9.0, 0)
+	f.damping_min = 2.0
+	f.damping_max = 5.0
+	f.particle_flag_align_y = true
+	f.scale_amount_min = 0.5
+	f.scale_amount_max = 1.0
+	var mote := CylinderMesh.new()
+	mote.top_radius = 0.002
+	mote.bottom_radius = 0.004
+	mote.height = 0.04
+	mote.radial_segments = 4
+	mote.rings = 1
+	f.mesh = mote
+	f.material_override = _blood_material()
+	f.color_ramp = _ramp([Color(0.72, 0.05, 0.04), Color(0.45, 0.01, 0.01, 0.0)], [0.0, 1.0])
+	_emit_at(parent, f, pos)
+	_free_later(f, 0.8)
+	# Red haze where it bursts out.
 	var m := CPUParticles3D.new()
 	m.one_shot = true
 	m.explosiveness = 1.0
-	m.amount = 10 if not big else 18
-	m.lifetime = 0.55
+	m.amount = 7 if not big else 14
+	m.lifetime = 0.7
 	m.local_coords = false
-	m.direction = dir.normalized()
-	m.spread = 50.0
+	m.direction = d
+	m.spread = 40.0
 	m.initial_velocity_min = 0.6
-	m.initial_velocity_max = 2.2
-	m.gravity = Vector3(0, -1.0, 0)
+	m.initial_velocity_max = 2.0
+	m.gravity = Vector3(0, -0.8, 0)
 	m.damping_min = 3.0
 	m.damping_max = 5.0
-	m.scale_amount_min = 1.0
-	m.scale_amount_max = 2.2
-	m.scale_amount_curve = _curve([Vector2(0, 0.4), Vector2(0.3, 1.0), Vector2(1, 1.2)])
+	m.scale_amount_min = 0.8
+	m.scale_amount_max = 1.6 if not big else 2.2
+	m.scale_amount_curve = _curve([Vector2(0, 0.35), Vector2(0.3, 1.0), Vector2(1, 1.3)])
 	var q := QuadMesh.new()
-	q.size = Vector2(0.18, 0.18)
+	q.size = Vector2(0.3, 0.3)
 	m.mesh = q
-	var mm := StandardMaterial3D.new()
-	mm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mm.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	mm.vertex_color_use_as_albedo = true
-	mm.albedo_texture = radial_texture("mist", Color(1, 1, 1, 1), Color(1, 1, 1, 0), 64)
-	m.material_override = mm
-	m.color_ramp = _ramp([Color(0.5, 0.02, 0.02, 0.55), Color(0.25, 0.0, 0.0, 0.0)], [0.0, 1.0])
+	m.material_override = _puff_material(false)
+	m.color_ramp = _ramp([Color(0.5, 0.02, 0.02, 0.55), Color(0.3, 0.0, 0.0, 0.0)], [0.0, 1.0])
 	_emit_at(parent, m, pos)
-	_free_later(m, 0.9)
+	_free_later(m, 1.0)
+	_splatter(parent, pos, d, big)
 
 
+static func _blood_material() -> StandardMaterial3D:
+	if _blood_mat == null:
+		_blood_mat = StandardMaterial3D.new()
+		_blood_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED   # reads as red in the dark
+		_blood_mat.vertex_color_use_as_albedo = true
+		_blood_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	return _blood_mat
+
+
+## Splatter on the flagstones along the way the blood flew: decals that fade in as the drops
+## land, stay a while and fade away. The oldest go first when there are too many.
+static func _splatter(parent: Node, pos: Vector3, d: Vector3, big: bool) -> void:
+	var flat := Vector3(d.x, 0.0, d.z)
+	if flat.length() < 0.05:
+		flat = Vector3(_rand(-1.0, 1.0), 0.0, _rand(-1.0, 1.0))
+	flat = flat.normalized()
+	var ground := Vector3(pos.x, 0.0, pos.z)
+	var n := 3 + int(_rand(0.0, 3.0)) if big else 1 + int(_rand(0.0, 2.0))
+	for i in n:
+		var dist := _rand(0.25, 1.6 if big else 1.0)
+		var side := flat.cross(Vector3.UP) * _rand(-0.3, 0.3)
+		var way := flat.rotated(Vector3.UP, _rand(-0.5, 0.5))
+		var size := _rand(0.5, 0.85) * (1.3 if big else 0.9)
+		_add_splat(parent, ground + flat * dist + side, way, size, 0.1 + dist * 0.14)
+
+
+static func _add_splat(parent: Node, at: Vector3, way: Vector3, size: float, delay: float) -> void:
+	var dec := Decal.new()
+	dec.texture_albedo = _splat_texture(int(_rand(0.0, float(SPLAT_TEXTURES))))
+	dec.size = Vector3(size, 0.14, size)
+	dec.albedo_mix = 1.0
+	dec.upper_fade = 0.25
+	dec.lower_fade = 0.25
+	dec.distance_fade_enabled = true
+	dec.distance_fade_begin = 30.0
+	dec.distance_fade_length = 6.0
+	dec.modulate = Color(1, 1, 1, 0)
+	parent.add_child(dec)
+	# The texture's +x is the way the blood flew.
+	dec.global_transform = Transform3D(Basis(Vector3.UP, atan2(-way.z, way.x)), at)
+	# (splats go with their scene: drop the ones already freed before counting)
+	_splats = _splats.filter(func(x): return is_instance_valid(x))
+	_splats.append(dec)
+	while _splats.size() > MAX_SPLATS:
+		(_splats.pop_front() as Node).queue_free()
+	var tw := dec.create_tween()
+	tw.tween_interval(delay)
+	tw.tween_property(dec, "modulate:a", 1.0, 0.12)
+	tw.tween_interval(SPLAT_LIFE)
+	tw.tween_property(dec, "modulate:a", 0.0, 3.0)
+	tw.tween_callback(func():
+		_splats.erase(dec)
+		dec.queue_free())
+
+
+static func _splat_texture(i: int) -> Texture2D:
+	var key := "splat_%d" % i
+	if not _textures.has(key):
+		_textures[key] = load("res://textures/fx/blood_splat_%d.png" % i)
+	return _textures[key]
+
+
+## Dust kicked up by feet, landings and impacts: soft billows lit by the scene, their edges
+## eaten by the noise's cells.
 static func dust(parent: Node, pos: Vector3, amount := 18, spread_radius := 0.6) -> void:
-	if _dust_mat == null:
-		_dust_mat = StandardMaterial3D.new()
-		_dust_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		_dust_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		_dust_mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-		_dust_mat.vertex_color_use_as_albedo = true
-		_dust_mat.albedo_texture = radial_texture("dust", Color(1, 1, 1, 1), Color(1, 1, 1, 0), 64)
+	if parent == null or not parent.is_inside_tree():
+		return
 	var p := CPUParticles3D.new()
 	p.one_shot = true
 	p.explosiveness = 0.95
 	p.amount = amount
-	p.lifetime = 1.1
+	p.lifetime = 1.2
 	p.local_coords = false
 	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
 	p.emission_sphere_radius = spread_radius * 0.4
-	p.direction = Vector3(0, 0.4, 0)
+	p.direction = Vector3(0, 0.35, 0)
 	p.spread = 85.0
 	p.initial_velocity_min = 0.8
 	p.initial_velocity_max = 2.6
-	p.gravity = Vector3(0, -0.6, 0)
+	p.gravity = Vector3(0, -0.5, 0)
 	p.damping_min = 2.0
 	p.damping_max = 3.5
 	p.scale_amount_min = 1.0
 	p.scale_amount_max = 2.0
-	p.scale_amount_curve = _curve([Vector2(0, 0.5), Vector2(0.4, 1.0), Vector2(1, 1.4)])
+	p.scale_amount_curve = _curve([Vector2(0, 0.45), Vector2(0.4, 1.0), Vector2(1, 1.5)])
 	var q := QuadMesh.new()
-	q.size = Vector2(0.35, 0.35)
+	q.size = Vector2(0.42, 0.42)
 	p.mesh = q
-	p.material_override = _dust_mat
-	p.color_ramp = _ramp([Color(0.55, 0.52, 0.48, 0.45), Color(0.4, 0.38, 0.36, 0.0)], [0.0, 1.0])
+	p.material_override = _puff_material(true)
+	p.color_ramp = _ramp([Color(0.62, 0.6, 0.58, 0.0), Color(0.6, 0.58, 0.56, 0.5), Color(0.52, 0.5, 0.49, 0.0)],
+		[0.0, 0.12, 1.0])
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_emit_at(parent, p, pos + Vector3(0, 0.08, 0))
-	_free_later(p, 1.5)
+	_free_later(p, 1.6)
+
+
+## Soft puffs (dust, the haze of blood): a round billboard whose edge is eaten by the noise's
+## cells, lumpier and lighter on top. The particle colour is the puff's colour and opacity.
+## `lit`: shaded by the scene's lights (dust); otherwise its own colour (blood reads red at night).
+static func _puff_material(lit: bool) -> ShaderMaterial:
+	var key := "puff_lit" if lit else "puff"
+	if not _textures.has(key):
+		var sh := Shader.new()
+		sh.code = PUFF_SHADER.replace("@MODE@", "diffuse_lambert_wrap, specular_disabled" if lit else "unshaded") \
+			.replace("@BILLBOARD@", FireFx._BILLBOARD)
+		var m := ShaderMaterial.new()
+		m.shader = sh
+		m.set_shader_parameter("noise_tex", FireFx.noise_texture())
+		_textures[key] = m
+	return _textures[key]
 
 
 ## Perilous-attack warning: the brush kanji pops in above the attacker and fades.

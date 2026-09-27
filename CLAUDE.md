@@ -44,9 +44,11 @@ the script backs off and retries, so let it run. For another version, set
   `[rendering]` `textures/default_filters/anisotropic_filtering_level=0` to `override.cfg` cuts a
   third while iterating. `override.cfg` is git-ignored. The shots are
   the `shot_*` functions in `tests/capture.gd`; `-- attack <clip> [distance]` films any boss
-  attack from the lock-on camera, `diagnostics` shows the hitbox overlay, and `inferno`
+  attack from the lock-on camera, `diagnostics` shows the hitbox overlay, `deathblow [final]` a
+  posture break and the kill (the camera's deathblow shot, blood, 忍殺), `help` and
+  `menu_controls` the controls sheet, and `inferno`
   (`stand`, `wide`) films phase 2's fire move (about 16 s: render it at 640x360 to iterate). Contact-sheet the
-  PNGs with PIL, then look at them.
+  PNGs with PIL, then look at them. `--fixed-fps 10` renders a third of the frames for a quick look.
 - The game boots to a title menu. The capture harness sets `Game.skip_title` (and ignores the
   saved options: `Game.start_phase`, `Game.debug`) so shots go straight into the fight; the
   `menu_*` shots boot to the menu like the game. Options live in `user://settings.cfg`.
@@ -159,3 +161,14 @@ godot --headless --editor --quit               # import
   Fire is drawn additively in HDR: keep its colours near 1.0 and thin out overlapping flames, or
   it blows out to white under the glow. The staff's smoulder (his normal fighting) is kept low so
   strikes stay readable; captures `fire_staff [level]`, `fire_combo`, `inferno spin|plunge`.
+- Cosmetic randomness in effects (blood splatter) comes from `Fx._rand`, not the global RNG: the
+  lab seeds the global RNG and the AI draws from it, so an effect that called `randf()` would
+  change how fights play out.
+- Blood on the stones is `Decal`s (`Fx._splatter`: at most 36, each fading after 12 s) with the
+  `textures/fx/blood_splat_*.png` from `tools/gen_fx_textures.py`.
+- `foliage.gdshader` and `leaves.gdshader` spot the moon's shadow pass by its orthographic
+  projection (`PROJECTION_MATRIX[3][3]`) and drop every other shadow-map texel there (the clumps
+  also get gaps), so tree crowns cast a light dappled shade on the plaza instead of dark smears.
+  An orthographic camera would see the crowns the same way.
+- The combat camera frames deathblows itself (`CombatCamera.play_deathblow`, called by the
+  player): it swings beside the fighters while the kill plays out, then eases back.
