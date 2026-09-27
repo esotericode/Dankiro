@@ -39,14 +39,14 @@ func _draw() -> void:
 	var h := size.y
 	var cx := w * 0.5
 	var a := _alpha
-	# frame
-	draw_rect(Rect2(Vector2(-3, -3), Vector2(w + 6, h + 6)), Color(0.0, 0.0, 0.0, 0.55 * a))
-	draw_rect(Rect2(Vector2(-3, -3), Vector2(w + 6, h + 6)), Color(0.72, 0.6, 0.38, 0.55 * a), false, 1.5)
-	draw_rect(Rect2(Vector2.ZERO, Vector2(w, h)), Color(0.08, 0.06, 0.05, 0.75 * a))
+	var frame := Rect2(Vector2(-4, -4), Vector2(w + 8, h + 8))
+	draw_rect(frame, Color(0.015, 0.014, 0.015, 0.72 * a))
+	draw_rect(frame, Color(0.58, 0.45, 0.3, 0.6 * a), false, 1.0)
+	draw_rect(Rect2(Vector2.ZERO, size), Color(0.11, 0.09, 0.075, 0.82 * a))
 	# fill from the centre
 	var half := cx * shown
-	var low := Color(1.0, 0.78, 0.25)
-	var high := Color(1.0, 0.22, 0.05)
+	var low := Color(0.92, 0.64, 0.3)
+	var high := Color(0.93, 0.22, 0.1)
 	var col := low.lerp(high, smoothstep(0.35, 0.95, shown))
 	if shown > 0.8:
 		var pulse := 0.5 + 0.5 * sin(_t * 14.0)
@@ -56,10 +56,9 @@ func _draw() -> void:
 		half = cx
 	col.a = a
 	draw_rect(Rect2(Vector2(cx - half, 0), Vector2(half * 2.0, h)), col)
-	# glossy top edge
-	draw_rect(Rect2(Vector2(cx - half, 0), Vector2(half * 2.0, h * 0.3)), Color(1, 1, 1, 0.18 * a))
+	draw_line(Vector2(cx - half, 1), Vector2(cx + half, 1), Color(1, 0.86, 0.62, 0.42 * a), 1.0)
 	# centre diamond
 	var d := h * 0.9
 	var pts := PackedVector2Array([Vector2(cx, -d * 0.35), Vector2(cx + d * 0.5, h * 0.5), Vector2(cx, h + d * 0.35),
 		Vector2(cx - d * 0.5, h * 0.5)])
-	draw_colored_polygon(pts, Color(0.85, 0.72, 0.45, a))
+	draw_colored_polygon(pts, Color(0.89, 0.74, 0.48, a))

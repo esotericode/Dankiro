@@ -13,9 +13,10 @@ signal restart_pressed
 signal title_pressed
 signal quit_pressed
 
-const C_TEXT := Color(0.88, 0.84, 0.76)
-const C_FOCUS := Color(1.0, 0.8, 0.42)
-const C_DIM := Color(0.62, 0.58, 0.52)
+const C_TEXT := Color(0.91, 0.88, 0.81)
+const C_FOCUS := Color(0.98, 0.79, 0.51)
+const C_DIM := Color(0.63, 0.62, 0.58)
+const C_BRASS := Color(0.68, 0.51, 0.32)
 
 var _font: Font
 var _root: Control
@@ -24,6 +25,7 @@ var _pause_shade: ColorRect
 var _column: VBoxContainer
 var _heading: Label
 var _subheading: Label
+var _eyebrow: Label
 var _buttons: VBoxContainer
 var _note: Label
 var _hint: Label
@@ -48,11 +50,12 @@ func _ready() -> void:
 
 # ------------------------------------------------------------------------------ building
 func _build() -> void:
-	# Title: dark to the left, where the menu sits, clear on the right where he stands.
+	# An ink wash keeps the menu legible without hiding the arena and the boss.
 	var g := Gradient.new()
-	g.set_color(0, Color(0.01, 0.01, 0.02, 0.92))
-	g.set_color(1, Color(0.01, 0.01, 0.02, 0.0))
-	g.add_point(0.42, Color(0.01, 0.01, 0.02, 0.7))
+	g.set_color(0, Color(0.018, 0.019, 0.022, 0.98))
+	g.set_color(1, Color(0.018, 0.019, 0.022, 0.0))
+	g.add_point(0.36, Color(0.018, 0.019, 0.022, 0.9))
+	g.add_point(0.7, Color(0.018, 0.019, 0.022, 0.18))
 	var gt := GradientTexture2D.new()
 	gt.gradient = g
 	gt.fill_from = Vector2(0, 0.5)
@@ -67,7 +70,7 @@ func _build() -> void:
 	_title_shade.mouse_filter = Control.MOUSE_FILTER_STOP     # clicks on the menu stay in the menu
 	_root.add_child(_title_shade)
 	_pause_shade = ColorRect.new()
-	_pause_shade.color = Color(0.0, 0.0, 0.01, 0.62)
+	_pause_shade.color = Color(0.012, 0.013, 0.018, 0.78)
 	_pause_shade.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_pause_shade.mouse_filter = Control.MOUSE_FILTER_STOP
 	_root.add_child(_pause_shade)
@@ -78,58 +81,68 @@ func _build() -> void:
 	_column.anchor_top = 0.0
 	_column.anchor_bottom = 1.0
 	_column.offset_left = 150
-	_column.offset_right = 150 + 860
-	_column.offset_top = 170
-	_column.offset_bottom = -90
-	_column.add_theme_constant_override("separation", 6)
+	_column.offset_right = 880
+	_column.offset_top = 142
+	_column.offset_bottom = -106
+	_column.add_theme_constant_override("separation", 0)
 	_root.add_child(_column)
-	_heading = _label("", 96, Color(0.95, 0.9, 0.82))
+	_eyebrow = _label("", 20, C_BRASS)
+	_column.add_child(_eyebrow)
+	var head_gap := Control.new()
+	head_gap.custom_minimum_size.y = 12
+	_column.add_child(head_gap)
+	_heading = _label("", 112, Color(0.96, 0.93, 0.86))
 	_column.add_child(_heading)
-	_subheading = _label("", 30, Color(0.82, 0.62, 0.4))
+	_subheading = _label("", 28, Color(0.78, 0.71, 0.61))
 	_column.add_child(_subheading)
+	var rule := ColorRect.new()
+	rule.color = C_BRASS.darkened(0.18)
+	rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	rule.custom_minimum_size = Vector2(92, 2)
+	rule.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	_column.add_child(rule)
 	var gap := Control.new()
-	gap.custom_minimum_size = Vector2(0, 56)
+	gap.custom_minimum_size = Vector2(0, 62)
 	_column.add_child(gap)
 	_buttons = VBoxContainer.new()
-	_buttons.add_theme_constant_override("separation", 4)
+	_buttons.add_theme_constant_override("separation", 8)
 	_column.add_child(_buttons)
 	var gap2 := Control.new()
-	gap2.custom_minimum_size = Vector2(0, 26)
+	gap2.custom_minimum_size = Vector2(0, 32)
 	_column.add_child(gap2)
-	_note = _label("", 24, C_DIM)
+	_note = _label("", 22, C_DIM)
 	_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_note.custom_minimum_size = Vector2(760, 0)
+	_note.custom_minimum_size = Vector2(680, 0)
 	_column.add_child(_note)
 
-	_hint = _label("Move: arrows, D-pad or stick     Change: left / right     Select: Enter / (A)     Back: Esc / (B)",
-		20, C_DIM)
+	_hint = _label("MOVE  ARROWS / STICK     CHANGE  LEFT / RIGHT     SELECT  ENTER / A     BACK  ESC / B",
+		18, C_DIM)
 	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_hint.anchor_left = 1.0
 	_hint.anchor_right = 1.0
 	_hint.anchor_top = 1.0
 	_hint.anchor_bottom = 1.0
-	_hint.offset_left = -1400
-	_hint.offset_right = -48
-	_hint.offset_top = -64
-	_hint.offset_bottom = -30
+	_hint.offset_left = -1500
+	_hint.offset_right = -70
+	_hint.offset_top = -72
+	_hint.offset_bottom = -38
 	_root.add_child(_hint)
 
 	_controls = PanelContainer.new()
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.03, 0.03, 0.04, 0.9)
-	sb.border_color = Color(0.7, 0.58, 0.36, 0.8)
-	sb.set_border_width_all(2)
-	sb.set_content_margin_all(24)
-	sb.set_corner_radius_all(4)
+	sb.bg_color = Color(0.025, 0.027, 0.031, 0.94)
+	sb.border_color = Color(C_BRASS, 0.48)
+	sb.set_border_width_all(1)
+	sb.set_content_margin_all(32)
 	_controls.add_theme_stylebox_override("panel", sb)
 	_controls.anchor_left = 0.0
 	_controls.anchor_right = 0.0
 	_controls.anchor_top = 0.0
 	_controls.anchor_bottom = 0.0
 	_controls.offset_left = 800
-	_controls.offset_right = 1860
-	_controls.offset_top = 150
-	_controls.offset_bottom = 930
+	_controls.offset_right = 1810
+	_controls.offset_top = 142
+	_controls.offset_bottom = 942
 	var rt := RichTextLabel.new()
 	rt.bbcode_enabled = true
 	rt.fit_content = true
@@ -137,7 +150,7 @@ func _build() -> void:
 	rt.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	rt.add_theme_font_size_override("normal_font_size", 20)
 	rt.add_theme_font_size_override("bold_font_size", 21)
-	rt.add_theme_color_override("default_color", Color(0.9, 0.87, 0.8))
+	rt.add_theme_color_override("default_color", C_TEXT)
 	var mono := SystemFont.new()
 	mono.font_names = PackedStringArray(["DejaVu Sans Mono", "Consolas", "Menlo", "Courier New", "monospace"])
 	rt.add_theme_font_override("normal_font", mono)
@@ -154,17 +167,17 @@ func _label(text: String, font_size: int, color: Color) -> Label:
 		l.add_theme_font_override("font", _font)
 	l.add_theme_font_size_override("font_size", font_size)
 	l.add_theme_color_override("font_color", color)
-	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
-	l.add_theme_constant_override("outline_size", maxi(4, font_size / 8))
+	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.65))
+	l.add_theme_constant_override("outline_size", maxi(2, font_size / 12))
 	return l
 
 
-func _button(text: String, on_press: Callable, font_size := 38) -> Button:
+func _button(text: String, on_press: Callable, font_size := 36) -> Button:
 	var b := Button.new()
 	b.text = text
 	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	b.focus_mode = Control.FOCUS_ALL
-	b.custom_minimum_size = Vector2(620, 0)
+	b.custom_minimum_size = Vector2(620, 60)
 	b.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	if _font:
 		b.add_theme_font_override("font", _font)
@@ -172,25 +185,30 @@ func _button(text: String, on_press: Callable, font_size := 38) -> Button:
 	b.add_theme_color_override("font_color", C_TEXT)
 	for st in ["font_hover_color", "font_focus_color", "font_pressed_color", "font_hover_pressed_color"]:
 		b.add_theme_color_override(st, C_FOCUS)
-	b.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
-	b.add_theme_constant_override("outline_size", 5)
-	var normal := StyleBoxEmpty.new()
-	normal.content_margin_left = 22
-	normal.content_margin_right = 22
-	normal.content_margin_top = 6
-	normal.content_margin_bottom = 6
+	b.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.58))
+	b.add_theme_constant_override("outline_size", 3)
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color(0.1, 0.095, 0.09, 0.24)
+	normal.border_color = Color(C_BRASS, 0.17)
+	normal.border_width_bottom = 1
+	normal.content_margin_left = 26
+	normal.content_margin_right = 26
+	normal.content_margin_top = 8
+	normal.content_margin_bottom = 8
 	var lit := StyleBoxFlat.new()
-	lit.bg_color = Color(0.9, 0.66, 0.3, 0.1)
+	lit.bg_color = Color(0.34, 0.25, 0.16, 0.38)
 	lit.border_color = C_FOCUS
-	lit.border_width_left = 4
-	lit.content_margin_left = 22
-	lit.content_margin_right = 22
-	lit.content_margin_top = 6
-	lit.content_margin_bottom = 6
+	lit.border_width_left = 3
+	lit.border_width_bottom = 1
+	lit.content_margin_left = 26
+	lit.content_margin_right = 26
+	lit.content_margin_top = 8
+	lit.content_margin_bottom = 8
 	b.add_theme_stylebox_override("normal", normal)
 	b.add_theme_stylebox_override("hover", lit)
 	b.add_theme_stylebox_override("focus", lit)
 	b.add_theme_stylebox_override("pressed", lit)
+	b.add_theme_stylebox_override("hover_pressed", lit)
 	b.pressed.connect(func():
 		Sfx.play_ui("lockon", -6.0)
 		on_press.call_deferred())   # deferred: a page switch frees this very button
@@ -342,10 +360,11 @@ func _show(page: String, focus_on := "") -> void:
 	_controls.visible = page == "controls"
 	_title_shade.visible = _root_page == "title"
 	_pause_shade.visible = _root_page == "pause"
-	_heading.add_theme_font_size_override("font_size", 96 if page == "title" else 64)
+	_heading.add_theme_font_size_override("font_size", 112 if page == "title" else 82)
 	var first: Button
 	match page:
 		"title":
+			_eyebrow.text = "A SHINOBI DUEL   /   THE MOON GATE"
 			_heading.text = "DANKIRO"
 			_subheading.text = "Sojin, the Twin Fang  ·  Warden of the Moon Gate"
 			first = _button("Start fight", func(): start_pressed.emit())
@@ -355,16 +374,18 @@ func _show(page: String, focus_on := "") -> void:
 			if Game.start_phase > 1:
 				_note.text = "The fight starts in phase %d (Options)." % Game.start_phase
 		"pause":
+			_eyebrow.text = "THE FIGHT AWAITS"
 			_heading.text = "Paused"
-			_subheading.text = ""
+			_subheading.text = "Sojin, the Twin Fang"
 			first = _button("Resume", func(): resume_pressed.emit())
 			_button("Restart fight", func(): restart_pressed.emit())
 			_button("Options", func(): _show("options"))
 			_button("Controls", func(): _show("controls"))
 			_button("Quit to title", func(): title_pressed.emit())
 		"options":
+			_eyebrow.text = "PREFERENCES   /   DANKIRO"
 			_heading.text = "Options"
-			_subheading.text = ""
+			_subheading.text = "Shape the encounter"
 			var later := "" if _root_page == "title" else " Takes effect when you restart the fight."
 			first = _option("Starting phase", ["1", "2", "3"],
 				func(): return Game.start_phase - 1,
@@ -379,10 +400,11 @@ func _show(page: String, focus_on := "") -> void:
 				"F3 toggles it during a fight.")
 			_button("Back", func(): back())
 		"controls":
+			_eyebrow.text = "FIELD GUIDE   /   DANKIRO"
 			_heading.text = "Controls"
-			_subheading.text = ""
+			_subheading.text = "Learn the rhythm of the fight"
 			first = _button("Back", func(): back())
-	_column.offset_top = 170 if page == "title" else 150
+	_column.offset_top = 142
 	for c in _buttons.get_children():
 		if focus_on != "" and c is Button and (c as Button).text == focus_on:
 			first = c

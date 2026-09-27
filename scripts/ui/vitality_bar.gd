@@ -33,9 +33,13 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	var w := size.x
 	var h := size.y
-	draw_rect(Rect2(Vector2(-3, -3), Vector2(w + 6, h + 6)), Color(0, 0, 0, 0.6))
-	draw_rect(Rect2(Vector2(-3, -3), Vector2(w + 6, h + 6)), Color(0.55, 0.47, 0.33, 0.55), false, 1.5)
-	draw_rect(Rect2(Vector2.ZERO, Vector2(w, h)), Color(0.06, 0.05, 0.05, 0.85))
-	draw_rect(Rect2(Vector2.ZERO, Vector2(w * chip, h)), Color(0.9, 0.82, 0.7, 0.8))
+	var frame := Rect2(Vector2(-4, -4), Vector2(w + 8, h + 8))
+	draw_rect(frame, Color(0.015, 0.014, 0.015, 0.78))
+	draw_rect(frame, Color(0.55, 0.43, 0.31, 0.62), false, 1.0)
+	draw_rect(Rect2(Vector2.ZERO, size), Color(0.12, 0.105, 0.1, 0.95))
+	draw_rect(Rect2(Vector2.ZERO, Vector2(w * chip, h)), Color(0.86, 0.76, 0.59, 0.86))
 	draw_rect(Rect2(Vector2.ZERO, Vector2(w * ratio, h)), fill_color)
-	draw_rect(Rect2(Vector2.ZERO, Vector2(w * ratio, h * 0.3)), Color(1, 1, 1, 0.15))
+	draw_line(Vector2(0, 1), Vector2(w * ratio, 1), Color(1.0, 0.7, 0.5, 0.48), 1.0)
+	for i in range(1, 4):
+		var x := w * float(i) / 4.0
+		draw_line(Vector2(x, 0), Vector2(x, h), Color(0.04, 0.035, 0.035, 0.5), 1.0)
