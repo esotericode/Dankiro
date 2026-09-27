@@ -44,6 +44,12 @@ REPOS = {
         name="Kenney Starter Kit 3D Platformer", by="Kenney (kenney.nl)",
         link="https://github.com/KenneyNL/Starter-Kit-3D-Platformer", license="CC0 1.0",
         raw="https://raw.githubusercontent.com/KenneyNL/Starter-Kit-3D-Platformer/3fa8a04b1c01ab23db43123d4ce814a34c3fc7f0/sounds/"),
+    "kenney_rpg": dict(
+        name="Kenney RPG Audio (as bundled in UnityGladiators)", by="Kenney (kenney.nl)",
+        link="https://github.com/Reid910/UnityGladiators/tree/main/Assets/AssetPacks/kenney_rpg-audio",
+        license="CC0 1.0",
+        raw="https://raw.githubusercontent.com/Reid910/UnityGladiators/9e5528e8ff66dd2fc5c4a99a9ff5a93fd9465b6a/"
+            "Assets/AssetPacks/kenney_rpg-audio/Audio/"),
     "veloren": dict(
         name="Veloren (authors and licences from its assets/credits.ron)", by="",
         link="https://gitlab.com/veloren/veloren", license="see each file",
@@ -165,6 +171,12 @@ SOURCES = {
     "land_fps": ("kenney_fps", "land.ogg", None, None, None),
     "jump_a": ("kenney_fps", "jump_a.ogg", None, None, None),
     "land_plat": ("kenney_plat", "land.ogg", None, None, None),
+    **{"cloth_%d" % i: ("kenney_rpg", "cloth%d.ogg" % i, None, None, None) for i in (1, 2, 3, 4)},
+    **{"draw_knife_%d" % i: ("kenney_rpg", "drawKnife%d.ogg" % i, None, None, None) for i in (1, 2, 3)},
+    "knife_slice_1": ("kenney_rpg", "knifeSlice.ogg", None, None, None),
+    "knife_slice_2": ("kenney_rpg", "knifeSlice2.ogg", None, None, None),
+    "cloth_belt": ("kenney_rpg", "clothBelt.ogg", None, None, None),
+    **{"metal_pot_%d" % i: ("kenney_rpg", "metalPot%d.ogg" % i, None, None, None) for i in (1, 2, 3)},
     "fall_plat": ("kenney_plat", "fall.ogg", None, None, None),
     "break_plat": ("kenney_plat", "break.ogg", None, None, None),
     **{k: ("veloren", "abilities/%s.ogg" % k, "riccifl0w", CC_BY4, None)

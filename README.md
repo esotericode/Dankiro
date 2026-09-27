@@ -399,7 +399,7 @@ visuals was checked on frames rendered with Movie Maker.
 **Latest: new sound.** Every sound effect is rebuilt from real recordings instead of pure
 synthesis: CC0 and CC BY material (the Versilian Community Sample Library's anvil, brake drum,
 gongs, cymbals, bells and drums; freesound recordings from Sonic Pi's sample set; Kenney's
-footsteps; wind, fire, fuses and flares from Blanket, Minetest Game and Veloren), cut, pitched,
+footsteps, cloth, steel draws and knife slices; wind, fire, fuses and flares from Blanket, Minetest Game and Veloren), cut, pitched,
 filtered and layered with synthesized parts by `tools/gen_audio.py` (credits in
 `audio/CREDITS.md`).
 
@@ -644,7 +644,8 @@ and a settings menu.
   to render the kanji textures). All are SIL Open Font License 1.1, and the license texts are in
   `fonts/` and `textures/`.
 - Sounds: built by `tools/gen_audio.py` from recordings that are CC0 or public domain (the
-  Versilian Community Sample Library, Sonic Pi's freesound samples, Kenney, Blanket's wind and
+  Versilian Community Sample Library, Sonic Pi's freesound samples, Kenney (footsteps and RPG
+  Audio), Blanket's wind and
   fireplace, Minetest Game's fuse, flare and metal sounds) or CC BY (Minetest Game's fire by
   Dynamicell, CC BY 3.0, and Veloren's fire by riccifl0w, CC BY 4.0), all of them modified. The
   full list, with links and licences, is `audio/CREDITS.md`.

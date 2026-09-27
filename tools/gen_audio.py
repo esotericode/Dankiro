@@ -501,7 +501,8 @@ def block(i):
 def hit(i):
     """A blade cutting you: the hiss of the cut, a meaty slap, a thud, and something wet."""
     dur = 0.6
-    cut = slice_noise(0.14, 5400 - 350 * i, 1300, seed=60 + i) * 0.8
+    knife = decay(highpass(S("knife_slice_%d" % (1 + i % 2), dur=0.3), 1200), 0.05, 0.01)
+    cut = mix(slice_noise(0.14, 5400 - 350 * i, 1300, seed=60 + i) * 0.35, knife * 0.8)
     slap = decay(lowpass(repitch(S("cajon_slap", dur=0.3), 0.68 + 0.05 * i), 2400), 0.06)
     th = decay(S("heavy_kick", dur=0.27), 0.08) * 0.75
     wet = squelch(0.22, seed=65 + i) * 0.45
@@ -582,7 +583,7 @@ def build(only=None):
             out("jab_%d" % (i + 1), x, -15.5)
     if want("leap"):
         whoosh = fade(lowpass(repitch(S("dark_woosh", start=0.4, dur=1.6), 1.8), 2500), 0.02, 0.3)
-        x = mix(whoosh * 0.8, delay(repitch(S("swash"), 0.9), 0.02) * 0.6)
+        x = mix(whoosh * 0.8, delay(repitch(S("swash"), 0.9), 0.02) * 0.4, fade(S("cloth_2", dur=0.4), 0.0, 0.1) * 0.6)
         out("leap", x, -18.0)
     if want("flick"):
         out("flick", highpass(repitch(swoosh_pass(1), 1.7), 700), -18.0)
@@ -592,9 +593,9 @@ def build(only=None):
             whir = partials(0.18, 2600 + 180 * i, [1.0, 2.76], [0.05, 0.03], [0.25, 0.12], seed=310 + i)
             out("throw_%d" % (i + 1), mix(whip, whir * 0.5), -12.5)
     if want("draw"):
-        scrape = decay(highpass(S("cym_scrape", dur=0.5), 2200), 0.09, 0.04)
-        ting = decay(highpass(S("triangle_muted", dur=0.3), 1500), 0.05) * 0.25
-        out("draw", reverb(mix(scrape, delay(ting, 0.11)), 0.4, 0.1), -15.0)
+        steel = decay(highpass(S("draw_knife_1", dur=0.4), 1500), 0.1, 0.06)
+        ting = decay(highpass(S("triangle_muted", dur=0.3), 1500), 0.05) * 0.2
+        out("draw", reverb(mix(steel, delay(ting, 0.12)), 0.4, 0.1), -15.0)
 
     # --- the big moments
     if want("perilous"):
@@ -625,7 +626,8 @@ def build(only=None):
         th = mix(S("heavy_kick") * 0.8, lowpass(S("frame_1", dur=1.0), 700) * 0.6)
         out("guard_break", reverb(mix(sat(clang, 1.5), crash, th, dur=1.4), 1.0, 0.18, seed=230), -12.5)
     if want("deathblow"):
-        stab = mix(slice_noise(0.18, 6000, 1200, seed=240),
+        stab = mix(slice_noise(0.18, 6000, 1200, seed=240) * 0.5,
+                   decay(highpass(S("knife_slice_2", dur=0.4), 1000), 0.08, 0.01) * 0.8,
                    delay(decay(lowpass(repitch(S("cajon_slap"), 0.62), 2000), 0.08), 0.01) * 0.9,
                    delay(squelch(0.35, 241), 0.02) * 0.7)
         boom = mix(S("bd_boom") * 0.9, lowpass(S("timpani_lo", dur=2.5), 500) * 0.7, S("heavy_kick") * 0.6)
@@ -635,7 +637,7 @@ def build(only=None):
         x = mix(stab, boom, delay(shing, 0.03), low, dur=3.0)
         out("deathblow", reverb_st(x, 2.2, 0.3, bright=4500, seed=243), -12.0)
     if want("deathblow_pull"):
-        slide = decay(bandpass(repitch(S("cym_scrape", dur=1.0), 1.1), 1500, 9000), 0.3) * 0.5
+        slide = decay(bandpass(repitch(S("draw_knife_2", dur=0.45), 0.85), 900, 9000), 0.25, 0.05) * 0.7
         x = mix(slide, delay(squelch(0.4, 250), 0.05) * 0.8, splats(0.9, 9, seed=260, t0=0.12, t1=0.7) * 0.7,
                 slice_noise(0.25, 2000, 5000, seed=270) * 0.5)
         out("deathblow_pull", reverb(x, 0.8, 0.15, seed=271), -15.0)
@@ -660,12 +662,14 @@ def build(only=None):
         out("land", x, -13.5)
     if want("dodge"):
         for i in range(2):
-            cloth = highpass(repitch(S("swash"), 1.3 + 0.15 * i), 250)
+            cloth = mix(highpass(repitch(S("swash"), 1.3 + 0.15 * i), 250) * 0.6,
+                        fade(highpass(S("cloth_%d" % (2 + 2 * i), dur=0.3), 120), 0.0, 0.08))
             air = swing(0.3, 250, 1600, q=1.8, seed=330 + i, whistle=0.0, peak=0.3) * 0.5
             scuff = decay(bandpass(S("sand_step_%d" % (1 + i)), 300, 6000), 0.05) * 0.4
-            out("dodge_%d" % (i + 1), mix(cloth, air, delay(scuff, 0.02)), -18.0)
+            out("dodge_%d" % (i + 1), fade(mix(cloth, air, delay(scuff, 0.02)), 0.0, 0.1), -18.0)
     if want("jump"):
-        out("jump", mix(highpass(repitch(S("swash"), 1.6), 300) * 0.8,
+        out("jump", mix(highpass(repitch(S("swash"), 1.6), 300) * 0.5,
+                        fade(highpass(S("cloth_3", dur=0.25), 120), 0.0, 0.06) * 0.8,
                         decay(bandpass(S("sand_step_3"), 300, 6000), 0.04) * 0.4), -20.0)
     rattle = np.zeros(int(0.7 * SR))
     for k, (key, t, g) in enumerate([("metal_dug_1", 0.0, 1.0), ("metal_place_2", 0.05, 0.7),
@@ -673,7 +677,7 @@ def build(only=None):
         rattle = mix(rattle, delay(lowpass(S(key, dur=0.3), 7000), t) * g)
     if want("kneel"):
         x = mix(rattle * 0.6, delay(decay(lowpass(S("frame_muted"), 700), 0.08), 0.09),
-                repitch(S("swash"), 0.9) * 0.3)
+                fade(S("cloth_1", dur=0.5), 0.0, 0.1) * 0.5)
         out("kneel", reverb(x, 0.8, 0.15, seed=370), -15.0)
     if want("body_fall"):
         x = mix(S("impact_2") * 0.9, S("heavy_kick") * 0.8, delay(rattle, 0.02) * 0.5,

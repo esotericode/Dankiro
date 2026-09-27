@@ -12,6 +12,19 @@ them modified: trimmed, pitched, filtered, mixed with other sounds).
 - `fireplace.ogg`, by ezwa, Public domain, <https://soundbible.com/1543-Fireplace.html>
 - `wind.ogg`, by felix.blume (edited by Porrumentzio), CC0 1.0, <https://freesound.org/s/217506/>
 
+## Kenney RPG Audio (as bundled in UnityGladiators)
+
+By Kenney (kenney.nl), <https://github.com/Reid910/UnityGladiators/tree/main/Assets/AssetPacks/kenney_rpg-audio>. Licence: CC0 1.0.
+
+- `cloth1.ogg`, CC0 1.0
+- `cloth2.ogg`, CC0 1.0
+- `cloth3.ogg`, CC0 1.0
+- `cloth4.ogg`, CC0 1.0
+- `drawKnife1.ogg`, CC0 1.0
+- `drawKnife2.ogg`, CC0 1.0
+- `knifeSlice.ogg`, CC0 1.0
+- `knifeSlice2.ogg`, CC0 1.0
+
 ## Kenney Starter Kit 3D Platformer
 
 By Kenney (kenney.nl), <https://github.com/KenneyNL/Starter-Kit-3D-Platformer>. Licence: CC0 1.0.
@@ -96,7 +109,6 @@ By Versilian Studios and contributors, <https://github.com/sgossner/VCSL>. Licen
 - `Idiophones/Struck Idiophones/Hand Bells, Nepalese/HB_2.wav`, CC0 1.0
 - `Idiophones/Struck Idiophones/Mark Trees/Legacy/windchimes_desc1.wav`, CC0 1.0
 - `Idiophones/Struck Idiophones/Suspended Cymbal 1/susCymb1_hit_bell_fff1.wav`, CC0 1.0
-- `Idiophones/Struck Idiophones/Suspended Cymbal 1/susCymb1_scrape_1.wav`, CC0 1.0
 - `Idiophones/Struck Idiophones/Triangles/Legacy/1/triangle1_hit_mp_muted1.wav`, CC0 1.0
 - `Idiophones/Struck Idiophones/Tubular Bells 1/chimes_C3_f_rr1.wav`, CC0 1.0
 - `Idiophones/Struck Idiophones/Tubular Bells 1/chimes_C4_ff_rr2.wav`, CC0 1.0
