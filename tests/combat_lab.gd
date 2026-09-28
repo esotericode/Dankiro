@@ -1512,6 +1512,7 @@ func suite_escape() -> void:
 			boss.global_position = Vector3(0, 0, -10.8)
 			player.global_position = Vector3(0, 0, -8.4)
 			player.face_now(boss.global_position)
+			boss.face_now(player.global_position)
 		boss.passive = false
 		boss.cooldown = 99.0
 		boss._begin_action("reposition", boss.distance_to_opponent())

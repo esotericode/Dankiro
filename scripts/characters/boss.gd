@@ -518,11 +518,14 @@ func _mode_reposition(delta: float, d: float) -> Vector3:
 	var v_t := RUN * clampf((r - 2.2) / 1.3, 0.15, 1.0)       # close to you he backs off before he runs round
 	v_t = minf(v_t, sqrt(2.0 * 6.0 * remaining))              # easing off as he nears the spot
 	var want := _keep_off_wall(out * v_r + tangent * v_t)
-	if want.length() > RUN:
-		want = want.normalized() * RUN
+	# up close he backpedals, facing you, before he turns and runs
+	var close := r < 3.4
+	var cap := 2.6 if close else RUN
+	if want.length() > cap:
+		want = want.normalized() * cap
 	_move_vel = _move_vel.move_toward(want, MOVE_ACCEL * delta)
 	# he runs where he's going; once he's pulled up he turns to you
-	if _move_vel.length() > 1.8 and remaining > 0.3:
+	if not close and _move_vel.length() > 1.8 and remaining > 0.3:
 		turn_toward(global_position + _move_vel, 420.0, delta)
 	else:
 		turn_toward(opponent.global_position, 330.0, delta)
