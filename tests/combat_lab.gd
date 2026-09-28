@@ -1505,7 +1505,7 @@ func suite_escape() -> void:
 	# Running round you.
 	for sd in [11, 12, 13, 14, 15, 16]:
 		seed(sd)
-		var near_wall := sd >= 15
+		var near_wall: bool = int(sd) >= 15
 		await setup(2.4)
 		if near_wall:
 			# (both of you near the wall: he has to run round inside it)
