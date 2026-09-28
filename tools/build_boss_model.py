@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Builds Sojin's PS2-style model: models/boss.glb (skinned to the boss rig) and
+"""Builds the Twin Fang's PS2-style model: models/boss.glb (skinned to the boss rig) and
 models/boss_staff.glb (the twin-bladed staff, in weapon space), plus models/boss_hair.png.
 
     pip install bpy==4.5.9                      # Blender 4.5 LTS as a Python module (once)

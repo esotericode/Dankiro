@@ -3,8 +3,7 @@ extends RefCounted
 ## The Lore page's text (LoreSheet shows it, in type far too small to read). Kept verbatim,
 ## Markdown and all: LoreSheet turns its **bold** and *italics* into BBCode. It lives in a script
 ## rather than a text file so that exported builds carry it (Godot only exports resources).
-
-const TITLE := "The Chronicle of the Dried Root"
+## The page never names it: no title, just the text.
 
 const CHRONICLE := """The castle was called Nagatsuki, and the army consisted of four men carrying a ladder. Both accounts agree that a shinobi entered through the western storehouse at the hour of the ox, killed no guards, moved the ceremonial bell fourteen inches to the left, and departed with a piece of dried root. The bell was returned in the morning. The dried root was not. This is why the Arakawa household maintained a bell keeper for the next one hundred and nineteen years and a root keeper for one hundred and twenty, despite the fact that nobody could describe the root keeper's duties without first describing the bell.
 

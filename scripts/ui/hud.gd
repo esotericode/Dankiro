@@ -7,7 +7,6 @@ extends CanvasLayer
 ## Like Sekiro: his vitality and deathblow marks top left, his posture top centre, yours bottom
 ## centre, your vitality and the gourd bottom left.
 
-const BOSS_TITLE := "Warden of the Moon Gate"
 
 var player: Player
 var boss: Boss
@@ -207,7 +206,7 @@ func _build_debug() -> void:
 	_root.add_child(_debug_panel)
 
 
-## His name as the fight begins, like a film's title: the name, a line drawn out under it, his title.
+## His name as the fight begins, like a film's title: the name, and a line drawn out under it.
 func _build_namecard() -> void:
 	_namecard = Control.new()
 	_namecard.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -225,10 +224,6 @@ func _build_namecard() -> void:
 	_namecard_rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	UiTheme.place(_namecard_rule, Vector2(0, 0), Vector2(700, 104), Vector2(0, 1))
 	_namecard.add_child(_namecard_rule)
-	var sub := UiTheme.label(BOSS_TITLE.to_upper(), UiTheme.sans(400, 8), 17, Color(UiTheme.TEXT, 0.8),
-		HORIZONTAL_ALIGNMENT_CENTER)
-	UiTheme.place(sub, Vector2(0, 0), Vector2(0, 118), Vector2(1400, 34))
-	_namecard.add_child(sub)
 
 
 ## The 忍殺 (shinobi execution) splash for a deathblow: the brush kanji over a darkened screen.
@@ -462,7 +457,7 @@ func _update_debug() -> void:
 			player.spam_level, player.deflect_chain, player.heal_charges])
 	if boss:
 		var b_regen := boss.posture_regen * (0.3 + 0.7 * boss.hp / boss.max_hp)
-		lines.append("SOJIN  phase %d   lives %d/%d   %s %s   seq %s" % [boss.phase, boss.lives_left, Combat.BOSS_LIVES,
+		lines.append("TWIN FANG  phase %d   lives %d/%d   %s %s   seq %s" % [boss.phase, boss.lives_left, Combat.BOSS_LIVES,
 			Boss.S.keys()[boss.state], boss._mode, boss._seq_name if boss._seq_name != "" else "-"])
 		lines.append("       hp %.0f/%.0f   posture %.0f/%.0f (-%.1f/s after %.1f s)" % [boss.hp, boss.max_hp,
 			boss.posture, boss.max_posture, b_regen, boss.posture_delay])

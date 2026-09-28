@@ -1,6 +1,6 @@
 class_name Boss
 extends Combatant
-## Sojin, the Twin Fang. Staff-and-blades duelist with Sekiro-style behaviour:
+## The Twin Fang. Staff-and-blades duelist with Sekiro-style behaviour:
 ##  * Attack strings with mix-up enders (thrust / sweep / delayed overhead).
 ##  * Guards most attacks from neutral; blocked hits build HIS posture; mashing gets parried
 ##    and punished with a counter.
@@ -104,7 +104,7 @@ var state: int = S.INTRO
 var state_time := 0.0
 var lives_left := Combat.BOSS_LIVES
 var phase := 1
-var display_name := "Sojin, the Twin Fang"
+var display_name := "The Twin Fang"
 var attack_speed := 1.0
 var aggression := 1.0
 

@@ -126,7 +126,7 @@ deflecting is the real answer. **[tested]**
   sword glances off the flames), so there's no pressure you could keep up, and letting it
   recover would take back what you'd built for surviving it. It recovers again, after the usual
   delay, once he hands back into his spent window. **[tested]**
-- Bosses have several lives (Sekiro's deathblow marks). Sojin has three, one per phase.
+- Bosses have several lives (Sekiro's deathblow marks). The Twin Fang has three, one per phase.
 
 ## 5. Readability (why the fight is fair)
 

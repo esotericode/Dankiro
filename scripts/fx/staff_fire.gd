@@ -1,6 +1,6 @@
 class_name StaffFire
 extends Node3D
-## Flames on both blades of Sojin's staff (phase 2 on). Each blade has a level: 0 out,
+## Flames on both blades of the Twin Fang's staff (phase 2 on). Each blade has a level: 0 out,
 ## SMOULDER (his look between fire moves), 1 ablaze (the Inferno).
 ##
 ## Smouldering is kept low so his strikes stay easy to read: small licks that cling to the

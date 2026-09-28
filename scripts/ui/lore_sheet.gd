@@ -1,9 +1,9 @@
 class_name LoreSheet
 extends VBoxContainer
-## The menus' Lore page, beside the menu column: the Chronicle of the Dried Root (LoreText),
-## complete and unabridged, under a proper title, and set in type so small it can barely be
-## read, if at all: a slab of ant-sized text. That's the joke, so keep it that way. Like the
-## controls sheet it has no box of its own; the menu puts a blurred backdrop behind it.
+## The menus' Lore page, beside the menu column: the whole chronicle (LoreText) and nothing
+## else, no title, set in type so small it can barely be read, if at all: a slab of ant-sized
+## text. That's the joke, so keep it that way. Like the controls sheet it has no box of its own;
+## the menu puts a blurred backdrop behind it.
 
 const BODY_SIZE := 4          ## px on the 1920x1080 canvas
 const WIDTH := 1180.0
@@ -14,18 +14,6 @@ var body: RichTextLabel
 func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_theme_constant_override("separation", 0)
-	var title := UiTheme.label(LoreText.TITLE, UiTheme.serif(500), 52)
-	title.vertical_alignment = VERTICAL_ALIGNMENT_TOP
-	add_child(title)
-	add_child(UiTheme.label("COMPLETE AND UNABRIDGED", UiTheme.sans(400, 6), 15, UiTheme.DIM))
-	add_child(_gap(26))
-	var rule := ColorRect.new()
-	rule.color = UiTheme.ACCENT
-	rule.custom_minimum_size = Vector2(44, 2)
-	rule.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(rule)
-	add_child(_gap(30))
 	body = RichTextLabel.new()
 	body.bbcode_enabled = true
 	body.fit_content = true
@@ -54,9 +42,3 @@ static func bbcode(md: String) -> String:
 	s = RegEx.create_from_string("\\*([^*\\n]+?)\\*").sub(s, "[i]$1[/i]", true)
 	return s
 
-
-func _gap(h: float) -> Control:
-	var c := Control.new()
-	c.custom_minimum_size = Vector2(0, h)
-	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	return c

@@ -1,6 +1,6 @@
 class_name Inferno
 extends Node3D
-## Sojin's fire move (phase 2 on; he opens phase 2 with it). The boss hands control over
+## The Twin Fang's fire move (phase 2 on; he opens phase 2 with it). The boss hands control over
 ## (Boss.S.INFERNO) and gets it back when the fire is spent (b_fire_spent, his punish window).
 ##
 ##  1. The tell: he leaps to the middle of the arena and drives the staff into the stones

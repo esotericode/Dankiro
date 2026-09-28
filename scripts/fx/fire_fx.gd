@@ -1,6 +1,6 @@
 class_name FireFx
 extends RefCounted
-## Fire for Sojin (his burning staff from phase 2 on, and the Inferno): shaders, materials,
+## Fire for the Twin Fang (his burning staff from phase 2 on, and the Inferno): shaders, materials,
 ## meshes and one-shot bursts.
 ##
 ## Every flame is drawn by a shader rather than a painted sprite, all of them reading one small

@@ -1,14 +1,14 @@
 # Dankiro
 
 A Sekiro-inspired boss fight prototype for **Godot 4.7** (Forward+, tested on 4.7.2).
-One arena, one duel: you (a shinobi with a katana) against **Sojin, the Twin Fang**, an
+One arena, one duel: you (a shinobi with a katana) against **the Twin Fang**, an
 armoured warrior with a 3.2 m staff that has a curved blade on each end.
 
 The combat is tuned against a written spec of how Sekiro actually works:
 [docs/SEKIRO_MECHANICS.md](docs/SEKIRO_MECHANICS.md). An automated combat lab checks the game
 against it (see [Testing](#testing)).
 
-![Deflecting Sojin's Rising Fang](docs/screenshot_deflect.png)
+![Deflecting the Twin Fang's Rising Fang](docs/screenshot_deflect.png)
 
 *In-engine (Godot 4.7.2, rendered with Movie Maker): a perfect deflect of his Rising Fang.
 The boss up close: [docs/boss_model.png](docs/boss_model.png), and
@@ -58,9 +58,9 @@ The input map is registered in code (`scripts/autoload/game_input.gd`); actions 
 - **Pause menu** (Esc / Start): Resume, Restart fight, Options, Controls, Lore, Quit to title.
   After a death or a victory, Enter / (A) goes straight back into the fight and Esc / (Start)
   goes to the title.
-- **Lore**: *The Chronicle of the Dried Root*, complete and unabridged, under a proper title,
-  in 4 px type (on the 1080p canvas): the whole thing fits on one screen and can barely be read,
-  if at all. That's the point. The text is `LoreText.CHRONICLE` (`scripts/ui/lore_text.gd`).
+- **Lore**: a long chronicle, all of it, with no title, in 4 px type (on the 1080p canvas):
+  the whole thing fits on one screen and can barely be read, if at all. That's the point. The
+  text is `LoreText.CHRONICLE` (`scripts/ui/lore_text.gd`).
 - **Options** (saved to `user://settings.cfg`):
   - **Starting phase** (1, 2 or 3): start the fight in a later phase, for testing. The
     earlier lives count as taken. It applies when a fight starts.
@@ -306,7 +306,7 @@ godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--v
 | `inferno` | Phase 2 opens with the Inferno (starting there, or rising into it); he lands in the middle of the arena; the blast misses you outside its radius, knocks you down and throws you out of it inside, and walking away locked on from right beside him gets clear in time (stepping through it doesn't); jumping each arm clears all four from 4 to 14 m out, the beat holds (1.5, 1.5, 1.0 s) wherever you stand and while you walk round him; standing, guarding and dodging get burned by every arm and by the eruption; jumping on the beat gets caught by the fourth; one jump timed to the eruption clears it (in the air you're clear), earlier or later burns (it prints the window), and it rolls outward, reaching the wall a moment after it bursts beside him; after a burn the next arm, or the eruption, waits until you can jump it. Phase 3: jumping each arm, each wave and the eruption clears them all from 4 to 14 m out, each wave comes on the half-beat between two arms and there's never less than 0.9 s between two things to jump, still so walking round him or backing away; watching only the arms, a wave burns you; after any burn nothing reaches you for 2 s; it prints how early or late a jump over a wave may be; phase 2 has no waves. The ring stops you and burns; your sword glances off him; his posture holds through it; he's open afterwards; he uses it again once it's off cooldown |
 | `soak` | A full fight against the real AI (charges, repositioning, volleys) with a bot player that reacts to the blade and to incoming shuriken: deflects, blocks, posture breaks, deathblows (each signalling 忍殺 once, the last as the final one), the next phase and the Inferno it opens with |
 
-The run exits with code 0 when every check passes (843 checks, including the soak). It also
+The run exits with code 0 when every check passes (859 checks, including the soak). It also
 fails if the engine or a script reports any error during the run (it listens through a
 `Logger`), so runtime errors can't hide behind passing gameplay checks.
 
@@ -442,7 +442,7 @@ How the boss model is built (PS2-style: ~25k triangles, one 2048 px atlas with b
 
 ## Status
 
-This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (843 checks, including
+This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (859 checks, including
 a full-fight soak), the game boots and runs with no script errors, and every change to the
 visuals was checked on frames rendered with Movie Maker.
 
@@ -698,7 +698,7 @@ copy of phase two for now.
 - **Camera:** the lock-on camera sits a little higher and further right, so his arms and staff
   show above and beside your character instead of behind it.
 
-**Before that: Sojin's PS2-style model.** The boss was a set of flat-coloured primitives bolted to
+**Before that: the boss's PS2-style model.** The boss was a set of flat-coloured primitives bolted to
 the joints. He is now a skinned, textured model built by a Blender script: black-lacquered
 armour with scarlet lacing, a suji-bachi helmet with gilt kuwagata and a white horsehair mane,
 a snarling red oni mask with ember eyes, and a rebuilt Twin Fang staff with tempered, glowing

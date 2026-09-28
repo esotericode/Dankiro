@@ -16,7 +16,7 @@ signal quit_pressed
 
 const COLUMN_X := 136.0
 const ITEM_W := 560.0
-const SUBTITLE := "Sojin, the Twin Fang  \u00b7  Warden of the Moon Gate"
+const SUBTITLE := "The Twin Fang"
 
 ## The hint bar's items for each page: [keyboard keys, gamepad buttons, what they do].
 const MOVE := [["Up", "Down"], ["D-pad"], "Move"]
@@ -133,7 +133,7 @@ func _build() -> void:
 	UiTheme.place(_controls, Vector2(0, 0), Vector2(566, 128), Vector2(1284, 760))
 	_root.add_child(_controls)
 	_lore = LoreSheet.new()
-	UiTheme.place(_lore, Vector2(0, 0), Vector2(566, 128), Vector2(LoreSheet.WIDTH, 820))
+	UiTheme.place(_lore, Vector2(0, 0), Vector2(566, 176), Vector2(LoreSheet.WIDTH, 780))   # (level with the heading)
 	_root.add_child(_lore)
 
 
