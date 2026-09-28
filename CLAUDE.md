@@ -25,11 +25,11 @@ the script backs off and retries, so let it run. For another version, set
 
 ## Testing in the engine
 
-- Combat lab (headless, about 6 min for everything, exits 0 when all checks pass; any engine or
+- Combat lab (headless, about 8 min for everything, exits 0 when all checks pass; any engine or
   script error during the run also fails it):
   `godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--verbose]`
   Suites: reach, tells, deflect, flurry, punish, loop, phases, menu, camera, ribbons, spam, mikiri, dodge,
-  sweep, shuriken, attack, cancel, hitstop, deathblow, inferno, tempest, escape, soak. `camera` loads the real arena (main.tscn), like
+  sweep, shuriken, leap, circle, attack, cancel, hitstop, deathblow, inferno, tempest, escape, soak. `camera` loads the real arena (main.tscn), like
   `menu`. `menu` drives the real menus with simulated gamepad input
   (`Input.parse_input_event`); it sets `Game.save_enabled = false` so tests never overwrite the
   saved options.
@@ -274,3 +274,9 @@ godot --headless --editor --quit               # import
   `reposition [wide]`, `pummel [phase] [seed] [escape]`.
 - The combat camera frames deathblows itself (`CombatCamera.play_deathblow`, called by the
   player): it swings beside the fighters while the kill plays out, then eases back.
+- A leap (a clip with `root_scale_window`, the jump's travel) steers its landing in the air:
+  `Boss._leap_scale` stretches or shortens what's left of the jump to end `LEAP_STRIKE` from where
+  you'll be when he comes down. Keep every blow's tracking (`track`) going until just before it
+  lands: a window that ends early lets a player circling him slip a hand's width out from under
+  it, and the staff passes through them on screen, touching nothing. Lab suites `leap` and
+  `circle`; the capture shot `attack <clip> <distance> circle` films it.

@@ -705,8 +705,10 @@ def build_boss():
     keys.append(key(0.86, {"chest": [-28, 0, 0], "root": [0, 0, -0.75]}, ease="out_quad"))
     keys.append(key(1.25, {"chest": [-22, 0, 0], "hips_pos": [0, 0.90, -0.14]}))
     keys.append({"t": 1.62, "pose": "b_stance", "set": {"root": [0, 0, -0.78]}, "ease": "inout_sine"})
+    # (He turns with you until the blade is almost on you: running round him, you'd slip out
+    # from under the chop by a hand's width, the staff passing through your arm on screen.)
     clip("b_combo_3", "boss", keys, chain=1.3, close=[0.20, 0.62, 1.9, 4.2], chain_in=0.14, vuln=[0.88, 1.5],
-         track=[[0.0, 0.56, 380], [0.56, 0.66, 170]],
+         track=[[0.0, 0.56, 380], [0.56, 0.70, 200]],
          hits=[{"from": 0.62, "to": 0.75, "blade": "upper", "kind": "normal", "dmg": 34, "posture_block": 30,
                 "posture_deflect": 10, "boss_posture": 16, "dir": "high", "final": True}],
          events=[{"t": 0.60, "type": "sfx", "name": "swing_heavy"}, {"t": 0.74, "type": "ground_impact", "blade": "upper"}])
@@ -902,7 +904,9 @@ def build_boss():
     events.append({"t": round(t1 + 0.26, 3), "type": "sfx", "name": "swing_heavy"})
     clip("b_whirl", "boss", keys, chain=round(t1 + 0.76, 3), close=[0.20, round(t1 + 0.06, 3), 1.6, 3.0],
          vuln=[round(t1 + 0.66, 3), round(t1 + 1.08, 3)],
-         track=[[0.0, T0 - 0.04, 400], [T0 - 0.04, round(t1 + 0.06, 3), 160], [round(t1 + 0.06, 3), round(t1 + 0.26, 3), 260]],
+         # (200 deg/s through the windmill: fast enough to follow you running round him at arm's
+         # length, where 160 let the chops fall behind you)
+         track=[[0.0, T0 - 0.04, 400], [T0 - 0.04, round(t1 + 0.06, 3), 200], [round(t1 + 0.06, 3), round(t1 + 0.26, 3), 260]],
          hits=hits, events=events)
 
     # ---- Leaping cleave: gap closer (root motion is scaled by the AI to land on target)
@@ -935,8 +939,10 @@ def build_boss():
     keys.append(key(1.10, {"hips_pos": [0, 0.80, -0.16], "chest": [-30, 0, 0]}, ease="out_quad"))
     keys.append(key(1.45, {"chest": [-24, 0, 0], "hips_pos": [0, 0.84, -0.12]}))
     keys.append({"t": 1.85, "pose": "b_stance", "set": {"root": [0, 0, -4.45]}, "ease": "inout_sine"})
-    clip("b_leap", "boss", keys, chain=1.6, vuln=[1.0, 1.75], root_scale_window=[0.3, 0.97], nominal_reach=4.4,
-         track=[[0.0, 0.44, 420], [0.44, 0.84, 220]],
+    # He steers the jump's length in the air (Boss._leap_scale) and keeps turning with you until
+    # the staff is nearly down, so circling round him doesn't slip you out from under it.
+    clip("b_leap", "boss", keys, chain=1.6, vuln=[1.0, 1.75], root_scale_window=[0.3, 0.97],
+         track=[[0.0, 0.44, 420], [0.44, 0.92, 220]],
          hits=[{"from": 0.86, "to": 0.98, "blade": "upper", "kind": "normal", "dmg": 36, "posture_block": 32,
                 "posture_deflect": 10, "boss_posture": 16, "dir": "high", "final": True}],
          events=[{"t": 0.34, "type": "sfx", "name": "leap"}, {"t": 0.86, "type": "sfx", "name": "swing_heavy"},
@@ -1477,7 +1483,7 @@ def build_boss():
          track=[[0.0, 0.62, 480], [0.62, TT["b1"] + 0.06, 240],
                 [TT["b1"] + 0.17, TT["b2"] + 0.03, 360], [TT["b2"] + 0.16, TT["b3"] + 0.03, 420],
                 [TT["b3"] + 0.16, TT["b4"] + 0.03, 360], [TT["b4"] + 0.16, TT["b5"] + 0.02, 360],
-                [TT["b5"] + 0.14, TT["b6"] - 0.04, 420], [TT["b6"] - 0.04, TT["b6"] + 0.04, 200]],
+                [TT["b5"] + 0.14, TT["b6"] - 0.04, 420], [TT["b6"] - 0.04, TT["b6"] + 0.09, 240]],   # (with you till it lands)
          hits=hits, events=events)
 
     # =========================================================== REACTIONS

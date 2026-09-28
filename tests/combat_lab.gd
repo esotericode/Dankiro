@@ -56,7 +56,7 @@ func _ready() -> void:
 		if not a.begins_with("--"):
 			suites.append(a)
 	if suites.is_empty():
-		suites = ["reach", "tells", "deflect", "flurry", "tempest", "punish", "escape", "loop", "phases", "menu", "camera", "ribbons", "spam", "mikiri", "dodge", "sweep", "shuriken", "attack", "cancel", "hitstop", "deathblow", "inferno", "soak"]
+		suites = ["reach", "tells", "deflect", "flurry", "tempest", "punish", "escape", "loop", "phases", "menu", "camera", "ribbons", "spam", "mikiri", "dodge", "sweep", "shuriken", "leap", "circle", "attack", "cancel", "hitstop", "deathblow", "inferno", "soak"]
 	await get_tree().physics_frame
 	for s in suites:
 		print("\n=== suite: %s ===" % s)
@@ -207,7 +207,7 @@ const BOSS_ATTACKS := {
 	# far end of the range the AI uses the attack from (Boss.SEQUENCES) plus a little.
 	"b_combo_1": [1.0, 3.4], "b_combo_2": [1.0, 3.4], "b_combo_3": [1.0, 3.4], "b_backhand": [1.0, 3.4],
 	"b_jab": [1.0, 3.5], "b_whirl": [1.0, 3.0], "b_parry_counter": [1.0, 3.0], "b_thrust": [1.0, 5.6],
-	"b_sweep": [1.0, 3.4], "b_leap": [4.8, 8.0], "b_dash_cut": [1.3, 3.8], "b_tempest": [1.0, 4.4],
+	"b_sweep": [1.0, 3.4], "b_leap": [4.8, 9.4], "b_dash_cut": [1.3, 3.8], "b_tempest": [1.0, 4.4],
 }
 
 
@@ -218,7 +218,7 @@ func suite_reach() -> void:
 		var rng: Array = BOSS_ATTACKS[clip]
 		var n_hits: int = AnimLibrary.get_clip(clip).hits.size()
 		var row := PackedStringArray()
-		var dists: Array = [1.0, 1.3, 1.6, 2.0, 2.4, 2.8, 3.2, 3.8, 4.5, 5.4] if clip != "b_leap" else [4.8, 5.5, 6.5, 8.0]
+		var dists: Array = [1.0, 1.3, 1.6, 2.0, 2.4, 2.8, 3.2, 3.8, 4.5, 5.4] if clip != "b_leap" else [4.8, 5.5, 6.5, 8.0, 9.4]
 		for d in dists:
 			if d < float(rng[0]) - 0.01 or d > float(rng[1]) + 0.01:
 				continue
@@ -233,6 +233,114 @@ func suite_reach() -> void:
 				check(got.size() == n_hits, "%s at %.1f m, %+.0f°: %d of %d hit windows connected" % [clip, d, ang, got.size(), n_hits])
 		print("  %-16s %s" % [clip, " ".join(row)])
 
+
+
+## The leaping cleave comes down on you however you move while he's in the air. He steers the
+## jump's length (Boss._leap_scale; it used to be fixed at take-off, so moving left him slamming
+## the ground beside you, the staff passing through your arm or sword on screen without touching
+## you) and turns with you until the staff is nearly down. Standing, walking in or away, running
+## in, strafing, circling him walking or running, guarding: each meets the staff, from right in
+## front of him to as far as he leaps from. A side step as the staff comes down still gets you
+## out from under it; an early one, he follows.
+func suite_leap() -> void:
+	for how in ["stand", "walk in", "run in", "walk away", "strafe", "circle", "run circle", "circle guarding"]:
+		var row := PackedStringArray()
+		# (walking away or strafing in a straight line from 9.4 m takes you past his longest leap)
+		var dists: Array = [2.5, 4.6, 6.5] if how in ["walk away", "strafe"] else [2.5, 4.6, 6.5, 9.4]
+		for d in dists:
+			var res := await _leap_at(float(d), str(how))
+			row.append("%.1fm:%s" % [float(d), res_name(res)])
+			check(res == Combat.RESULT_HIT or res == Combat.RESULT_BLOCK or res == Combat.RESULT_DEFLECT,
+				"the leap comes down on a player who's %s, from %.1f m (%s)" % [how, float(d), res_name(res)])
+		print("  %-16s %s" % [how, " ".join(row)])
+	var row := PackedStringArray()
+	for step_at in [0.6, 0.8]:
+		for d in [2.5, 6.5]:
+			var res := await _leap_at(float(d), "step@%.2f" % step_at)
+			row.append("%.2fs %.1fm:%s" % [step_at, float(d), res_name(res)])
+			if step_at < 0.7:
+				check(res == Combat.RESULT_HIT, "a side step %.2f s into the leap is too early: he follows you (%.1f m, %s)" % [
+					step_at, float(d), res_name(res)])
+			else:
+				check(res == Combat.RESULT_NONE, "a side step %.2f s into the leap, as the staff comes down, gets out from under it (%.1f m, %s)" % [
+					step_at, float(d), res_name(res)])
+	print("  side step        %s" % " ".join(row))
+
+
+## One leap at a player `d` metres away who's doing `how` while he's in the air ("stand", "walk
+## in", "run circle", "step@0.80" for a side step then...); the first result.
+func _leap_at(d: float, how: String) -> int:
+	await setup(d)
+	player.locked = not how.begins_with("run")          # locked on you walk, else you run
+	var mv := Vector2.ZERO
+	if how.ends_with(" in"):
+		mv = Vector2(0, -1)
+	elif how == "walk away":
+		mv = Vector2(0, 1)
+	elif how == "strafe" or how.contains("circle"):
+		mv = Vector2(1, 0)
+	if how.contains("guarding"):
+		player.press_guard(Game.clock)
+	var t0 := boss_attack("b_leap")
+	player.bot_move = mv
+	if how.begins_with("step@"):
+		var st := t0 + float(how.substr(5))
+		at(st, func():
+			player.bot_move = Vector2(1, 0)
+			player.press_action("dodge", st))
+		at(st + 0.05, func():
+			player.release_dodge()
+			player.bot_move = Vector2.ZERO)
+	var t_end := Game.clock + 2.5
+	while Game.clock < t_end and boss.state == Boss.S.ATTACK and boss.anim.clip != null and boss.anim.clip.name == "b_leap":
+		if how.contains("circle"):     # the lock-on camera turns with you, so right circles him
+			player.camera_yaw = Combat.yaw_of(Combat.flat(boss.global_position - player.global_position))
+		await ticks(1)
+	player.bot_move = Vector2.ZERO
+	await run_until_boss_done(1.0)
+	return first_result()
+
+
+## No attack slips past a player circling him: walking round him locked on or running round him,
+## either way, every blow of every attack still comes down on you (he turns with you until the
+## blade is nearly there). A blow whose tracking ended too early fell a hand's width beside you,
+## through your arm or sword on screen, touching nothing. (The leap has a suite of its own.)
+func suite_circle() -> void:
+	for clip in BOSS_ATTACKS:
+		if clip == "b_leap":
+			continue
+		var n_hits: int = AnimLibrary.get_clip(clip).hits.size()
+		var rng: Array = BOSS_ATTACKS[clip]
+		var row := PackedStringArray()
+		for how in ["walk right", "walk left", "run right", "run left"]:
+			for d in [1.6, 2.4, 3.2]:
+				if float(d) < float(rng[0]) or float(d) > float(rng[1]):
+					continue
+				var got := await _circled(clip, float(d), str(how))
+				row.append("%s %.1fm:%d/%d" % [str(how).replace("walk ", "w").replace("run ", "r"), float(d), got, n_hits])
+				check(got == n_hits, "%s, circling him (%s) from %.1f m: %d of %d blows land" % [clip, how, float(d),
+					got, n_hits])
+		print("  %-16s %s" % [clip, " ".join(row)])
+
+
+## Plays `clip` at a player `d` metres away who circles him ("walk right": locked on, walking to
+## the right; "run left": not locked on, running to the left), the camera turning with them to
+## keep him ahead; how many of its hit windows connected.
+func _circled(clip: String, d: float, how: String) -> int:
+	await setup(d)
+	player.locked = how.begins_with("walk")
+	boss_attack(clip)
+	player.bot_move = Vector2(1, 0) if how.ends_with("right") else Vector2(-1, 0)
+	var t_end := Game.clock + AnimLibrary.get_clip(clip).length + 0.5
+	while Game.clock < t_end and boss.state == Boss.S.ATTACK and boss.anim.clip != null and boss.anim.clip.name == clip:
+		player.camera_yaw = Combat.yaw_of(Combat.flat(boss.global_position - player.global_position))
+		await ticks(1)
+	player.bot_move = Vector2.ZERO
+	await run_until_boss_done(1.0)
+	var got := {}
+	for r in _results:
+		got[int((r["info"] as Dictionary).get("index", -1))] = true
+	return got.size()
 
 ## How each attack reads from where you stand: when its blows land (seconds from the start of
 ## the attack) at a few distances. Every blow must land when the blade actually reaches you,
@@ -2536,5 +2644,3 @@ func _blade_time_to_contact(only := "") -> float:
 
 func _first_hit(c: ClipData) -> float:
 	return float(c.hits[0]["from"])
-
-

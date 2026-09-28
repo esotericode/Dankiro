@@ -32,6 +32,7 @@ const MOVE_ACCEL := 9.0              ## m/s^2: how fast his run builds, turns an
 const WALK_ACCEL := 5.0              ## ...and his walking and strafing (no instant starts or reversals)
 const CHARGE_ACCEL := 12.0
 const ARENA_RADIUS := 13.5
+const LEAP_STRIKE := 2.0              ## how far from you a leap lands (its slam reaches ~1.2 to 2.4 m)
 const DEATHBLOW_WINDOW_END := 2.75   ## b_posture_break time when he starts rising
 const INFERNO_COOLDOWN := 40.0       ## seconds from the end of one Inferno until he may use it again
 const INFERNO_PHASE3 := 18.0         ## ...and after rising into phase 3 (which has no opener)
@@ -47,7 +48,7 @@ const SEQUENCES := {
 	"whirl": {"steps": [["b_whirl", 1.0]], "range": [0.0, 2.8], "weight": 1.2},
 	"thrust": {"steps": [["b_thrust", 1.0]], "range": [2.8, 5.6], "weight": 1.8},
 	"sweep": {"steps": [["b_sweep", 1.0]], "range": [0.0, 3.4], "weight": 2.0},
-	"leap": {"steps": [["b_leap", 1.0], ["b_combo_2", 0.35]], "range": [4.6, 11.0], "weight": 2.6},
+	"leap": {"steps": [["b_leap", 1.0], ["b_combo_2", 0.35]], "range": [4.6, 9.4], "weight": 2.6},
 	"retreat": {"steps": [["b_backstep", 1.0], ["b_thrust|b_leap", 0.9]], "range": [0.0, 2.0], "weight": 0.9},
 	"shuriken_4": {"steps": [["b_shuriken_4", 1.0], ["b_leap|b_thrust", 0.4]], "range": [0.0, 4.5], "weight": 1.1},
 	"shuriken_5": {"steps": [["b_shuriken_5", 1.0], ["b_leap", 0.35]], "range": [0.0, 4.5], "weight": 0.8},
@@ -691,9 +692,26 @@ func _play_attack(clip_name: String, start: float) -> void:
 	anim.play(clip_name, 0.14 if start <= 0.0 else 0.1, attack_speed, start)
 	reset_hits()
 	root_scale = 1.0
-	if anim.clip.raw.has("nominal_reach") and opponent != null:
-		var reach := float(anim.clip.raw["nominal_reach"])
-		root_scale = clampf((distance_to_opponent() - 2.1) / reach, 0.35, 1.7)
+	if anim.clip.raw.has("root_scale_window") and opponent != null:
+		root_scale = _leap_scale(anim.clip, start)
+
+
+## How much of a leap's travel (its clip's root motion, unscaled) is still to come at time `t`.
+func _leap_left(c: ClipData, t: float) -> float:
+	var w: Array = c.raw["root_scale_window"]
+	return (c.sample(t)["root"] as Vector3).z - (c.sample(float(w[1]))["root"] as Vector3).z
+
+
+## The root-motion scale that ends a leap LEAP_STRIKE from you: from where you'll be when he comes
+## down, going by how fast you're moving toward or away from him now.
+func _leap_scale(c: ClipData, t: float) -> float:
+	var w: Array = c.raw["root_scale_window"]
+	var to := Combat.flat(opponent.global_position - global_position)
+	var d := to.length()
+	if d > 0.01:
+		var lead := maxf(0.0, float(w[1]) - t) / maxf(anim.speed, 0.01)
+		d += Combat.flat(opponent.velocity).dot(to / d) * lead
+	return clampf((d - LEAP_STRIKE) / maxf(_leap_left(c, t), 0.25), 0.35, 1.7)
 
 
 ## A string that steps in with every blow ("hold_distance") keeps its striking distance instead
@@ -715,11 +733,16 @@ func _state_attack(delta: float) -> Vector3:
 		var ta: Array = tr
 		if t >= float(ta[0]) and t <= float(ta[1]) and opponent != null:
 			turn_toward(opponent.global_position, float(ta[2]) * attack_speed, delta)
-	# Root-motion scale only applies inside its window (leaps).
+	# Leaps ("root_scale_window": [from, to], the jump's travel): in the air he steers his landing
+	# (see _leap_scale), so walking in, backing off or circling round him doesn't leave him
+	# slamming the ground beside you. As in Sekiro: deflect it or dodge it, you can't walk out
+	# from under it. The last bit of the jump is left as it is.
 	if c.raw.has("root_scale_window"):
 		var w: Array = c.raw["root_scale_window"]
 		if t > float(w[1]):
 			root_scale = 1.0
+		elif t >= float(w[0]) and opponent != null and _leap_left(c, t) > 0.25:
+			root_scale = move_toward(root_scale, _leap_scale(c, t), 3.0 * delta)   # (no jerks mid-air)
 	# Adaptive lunge ("lunge_reach": [at, until, reach, lunge length]): when the lunge starts he
 	# measures the gap and stretches the lunge so the blade still gets to you if you backed off
 	# (as in Sekiro, you can't just step away from a thrust).

@@ -104,6 +104,10 @@ deflecting is the real answer. **[tested]**
   wind-up he closes in, matching how fast you back off, so stepping, walking or sprinting away
   from the perilous thrust or sweep gets you hit. A side step timed right as the thrust
   arrives can still slip it, which Sekiro's side-step i-frames allow too. **[tested]**
+- Dankiro: every blow turns with you until just before it lands, so walking or running round
+  him doesn't slip it, and his leaping cleave steers its landing in the air, so walking in,
+  backing off or circling doesn't either; a side step as the staff comes down does.
+  **[tested]** (`circle`, `leap`)
 
 ## 3. Your attacks
 

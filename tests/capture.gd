@@ -258,13 +258,21 @@ func shot_whirl() -> void:
 
 
 ## Any single boss attack from the lock-on camera, the player deflecting each blow:
-## `-- attack <clip> [distance]` (to check how an attack reads from where you stand).
+## `-- attack <clip> [distance] [circle]` (to check how an attack reads from where you stand;
+## `circle`: locked on, you walk round him from the moment he starts and don't guard, to see
+## whether it still lands on you).
 func shot_attack() -> void:
 	var args := OS.get_cmdline_user_args()
 	var clip: String = args[1] if args.size() > 1 else "b_jab"
 	_stage(float(args[2]) if args.size() > 2 else 2.4)
-	auto_guard(0.05, 0.08)
+	var circle := args.size() > 3 and args[3] == "circle"
+	if not circle:
+		auto_guard(0.05, 0.08)
 	at(0.3, func(): boss_string([clip]))
+	if circle:
+		at(0.3, func():
+			player.locked = true
+			player.bot_move = Vector2(1, 0))
 	_end_at = 0.3 + AnimLibrary.get_clip(clip).length + 0.2
 
 
