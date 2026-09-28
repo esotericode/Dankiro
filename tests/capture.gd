@@ -690,6 +690,61 @@ func shot_recovery() -> void:
 	_end_at = 0.3 + AnimLibrary.get_clip(clip).length + 0.5
 
 
+## A pummeling: he's reeling (the recoil from a deflected final blow) and you keep hitting him;
+## after a few hits he escapes. `-- pummel [phase] [seed] [escape]`: the seed picks which way
+## out he takes, or name one (evade, shuriken, retreat, sidestep, sweep, parry) to force it.
+func shot_pummel() -> void:
+	var args := OS.get_cmdline_user_args()
+	var ph := int(args[1]) if args.size() > 1 else 1
+	seed(int(args[2]) if args.size() > 2 else 1)
+	var force: String = args[3] if args.size() > 3 else ""
+	_stage(2.2)
+	if ph > 1:
+		boss._enter_phase(ph, false)
+	if force != "":
+		boss.set_meta("force_escape", force)
+	player.max_hp = 1.0e6
+	player.hp = player.max_hp
+	auto_guard(0.06, 0.05)
+	at(0.3, func():
+		boss.passive = false
+		boss._react("b_recoil"))
+	for k in 22:
+		var tk := 0.34 + 0.12 * k
+		at(tk, func():
+			if boss.distance_to_opponent() < 2.8 and boss.escape_count == 0:
+				player.press_action("attack", Game.clock))
+	_end_at = 4.6
+
+
+## He runs round you to a new spot (the reposition move) and opens from there, seen from the
+## lock-on camera (`-- reposition wide`: from high above, so you see his path).
+func shot_reposition() -> void:
+	var args := OS.get_cmdline_user_args()
+	var mode: String = args[1] if args.size() > 1 else ""
+	_stage(2.4)
+	if mode == "wide":
+		# a fixed camera high above you, looking down on the plaza round you
+		var cc := Game.camera as Camera3D
+		if cc != null:
+			cc.set_process(false)
+			cc.set_physics_process(false)
+		Game.hud.visible = false
+		var cam := Camera3D.new()
+		cam.fov = 50.0
+		add_child(cam)
+		cam.current = true
+		var c := player.global_position
+		cam.global_position = c + Vector3(0.0, 15.0, 8.0)
+		cam.look_at(c + Vector3(0.0, 0.0, -1.0), Vector3.UP)
+	auto_guard(0.06, 0.05)
+	at(0.4, func():
+		boss.passive = false
+		boss.cooldown = 99.0
+		boss._begin_action("reposition", boss.distance_to_opponent()))
+	_end_at = 4.2
+
+
 ## Phase 3's Tempest of Fangs from the lock-on camera, every blow deflected (`-- tempest side`:
 ## from a fixed 3/4 view beside the two of you; `-- tempest hold`: holding guard, which breaks on
 ## the last blow).

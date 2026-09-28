@@ -467,7 +467,7 @@ func _update_debug() -> void:
 		lines.append("       hp %.0f/%.0f   posture %.0f/%.0f (-%.1f/s after %.1f s)" % [boss.hp, boss.max_hp,
 			boss.posture, boss.max_posture, b_regen, boss.posture_delay])
 		lines.append("       cooldown %.2f   reeling %d/%d   guard %d/%d" % [maxf(0.0, boss.cooldown),
-			boss._flinches, boss._breakout_after, boss._guard_count, boss._parry_threshold])
+			boss._pummel, boss._endure, boss._guard_count, boss._parry_threshold])
 		lines.append("       " + _boss_clip_line())
 		if boss.inferno != null and (boss.inferno.is_active() or boss.phase >= 2):
 			lines.append("       " + _inferno_line())

@@ -56,7 +56,7 @@ func _ready() -> void:
 		if not a.begins_with("--"):
 			suites.append(a)
 	if suites.is_empty():
-		suites = ["reach", "tells", "deflect", "flurry", "tempest", "punish", "loop", "phases", "menu", "camera", "ribbons", "spam", "mikiri", "dodge", "sweep", "shuriken", "attack", "cancel", "inferno", "soak"]
+		suites = ["reach", "tells", "deflect", "flurry", "tempest", "punish", "escape", "loop", "phases", "menu", "camera", "ribbons", "spam", "mikiri", "dodge", "sweep", "shuriken", "attack", "cancel", "inferno", "soak"]
 	await get_tree().physics_frame
 	for s in suites:
 		print("\n=== suite: %s ===" % s)
@@ -1456,8 +1456,137 @@ func suite_punish() -> void:
 		print("  %-12s deflected, then mashed: %s  (player hp -%.0f)" % [clip, "".join(got), player.max_hp - player.hp])
 		check(got.size() >= 2, "%s: the mash reaches him (%d)" % [clip, got.size()])
 		check(worst <= 3, "%s: he stops reeling after at most 3 hits in a row (%d)" % [clip, worst])
-		check(got.has("B") or got.has("D") or player.hp < player.max_hp,
-			"%s: he stops the mash (guards, parries or hits back)" % clip)
+		check(got.has("B") or got.has("D") or player.hp < player.max_hp or boss.escape_count > 0,
+			"%s: he stops the mash (guards, parries, escapes or hits back)" % clip)
+
+
+## Getting out of trouble, and moving like a fighter. A pummeling (he's reeling and you keep
+## hitting): he takes a few hits (3 in his first life, 2 or 3 in his second, 2 in his last),
+## then escapes instead of reeling again, a different way each time (never the same twice
+## running), and only where there's room for it (not backwards into the wall). Running round
+## you to a new spot: he backs off facing you, then runs an arc (never his back to you up
+## close, never nearer than he started), his speed building and easing off with no jumps,
+## stays inside the plaza, and squares up to you before he acts.
+func suite_escape() -> void:
+	for ph in [1, 2, 3]:
+		var hist: Array = []
+		var kinds := {}
+		var runs: Array = []
+		var repeats := 0
+		var over := 0
+		var endure_max := 3 if ph < 3 else 2
+		for trial in 12:
+			seed(5100 + 37 * ph + trial)
+			var r := await _pummel_run(ph, hist, Vector3.ZERO)
+			hist = r["hist"]
+			runs.append("%d%s" % [r["hits"], str(r["out"]).substr(0, 3)])
+			if int(r["hits"]) > endure_max:
+				over += 1
+			if str(r["out"]) != "attack" and str(r["out"]) != "none":
+				kinds[r["out"]] = true
+		for k in range(hist.size() - 1):
+			if str(hist[k]) == str(hist[k + 1]):
+				repeats += 1
+		print("  phase %d pummelings (hits, then how he got out): %s   escapes used: %s" % [ph, " ".join(runs), ", ".join(kinds.keys())])
+		check(over == 0, "phase %d: he reels from at most %d hits, then gets out of it (%d runs went over)" % [ph, endure_max, over])
+		check(kinds.size() >= 4, "phase %d: he escapes in at least 4 different ways over 12 pummelings (%d)" % [ph, kinds.size()])
+		check(repeats == 0, "phase %d: never the same escape twice running (%s)" % [ph, str(hist)])
+	# Backed up against the wall: no leaping, volleying or hopping backwards into it.
+	var wall_bad := 0
+	var wall_kinds := {}
+	for trial in 10:
+		seed(6200 + trial)
+		var r := await _pummel_run(2, [], Vector3(0, 0, -11.6))
+		if str(r["out"]) in ["evade", "shuriken", "retreat"]:
+			wall_bad += 1
+		wall_kinds[r["out"]] = true
+	print("  back to the wall: %s" % ", ".join(wall_kinds.keys()))
+	check(wall_bad == 0, "with his back to the wall he escapes aside or through you, never backwards (%d)" % wall_bad)
+	# Running round you.
+	for sd in [11, 12, 13, 14, 15, 16]:
+		seed(sd)
+		var near_wall := sd >= 15
+		await setup(2.4)
+		if near_wall:
+			# (both of you near the wall: he has to run round inside it)
+			boss.global_position = Vector3(0, 0, -10.8)
+			player.global_position = Vector3(0, 0, -8.4)
+			player.face_now(boss.global_position)
+		boss.passive = false
+		boss.cooldown = 99.0
+		boss._begin_action("reposition", boss.distance_to_opponent())
+		var a0 := Combat.yaw_of(Combat.flat(boss.global_position - player.global_position))
+		var prev_v := Vector3.ZERO
+		var max_acc := 0.0
+		var min_d := 99.0
+		var back_close := 0.0
+		var max_r := 0.0
+		var squared := 999.0
+		var t0 := Game.clock
+		while boss.state == Boss.S.NEUTRAL and boss._mode == "reposition" and Game.clock - t0 < 6.0:
+			await ticks(1)
+			var v := boss._move_vel
+			max_acc = maxf(max_acc, (v - prev_v).length() / DT)
+			prev_v = v
+			var d := boss.distance_to_opponent()
+			min_d = minf(min_d, d)
+			max_r = maxf(max_r, Combat.flat(boss.global_position).length())
+			var away := Combat.angle_to(boss.global_position, boss.forward(), player.global_position)
+			if d < 3.2:
+				back_close = maxf(back_close, away)
+			squared = away
+		var turned := rad_to_deg(absf(wrapf(Combat.yaw_of(Combat.flat(boss.global_position - player.global_position)) - a0, -PI, PI)))
+		var dist := boss.distance_to_opponent()
+		print("  run %d%s: %.1f s, %.0f° round you to %.1f m, closest %.2f m, facing away up close at most %.0f°, max accel %.1f m/s², " % [
+			sd, " (by the wall)" if near_wall else "", Game.clock - t0, turned, dist, min_d, back_close, max_acc] +
+			"furthest from the centre %.1f m, facing you %.0f° off when he acts" % [max_r, squared])
+		check(max_acc <= Boss.CHARGE_ACCEL + 0.5, "run %d: his speed builds and eases off (max %.1f m/s²)" % [sd, max_acc])
+		check(back_close <= 100.0, "run %d: never his back to you up close (%.0f°)" % [sd, back_close])
+		check(min_d >= 2.2, "run %d: he never runs nearer to you than he started (%.2f m)" % [sd, min_d])
+		check(turned >= 45.0 and dist >= 3.4 and dist <= 7.6, "run %d: he ends up somewhere else round you (%.0f°, %.1f m)" % [sd, turned, dist])
+		check(squared <= 25.0, "run %d: he squares up to you before he acts (%.0f° off)" % [sd, squared])
+		check(max_r <= Boss.ARENA_RADIUS - 0.3, "run %d: he stays inside the plaza (%.1f m from the centre)" % [sd, max_r])
+
+
+## One pummeling: he's reeling (a deflected final blow's recoil) and you mash attack at him.
+## Returns how many hits left him reeling before he got out of it, and how: an escape (its
+## kind), "attack" (he went straight back on the attack) or "none".
+func _pummel_run(ph: int, hist: Array, at_pos: Vector3) -> Dictionary:
+	await setup(2.2)
+	if at_pos != Vector3.ZERO:
+		boss.global_position = at_pos
+		player.global_position = at_pos + Vector3(0, 0, 2.2)
+		boss.face_now(player.global_position)
+		player.face_now(boss.global_position)
+	if ph > 1:
+		boss._enter_phase(ph, false)
+	boss.passive = false
+	boss._escapes = hist.duplicate()
+	player.max_hp = 1.0e6
+	player.hp = player.max_hp
+	var hits := [0]
+	boss.struck.connect(func(r, _point):
+		if int(r) == Combat.RESULT_HIT and boss.state == Boss.S.REACT:
+			hits[0] += 1)
+	boss._react("b_recoil")
+	var n0 := boss.escape_count
+	var out := "none"
+	var t_end := Game.clock + 4.0
+	var next := Game.clock
+	while Game.clock < t_end:
+		await ticks(1)
+		var now := Game.clock
+		player.camera_yaw = Combat.yaw_of(Combat.flat(boss.global_position - player.global_position))
+		if boss.escape_count > n0:
+			out = str(boss._escapes[0])
+			break
+		if boss.state == Boss.S.ATTACK and boss._seq_name != "":
+			out = "attack"
+			break
+		if now >= next and boss.distance_to_opponent() < 2.8:
+			player.press_action("attack", now)
+			next = now + 0.1
+	return {"hits": hits[0], "out": out, "hist": boss._escapes.duplicate()}
 
 
 ## Player attacks: reach and rhythm. Mashing attack must not produce hits faster than the
@@ -2164,3 +2293,4 @@ func _blade_time_to_contact(only := "") -> float:
 
 func _first_hit(c: ClipData) -> float:
 	return float(c.hits[0]["from"])
+

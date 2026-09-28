@@ -1023,6 +1023,97 @@ def build_boss():
          chain=0.5, iframes=[0.02, 0.40],   # hopping out of your combo: your swings whiff until he lands
          events=[{"t": 0.05, "type": "sfx", "name": "dodge"}, {"t": 0.44, "type": "sfx", "name": "land"}])
 
+    # ---- Evasive leap (how he gets out of a pummeling): a quick dip, a big spring backwards
+    # with the knees tucked, the staff carried level in his right hand and the left arm out for
+    # balance, a skidding landing in a low crouch, and he rises facing you. Your swings whiff
+    # while he's in the air (iframes). About 4.7 m back.
+    ev_staff = S.copy()
+    place(ev_staff, [0.34, 1.10, 0.02], unit([0.08, 0.22, -1.0]), [0, -1, 0], 0.0, 0.3, S["weapon_rot"])
+    EV = {"tell": 0.10, "off": 0.18, "apex": 0.38, "land": 0.62, "slide": 0.80, "end": 1.15, "air": 4.35, "skid": 0.35,
+          "apex_h": 1.62}
+
+    def ev_body(t):
+        if t <= EV["tell"]:
+            u = smooth(t / EV["tell"])
+            return {"hips_pos": lerp3(S["hips_pos"], [0, 0.86, 0.06], u), "chest": lerp3(S["chest"], [-14, -8, 0], u),
+                    "spine": lerp3(S["spine"], [-8, 0, 0], u), "root": [0, 0, 0], "foot_l": S["foot_l"], "foot_r": S["foot_r"],
+                    "arm": 0.0}
+        if t <= EV["off"]:
+            u = (t - EV["tell"]) / (EV["off"] - EV["tell"])
+            return {"hips_pos": [0, 0.86 + 0.14 * u, 0.06], "chest": lerp3([-14, -8, 0], [-4, -8, 0], u), "spine": [-6, 0, 0],
+                    "root": [0, 0, 0.15 * u], "foot_l": S["foot_l"], "foot_r": S["foot_r"], "arm": u * 0.5}
+        if t <= EV["land"]:
+            # rise (easing out) to the apex, fall (easing in) to the landing; most of the travel
+            # happens on the way up
+            if t <= EV["apex"]:
+                h = math.sin(0.5 * math.pi * (t - EV["off"]) / (EV["apex"] - EV["off"]))
+                ub = (t - EV["off"]) / (EV["apex"] - EV["off"])
+                travel = 0.72 * smooth(ub)
+            else:
+                v = (t - EV["apex"]) / (EV["land"] - EV["apex"])
+                h = math.cos(0.5 * math.pi * v)
+                travel = 0.72 + 0.28 * smooth(v)
+            hy = 1.0 + (EV["apex_h"] - 1.0) * h
+            tuck = min(1.0, h * 1.5)
+            return {"hips_pos": [0, hy, 0.04], "chest": lerp3([-4, -8, 0], [8, -6, 0], h), "spine": [0, -2, 0],
+                    "root": [0, 0, 0.15 + EV["air"] * travel],
+                    "foot_l": [-0.16, 0.08 + (hy - 1.0) * 0.9 + 0.34 * tuck, -0.18 + 0.12 * tuck],
+                    "foot_r": [0.20, 0.08 + (hy - 1.0) * 0.9 + 0.28 * tuck, 0.20 + 0.06 * tuck], "arm": 1.0}
+        if t <= EV["slide"]:
+            u = (t - EV["land"]) / (EV["slide"] - EV["land"])
+            return {"hips_pos": [0, 0.80 + 0.02 * u, 0.06], "chest": [-16, -10, 0], "spine": [-8, 0, 0],
+                    "root": [0, 0, 0.15 + EV["air"] + EV["skid"] * math.sin(0.5 * math.pi * u)],
+                    "foot_l": [-0.20, 0.08, -0.36], "foot_r": [0.24, 0.08, 0.34], "arm": 1.0 - 0.4 * u}
+        u = smooth((t - EV["slide"]) / (EV["end"] - EV["slide"]))
+        return {"hips_pos": lerp3([0, 0.82, 0.06], S["hips_pos"], u), "chest": lerp3([-16, -10, 0], S["chest"], u),
+                "spine": lerp3([-8, 0, 0], S["spine"], u), "root": [0, 0, 0.15 + EV["air"] + EV["skid"]],
+                "foot_l": lerp3([-0.20, 0.08, -0.36], S["foot_l"], u), "foot_r": lerp3([0.24, 0.08, 0.34], S["foot_r"], u),
+                "arm": 0.6 * (1.0 - u)}
+
+    ev_rest = ([18, 0, -28], [40, 0, 0])              # left arm hanging free
+    ev_out = ([-10, 0, -62], [24, 0, 0])              # ...and flung out for balance
+    keys = [key(0.0, "b_stance")]
+    for t in [round(x, 3) for x in np.arange(0.04, EV["end"], 0.04)] + [EV["land"]]:
+        b = ev_body(t)
+        arm = b.pop("arm")
+        d = dict(ev_staff) if t > EV["tell"] * 0.5 else dict(S)
+        d.update(b)
+        lift = b["hips_pos"][1] - S["hips_pos"][1]
+        d["weapon_pos"] = r3(np.array(ev_staff["weapon_pos"]) + np.array([0.0, lift, b["hips_pos"][2] - 0.02]))
+        d["weapon_rot"] = ev_staff["weapon_rot"]
+        d.update({"ik_l": 0.0, "upper_arm_l": r3(lerp3(ev_rest[0], ev_out[0], arm)),
+                  "forearm_l": r3(lerp3(ev_rest[1], ev_out[1], arm)), "hand_l": [0, 0, 0], "neck": [-4, 4, 0], "head": [-4, 0, 0]})
+        keys.append(key(t, d))
+    keys.sort(key=lambda k: k["t"])
+    keys.append({"t": EV["end"], "pose": "b_stance", "set": {"root": [0, 0, round(0.15 + EV["air"] + EV["skid"], 3)]},
+                 "ease": "inout_sine"})
+    clip("b_evade", "boss", keys, chain=0.95, iframes=[0.08, EV["land"] - 0.04], vuln=[0.90, EV["end"]],
+         track=[[0.0, 0.14, 520], [EV["land"], EV["end"], 420]],
+         events=[{"t": 0.06, "type": "sfx", "name": "dodge"}, {"t": 0.16, "type": "sfx", "name": "leap"},
+                 {"t": EV["land"], "type": "sfx", "name": "land"}])
+
+    # ---- Sidestep hop (the other way out): a dip, a quick hop to one side with the lead foot
+    # reaching out, a landing with the knees bent, still facing you (he tracks you all the
+    # way). About 2.4 m aside; your swings whiff while he's in the air.
+    def sidestep_clip(name, side):
+        lead, trail = ("foot_r", "foot_l") if side > 0 else ("foot_l", "foot_r")
+        dip = S.copy()
+        dip.update({"hips_pos": [0.04 * side, 0.93, 0.03], "chest": [-6, 5, 0], "spine": [-4, 5, 0]})
+        air = S.copy()
+        air.update({"hips_pos": [0.02 * side, 1.10, 0.02], "chest": [-2, 5, 0], "root": [1.25 * side, 0, 0.10]})
+        air[lead] = r3(np.array(S[lead]) + np.array([0.16 * side, 0.12, 0.0]))
+        air[trail] = r3(np.array(S[trail]) + np.array([0.06 * side, 0.22, 0.0]))
+        landp = S.copy()
+        landp.update({"hips_pos": [0.0, 0.88, 0.04], "chest": [-10, 5, 0], "spine": [-6, 5, 0], "root": [2.3 * side, 0, 0.12]})
+        landp[lead] = r3(np.array(S[lead]) + np.array([0.08 * side, 0.0, 0.0]))
+        clip(name, "boss", [key(0.0, "b_stance"), key(0.07, dip, ease="out_quad"), key(0.19, air, ease="out_quad"),
+                            key(0.33, landp, ease="in_quad"),
+                            {"t": 0.62, "pose": "b_stance", "set": {"root": [round(2.4 * side, 3), 0, 0.12]}, "ease": "inout_sine"}],
+             chain=0.42, iframes=[0.03, 0.30], track=[[0.0, 0.62, 600]],
+             events=[{"t": 0.03, "type": "sfx", "name": "dodge"}, {"t": 0.33, "type": "sfx", "name": "land"}])
+    sidestep_clip("b_sidestep_l", -1.0)
+    sidestep_clip("b_sidestep_r", 1.0)
+
     # ---- Backhand: flat cut from the boss's left to his right (arrives from the player's RIGHT)
     bs_ = unit([-0.85, 0.08, 0.52])
     axb, abk = arc(bs_, [0.0, 0.0, -1.0])

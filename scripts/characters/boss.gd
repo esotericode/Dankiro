@@ -28,6 +28,9 @@ const WALK := 1.8
 const STRAFE := 1.25
 const RUN := 4.8
 const CHARGE := 6.4                  ## running at you: faster than your run, a touch under your sprint
+const MOVE_ACCEL := 9.0              ## m/s^2: how fast his run builds, turns and pulls up
+const WALK_ACCEL := 5.0              ## ...and his walking and strafing (no instant starts or reversals)
+const CHARGE_ACCEL := 12.0
 const ARENA_RADIUS := 13.5
 const DEATHBLOW_WINDOW_END := 2.75   ## b_posture_break time when he starts rising
 const INFERNO_COOLDOWN := 40.0       ## seconds from the end of one Inferno until he may use it again
@@ -50,7 +53,27 @@ const SEQUENCES := {
 	"shuriken_5": {"steps": [["b_shuriken_5", 1.0], ["b_leap", 0.35]], "range": [0.0, 4.5], "weight": 0.8},
 	"dash_cut": {"steps": [["b_dash_cut", 1.0], ["b_combo_2|b_sweep|b_thrust", 0.5]], "range": [3.0, 4.2], "weight": 1.0},
 	"tempest": {"steps": [["b_tempest", 1.0]], "range": [0.0, 4.4], "weight": 2.4, "min_phase": 3},
+	# His ways out of a pummeling (Boss._escape picks these; he never opens with them).
+	"evade": {"steps": [["b_evade", 1.0], ["b_thrust|b_leap|b_shuriken_4", 0.45]], "range": [0.0, 99.0], "weight": 0.0,
+		"escape": true},
+	"sidestep_l": {"steps": [["b_sidestep_l", 1.0], ["b_backhand|b_combo_1|b_thrust", 0.5]], "range": [0.0, 99.0],
+		"weight": 0.0, "escape": true},
+	"sidestep_r": {"steps": [["b_sidestep_r", 1.0], ["b_backhand|b_combo_1|b_thrust", 0.5]], "range": [0.0, 99.0],
+		"weight": 0.0, "escape": true},
 }
+
+## How he gets out of a pummeling, once he's taken his share of hits (Boss._escape): the weight
+## of each, and the room it needs behind him (to the side for the sidestep). Never the same one
+## twice running, and the one before that less often.
+const ESCAPES := {
+	"evade": {"weight": 1.2, "room": 5.4},       # a big leap back, then maybe a thrust, leap or volley
+	"shuriken": {"weight": 1.0, "room": 4.8},    # a shuriken volley (it starts with a leap back)
+	"retreat": {"weight": 0.8, "room": 3.0},     # a backstep hop into a thrust or leap
+	"sidestep": {"weight": 1.0, "room": 2.8},    # a hop aside, then maybe a cut from there
+	"sweep": {"weight": 0.55, "room": 0.0},      # the perilous sweep through your combo: jump it
+	"parry": {"weight": 0.6, "room": 0.0},       # deflects your swing and counters (facing you)
+}
+const ESCAPE_SEQS := ["evade", "sidestep_l", "sidestep_r", "retreat"]
 
 ## Non-attack behaviours that compete with the sequences: [min, max] distance and weight.
 ##  charge     - run at you and flow into a running cut
@@ -63,8 +86,10 @@ const MOVES := {
 	"hold": {"range": [2.2, 9.0], "weight": 0.55},
 	"flourish": {"range": [5.5, 12.0], "weight": 0.3},
 }
-## Specials he opens with after repositioning, by distance.
-const SPECIALS := ["leap", "thrust", "shuriken_4", "shuriken_5", "charge"]
+## What he opens with once he's run round you to a new spot, and how likely each is (where its
+## range fits): "" walks back in and picks as usual.
+const AFTER_REPOSITION := [["leap", 1.0], ["thrust", 1.0], ["shuriken_4", 0.5], ["shuriken_5", 0.4], ["charge", 0.35],
+	["", 0.8]]
 ## Phase 2 on, his shuriken volleys come in two sets: the second from the ground straight after
 ## the first (0.4 to 0.55 s), with a glint of steel as its tell.
 const DOUBLE_VOLLEY := {"b_shuriken_4": "b_shuriken_4x2", "b_shuriken_5": "b_shuriken_5x2"}
@@ -94,13 +119,22 @@ var _guard_count := 0
 var _parry_threshold := 3
 var _since_blocked := 99.0
 var _guard_timer := 0.0
-var _flinches := 0                 ## hits taken while reeling (flinch / recoil / kicked) this opening
-var _breakout_after := 2            ## ...after this many he breaks out instead of flinching again
+var _pummel := 0                   ## hits he's taken reeling since he last got out of it
+var _endure := 3                   ## ...how many he takes before he escapes instead of reeling again
+var _since_hit := 99.0
+var _escapes: Array = []           ## the escapes he's used, most recent first
+var escape_count := 0              ## ...and how many (the lab counts them)
 var _punished_seq := ""             ## the sequence you last punished him for: he avoids reopening with it
 var _last_step_phase := 0.0
 var _mode := ""                     ## "" (stalk), "charge", "reposition", "hold"
 var _mode_time := 0.0
 var _mode_target := Vector3.ZERO
+var _move_vel := Vector3.ZERO        ## his own ground velocity in neutral, eased (no instant starts, stops or turns)
+var _rp_sign := 1.0                  ## repositioning: which way round you he runs
+var _rp_radius := 6.0                ## ...how far out from you
+var _rp_left := 0.0                  ## ...how much of the way round he still has to go (radians)
+var _rp_prev_ang := 0.0
+var _rp_settle := -1.0               ## ...seconds left standing, facing you, before he acts (-1: still running)
 var _strafe_speed := 1.0
 var _dist_prev := 0.0
 var _retreat := 0.0                 ## seconds the player has spent backing away from him
@@ -249,6 +283,9 @@ func play_intro() -> void:
 func _physics_process(delta: float) -> void:
 	state_time += delta
 	_since_blocked += delta
+	_since_hit += delta
+	if _since_hit > 2.2:
+		_pummel = 0                  # you let him off: the count starts again
 	if _since_blocked > 1.6:
 		_guard_count = 0
 	var planar := Vector3.ZERO
@@ -319,6 +356,7 @@ func _to_neutral(cd: float) -> void:
 	state = S.NEUTRAL
 	state_time = 0.0
 	_mode = ""
+	_move_vel = Vector3.ZERO
 	cooldown = cd
 	_seq.clear()
 	root_scale = 1.0
@@ -367,13 +405,13 @@ func _state_neutral(delta: float) -> Vector3:
 		"reposition":
 			return _mode_reposition(delta, d)
 		"hold":
-			anim.play_locomotion(LOCO)
-			anim.set_locomotion_velocity(Vector3.ZERO, WALK, false)
 			turn_toward(opponent.global_position, 200.0, delta)
+			_move_vel = _move_vel.move_toward(Vector3.ZERO, WALK_ACCEL * delta)
+			_loco_anim()
 			if _mode_time > _mode_target.x:
 				_mode = ""
 				cooldown = minf(cooldown, 0.1)
-			return Vector3.ZERO
+			return _move_vel
 	return _mode_stalk(delta, d, dirp)
 
 
@@ -396,26 +434,50 @@ func _mode_stalk(delta: float, d: float, dirp: Vector3) -> Vector3:
 		vel = -dirp * 1.2 + side * 0.6
 	else:
 		vel = side * STRAFE * _strafe_speed + dirp * (d - 2.5) * 0.9
-	if running:
-		turn_toward(global_position + vel, 360.0, delta)
+	_move_vel = _move_vel.move_toward(_keep_off_wall(vel), (MOVE_ACCEL if running else WALK_ACCEL) * delta)
+	if running and _move_vel.length() > 2.0:
+		turn_toward(global_position + _move_vel, 360.0, delta)
 	else:
 		turn_toward(opponent.global_position, 300.0, delta)
-	var local := Basis(Vector3.UP, -facing) * vel
-	anim.play_locomotion(LOCO)
-	anim.set_locomotion_velocity(local, WALK, running)
+	_loco_anim()
 	if cooldown <= 0.0:
 		var pick := _pick_action(d)
 		if pick != "" and _begin_action(pick, d):
 			return Vector3.ZERO
-	return vel
+	return _move_vel
+
+
+## Plays his walk / strafe / run blend for the velocity he's actually moving at: the run only
+## when he's going fast in the direction he faces (otherwise the walk clips, forward, back or
+## sideways, so his feet never slide).
+func _loco_anim() -> void:
+	var spd := _move_vel.length()
+	var running := spd > 2.6 and forward().angle_to(_move_vel) < deg_to_rad(50.0)
+	anim.play_locomotion(LOCO)
+	anim.set_locomotion_velocity(Basis(Vector3.UP, -facing) * _move_vel, WALK, running)
+
+
+## Takes out the part of a velocity that would carry him into the wall round the plaza as he
+## nears it (he runs along it instead).
+func _keep_off_wall(v: Vector3) -> Vector3:
+	var here := Combat.flat(global_position)
+	var rr := here.length()
+	var soft := ARENA_RADIUS - 2.2
+	if rr < soft:
+		return v
+	var n := here / rr
+	var outward := v.dot(n)
+	if outward > 0.0:
+		v -= n * outward * clampf((rr - soft) / 1.4, 0.0, 1.0)
+	return v
 
 
 ## Runs straight at the player; in range, flows into the running cut.
 func _mode_charge(delta: float, d: float, dirp: Vector3) -> Vector3:
 	turn_toward(opponent.global_position, 540.0, delta)
-	var vel := dirp * CHARGE
-	anim.play_locomotion(LOCO)
-	anim.set_locomotion_velocity(Basis(Vector3.UP, -facing) * vel, WALK, true)
+	# (he builds up to his sprint over half a second, turning into it)
+	_move_vel = _move_vel.move_toward(dirp * CHARGE, CHARGE_ACCEL * delta)
+	_loco_anim()
 	if d < 3.6:
 		_mode = ""
 		_start_sequence("dash_cut")
@@ -423,39 +485,109 @@ func _mode_charge(delta: float, d: float, dirp: Vector3) -> Vector3:
 	if _mode_time > 3.5:
 		_mode = ""
 		cooldown = 0.2
-	return vel
+	return _move_vel
 
 
-## Runs to a spot around the player, then opens with a special from there.
+## Runs round you to another spot, then opens from there. Like a fighter, not a chess piece:
+## if he's close he backs off facing you first, then runs an arc round you (you see his side,
+## not his back) at a pace that builds and eases off, keeps off the wall, pulls up, turns to
+## face you and settles for a moment before he acts.
 func _mode_reposition(delta: float, d: float) -> Vector3:
-	var to_t := Combat.flat(_mode_target - global_position)
-	if to_t.length() < 0.7 or _mode_time > 2.6:
-		_mode = ""
-		face_now(opponent.global_position)
-		var special := _pick_special(d)
-		if special == "charge":
-			_begin_action("charge", d)
-		elif special != "":
-			_start_sequence(special)
-		else:
-			cooldown = 0.1
-		return Vector3.ZERO
-	var vel := to_t.normalized() * RUN
-	turn_toward(global_position + vel, 540.0, delta)
-	anim.play_locomotion(LOCO)
-	anim.set_locomotion_velocity(Basis(Vector3.UP, -facing) * vel, WALK, true)
-	return vel
+	var rel := Combat.flat(global_position - opponent.global_position)
+	var r := maxf(rel.length(), 0.01)
+	var out := rel / r
+	var ang := atan2(rel.x, rel.z)
+	_rp_left -= wrapf(ang - _rp_prev_ang, -PI, PI) * _rp_sign
+	_rp_prev_ang = ang
+	if _rp_settle >= 0.0:
+		# pulled up: square up to you, a beat standing still, then go
+		_move_vel = _move_vel.move_toward(Vector3.ZERO, MOVE_ACCEL * delta)
+		if _move_vel.length() < 0.4:
+			_rp_settle -= delta
+		turn_toward(opponent.global_position, 330.0, delta)
+		_loco_anim()
+		var squared := Combat.angle_to(global_position, forward(), opponent.global_position) < 20.0
+		if _rp_settle <= 0.0 and (squared or _mode_time > 5.0):
+			_mode = ""
+			_after_reposition(d)
+			return Vector3.ZERO
+		return _move_vel
+	var remaining := maxf(_rp_left, 0.0) * r                 # metres of arc still to run
+	var tangent := Vector3(out.z, 0.0, -out.x) * _rp_sign
+	var v_r := clampf((_rp_radius - r) * 1.8, -2.0, 2.6)      # out to (or in to) his running line
+	var v_t := RUN * clampf((r - 2.2) / 1.3, 0.15, 1.0)       # close to you he backs off before he runs round
+	v_t = minf(v_t, sqrt(2.0 * 6.0 * remaining))              # easing off as he nears the spot
+	var want := _keep_off_wall(out * v_r + tangent * v_t)
+	if want.length() > RUN:
+		want = want.normalized() * RUN
+	_move_vel = _move_vel.move_toward(want, MOVE_ACCEL * delta)
+	# he runs where he's going; once he's pulled up he turns to you
+	if _move_vel.length() > 1.8 and remaining > 0.3:
+		turn_toward(global_position + _move_vel, 420.0, delta)
+	else:
+		turn_toward(opponent.global_position, 330.0, delta)
+	_loco_anim()
+	if (remaining < 0.4 and absf(r - _rp_radius) < 1.0) or _mode_time > 3.6:
+		_rp_settle = randf_range(0.2, 0.45)
+	return _move_vel
 
 
-func _pick_special(d: float) -> String:
+## Sets up a run round you: which way (the side that keeps him off the wall; either if both
+## are clear), how far out and how far round.
+func _plan_reposition() -> void:
+	var rel := Combat.flat(global_position - opponent.global_position)
+	if rel.length() < 0.1:
+		rel = -forward()
+	var a0 := atan2(rel.x, rel.z)
+	var sweep := deg_to_rad(randf_range(60.0, 110.0))
+	var radius := randf_range(5.0, 6.8)
+	var op := Combat.flat(opponent.global_position)
+	var room := {}
+	for sg in [1.0, -1.0]:
+		var a1: float = a0 + sweep * float(sg)
+		room[sg] = ARENA_RADIUS - (op + Vector3(sin(a1), 0.0, cos(a1)) * radius).length()
+	var way := 1.0 if randf() < 0.5 else -1.0
+	if float(room[way]) < 1.5 and float(room[-way]) > float(room[way]):
+		way = -way
+	# still too close to the wall that way: run a tighter circle
+	var a_end := a0 + sweep * way
+	var dir_end := Vector3(sin(a_end), 0.0, cos(a_end))
+	while radius > 3.8 and (op + dir_end * radius).length() > ARENA_RADIUS - 1.5:
+		radius -= 0.3
+	_rp_sign = way
+	_rp_radius = radius
+	_rp_left = sweep
+	_rp_prev_ang = a0
+	_rp_settle = -1.0
+	_mode_target = opponent.global_position + dir_end * radius
+
+
+## What he opens with from the spot he ran to.
+func _after_reposition(d: float) -> void:
 	var options: Array = []
-	for sname in SPECIALS:
-		var r: Array = MOVES[sname]["range"] if MOVES.has(sname) else SEQUENCES[sname]["range"]
-		if d >= float(r[0]) - 0.3 and d <= float(r[1]) + 0.5:
-			options.append(sname)
-	if options.is_empty():
-		return ""
-	return str(options[randi() % options.size()])
+	var total := 0.0
+	for o in AFTER_REPOSITION:
+		var sname: String = o[0]
+		if sname != "":
+			var r: Array = MOVES[sname]["range"] if MOVES.has(sname) else SEQUENCES[sname]["range"]
+			var hi := float(r[1]) + (3.0 if sname.begins_with("shuriken") else 0.5)
+			if d < float(r[0]) - 0.3 or d > hi:
+				continue
+		options.append(o)
+		total += float(o[1])
+	var roll := randf() * total
+	var pick := ""
+	for o in options:
+		roll -= float(o[1])
+		if roll <= 0.0:
+			pick = str(o[0])
+			break
+	if pick == "charge":
+		_begin_action("charge", d)
+	elif pick != "":
+		_start_sequence(pick)
+	else:
+		cooldown = randf_range(0.3, 0.8)
 
 
 ## Starts an attack sequence or a movement mode. Returns false if nothing started.
@@ -466,15 +598,7 @@ func _begin_action(pick: String, d: float) -> bool:
 			_mode = "charge"
 			return true
 		"reposition":
-			var from_p := Combat.flat(global_position - opponent.global_position)
-			if from_p.length() < 0.1:
-				from_p = -forward()
-			var ang := deg_to_rad(randf_range(55.0, 115.0)) * (1.0 if randf() < 0.5 else -1.0)
-			var spot := opponent.global_position + (Basis(Vector3.UP, ang) * from_p.normalized()) * randf_range(5.8, 7.6)
-			var flat_spot := Combat.flat(spot)
-			if flat_spot.length() > ARENA_RADIUS:
-				spot = flat_spot.normalized() * ARENA_RADIUS
-			_mode_target = Vector3(spot.x, global_position.y, spot.z)
+			_plan_reposition()
 			_mode = "reposition"
 			return true
 		"hold":
@@ -503,7 +627,7 @@ func _pick_action(d: float) -> String:
 		catalog[mname] = MOVES[mname]
 	for sname in catalog:
 		var sd: Dictionary = catalog[sname]
-		if int(sd.get("min_phase", 1)) > phase:
+		if int(sd.get("min_phase", 1)) > phase or bool(sd.get("escape", false)):
 			continue
 		var r: Array = sd["range"]
 		if d < float(r[0]) or d > float(r[1]):
@@ -545,7 +669,7 @@ func _start_sequence(seq_name: String) -> void:
 	_last_seq = seq_name
 	_seq_name = seq_name
 	_seq = (SEQUENCES[seq_name]["steps"] as Array).duplicate(true)
-	_flinches = 0
+	_pummel = 0
 	var first: Array = _seq.pop_front()
 	_play_attack(_choose(str(first[0])), 0.0)
 
@@ -621,7 +745,11 @@ func _state_attack(delta: float) -> Vector3:
 		var cd := randf_range(0.45, 1.25) / aggression
 		if distance_to_opponent() > 5.0:
 			cd = minf(cd, 0.2)          # you got away from that one: he comes after you
+		var escaped := _seq_name in ESCAPE_SEQS
 		_to_neutral(cd)
+		# out of your reach after an escape: sometimes he runs round you to come in from elsewhere
+		if escaped and not passive and opponent != null and randf() < 0.35:
+			_begin_action("reposition", distance_to_opponent())
 		return Vector3.ZERO
 	return _close_distance(c, t)
 
@@ -742,12 +870,10 @@ func _resolve_player_attack(info: Dictionary, p: Player) -> int:
 	var pos: Vector3 = info.get("point", global_position + Vector3.UP * 1.3)
 	var facing_ok := Combat.angle_to(global_position, forward(), p.global_position) < 100.0
 	if state == S.ATTACK:
-		return _take_hit(info, _in_vuln())
+		# (mid-attack he shrugs a hit off, except in the openings his attacks leave)
+		return _hit_reeling(info, pos, facing_ok) if _in_vuln() else _take_hit(info, false)
 	if state == S.REACT:
-		_flinches += 1
-		if _flinches > _breakout_after:
-			return _break_out(info, pos, facing_ok)
-		return _take_hit(info, true)
+		return _hit_reeling(info, pos, facing_ok)
 	if facing_ok:
 		_guard_count += 1
 		_since_blocked = 0.0
@@ -755,7 +881,7 @@ func _resolve_player_attack(info: Dictionary, p: Player) -> int:
 			return _parry(pos)
 		_block(info, pos)
 		return Combat.RESULT_BLOCK
-	return _take_hit(info, true)
+	return _hit_reeling(info, pos, facing_ok)
 
 
 func _block(info: Dictionary, pos: Vector3) -> void:
@@ -813,58 +939,129 @@ func _react(clip_name: String) -> void:
 	reset_hits()
 
 
-## He's taken his share of this opening (you deflected him and got a hit or two in): instead of
-## flinching again he gets out of it - deflects your swing and counters, or shrugs this one off
-## (it still hurts) and hops back into a thrust or leap, or answers with a fast strike or a
-## sweep straight through your combo. Stops the "deflect, hit, hit, hit..." stun-lock.
-func _break_out(info: Dictionary, pos: Vector3, facing_ok: bool) -> int:
-	_flinches = 0
-	_breakout_after = _roll_breakout()
+## A hit that would leave him reeling. He takes a few (your reward for the opening), then
+## instead of flinching again he gets out of it (_escape): the pummeling doesn't go on.
+func _hit_reeling(info: Dictionary, pos: Vector3, facing_ok: bool) -> int:
+	_since_hit = 0.0
+	_pummel += 1
+	if _pummel >= _endure:
+		return _escape(info, pos, facing_ok)
+	return _take_hit(info, true)
+
+
+## He's taken his share: this hit still lands, but he doesn't reel from it. He escapes, a
+## different way from last time: a big leap back, a shuriken volley from the air, a backstep
+## into a thrust or leap, a hop aside, a sweep through your combo, or a parry and counter.
+func _escape(info: Dictionary, pos: Vector3, facing_ok: bool) -> int:
+	_pummel = 0
+	_endure = _roll_endure()
 	_punished_seq = _seq_name
-	var r := randf()
-	if r < 0.4 and facing_ok:
+	var kind := _pick_escape(facing_ok)
+	if kind == "parry":
+		_note_escape(kind)
 		return _parry(pos)
 	var res := _take_hit(info, false)
 	if state == S.STAGGER or state == S.DEAD:
 		return res
-	face_now(opponent.global_position)
-	if r < 0.7:
-		_start_sequence(_fresh(["retreat", "backhand"]))
-	else:
-		_start_sequence(_fresh(["backhand", "sweep"] if randf() < 0.55 else ["sweep", "backhand"]))
+	if Combat.angle_to(global_position, forward(), opponent.global_position) > 60.0:
+		face_now(opponent.global_position)
+	_start_escape(kind)
 	return res
 
 
-## The first option that isn't the sequence you just punished him for.
-func _fresh(options: Array) -> String:
+func _pick_escape(allow_parry: bool) -> String:
+	if has_meta("force_escape"):                 # (a capture shot films one on purpose)
+		return str(get_meta("force_escape"))
+	var back := _room(-forward())
+	var aside := maxf(_room(_right()), _room(-_right()))
+	var options: Array = []
+	var total := 0.0
+	for kind in ESCAPES:
+		if kind == "parry" and not allow_parry:
+			continue
+		if not _escapes.is_empty() and kind == str(_escapes[0]):
+			continue
+		var need := float(ESCAPES[kind]["room"])
+		if need > 0.0 and (aside if kind == "sidestep" else back) < need:
+			continue
+		var w := float(ESCAPES[kind]["weight"])
+		if _escapes.size() > 1 and kind == str(_escapes[1]):
+			w *= 0.5
+		options.append([kind, w])
+		total += w
+	if options.is_empty():
+		return "sweep"
+	var roll := randf() * total
 	for o in options:
-		if str(o) != _punished_seq:
-			return str(o)
-	return str(options[0])
+		roll -= float(o[1])
+		if roll <= 0.0:
+			return str(o[0])
+	return str(options[options.size() - 1][0])
 
 
-## How many hits he takes while reeling before he breaks out.
-func _roll_breakout() -> int:
-	return 2 if phase == 1 else randi_range(1, 2)
+func _start_escape(kind: String) -> void:
+	_note_escape(kind)
+	match kind:
+		"shuriken":
+			_start_sequence("shuriken_4" if randf() < 0.55 else "shuriken_5")
+		"sidestep":
+			var r_room := _room(_right())
+			var l_room := _room(-_right())
+			var need := float(ESCAPES["sidestep"]["room"])
+			var go_right := r_room >= l_room if (r_room < need or l_room < need) else randf() < 0.5
+			_start_sequence("sidestep_r" if go_right else "sidestep_l")
+		_:
+			_start_sequence(kind)
+
+
+func _note_escape(kind: String) -> void:
+	escape_count += 1
+	_escapes.push_front(kind)
+	if _escapes.size() > 3:
+		_escapes.resize(3)
+
+
+## How far he can go in a direction before the wall round the plaza.
+func _room(dir: Vector3) -> float:
+	var here := Combat.flat(global_position)
+	var rad := ARENA_RADIUS - 0.8
+	var b := here.dot(dir)
+	var disc := b * b - (here.length_squared() - rad * rad)
+	if disc < 0.0:
+		return 0.0
+	return maxf(0.0, -b + sqrt(disc))
+
+
+func _right() -> Vector3:
+	return forward().cross(Vector3.UP)
+
+
+## How many hits he takes reeling before he escapes: three in his first life, two or three in
+## his second, two in his last.
+func _roll_endure() -> int:
+	match phase:
+		1:
+			return 3
+		2:
+			return randi_range(2, 3)
+	return 2
 
 
 ## Back on his feet after a flinch, recoil or kick. If you got hits in, he doesn't just stand
-## there for more: he often hops back out of reach (into a thrust or leap, or a shuriken
-## volley from the air), or goes straight back on the attack.
+## there for more: usually he escapes (see _escape) or goes straight back on the attack; if he
+## stands his ground, the next hits still count toward his escape.
 func _recover() -> void:
-	var punished := _flinches > 0
+	var punished := _pummel > 0
 	_to_neutral(0.25 / aggression)
 	if not punished or passive or opponent == null:
 		return
 	_punished_seq = _seq_name
-	_flinches = 0
-	_breakout_after = _roll_breakout()
 	var r := randf()
-	if r < 0.3:
-		_start_sequence(_fresh(["retreat", "shuriken_4"]))
-	elif r < 0.5:
-		_start_sequence(_fresh(["shuriken_4", "shuriken_5", "retreat"] if randf() < 0.6 else ["shuriken_5", "shuriken_4", "retreat"]))
-	elif r < 0.8:
+	if r < 0.55:
+		_pummel = 0
+		_endure = _roll_endure()
+		_start_escape(_pick_escape(false))
+	elif r < 0.85:
 		cooldown = 0.0
 
 
@@ -1001,6 +1198,8 @@ func _enter_phase(n: int, fanfare := true) -> void:
 	phase = clampi(n, 1, Combat.BOSS_LIVES)
 	hp = max_hp
 	posture = 0.0
+	_pummel = 0
+	_endure = _roll_endure()
 	var cfg: Dictionary = PHASES.get(phase, {})
 	if not cfg.is_empty():
 		attack_speed = float(cfg["attack_speed"])
@@ -1056,7 +1255,7 @@ func inferno_spent() -> void:
 	_inferno_at = Game.clock + INFERNO_COOLDOWN
 	_seq.clear()
 	_seq_name = "inferno"
-	_flinches = 0
+	_pummel = 0
 	_play_attack("b_fire_spent", 0.0)
 
 
