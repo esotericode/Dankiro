@@ -2191,22 +2191,27 @@ func suite_soak() -> void:
 ## standing still all get burned. Three passes on an even beat, a faster fourth that catches
 ## anyone jumping on the beat; the beat holds wherever you stand; after a burn you always get
 ## up in time to jump the next arm; the ring keeps you off him and his fire turns your sword;
-## afterwards he's open. He opens phase 2 with it and uses it again later.
+## afterwards he's open. He opens phases 2 and 3 with it and uses it again later.
 func suite_inferno() -> void:
-	# Opens phase 2: starting the fight there, and rising into it after a deathblow.
-	await setup(4.0)
-	boss.set_start_phase(2)
-	boss.passive = false
-	boss.start_fight()
-	await _wait_state(Boss.S.INFERNO, 2.0)
-	check(boss.state == Boss.S.INFERNO, "starting in phase 2, he opens with the Inferno (%s)" % Boss.S.keys()[boss.state])
-	await setup(3.0)
-	boss.passive = false
-	boss._posture_break()
-	boss.begin_deathblow(player)
-	await _wait_state(Boss.S.INFERNO, 12.0)
-	check(boss.state == Boss.S.INFERNO and boss.phase == 2, "rising into phase 2, he opens with the Inferno (%s, phase %d)" % [
-		Boss.S.keys()[boss.state], boss.phase])
+	# Opens phases 2 and 3: starting the fight there, and rising into it after a deathblow. Phase
+	# 3's is the one with the waves, so you meet it at least once.
+	for ph in [2, 3]:
+		await setup(4.0)
+		boss.set_start_phase(ph)
+		boss.passive = false
+		boss.start_fight()
+		await _wait_state(Boss.S.INFERNO, 2.0)
+		check(boss.state == Boss.S.INFERNO and boss.inferno.waves_on == (ph == 3),
+			"starting in phase %d, he opens with the Inferno (%s, waves %s)" % [ph, Boss.S.keys()[boss.state], boss.inferno.waves_on])
+		await setup(3.0)
+		boss.set_start_phase(ph - 1)
+		boss.passive = false
+		boss._posture_break()
+		boss.begin_deathblow(player)
+		await _wait_state(Boss.S.INFERNO, 12.0)
+		check(boss.state == Boss.S.INFERNO and boss.phase == ph and boss.inferno.waves_on == (ph == 3),
+			"rising into phase %d, he opens with the Inferno (%s, phase %d, waves %s)" % [ph, Boss.S.keys()[boss.state],
+			boss.phase, boss.inferno.waves_on])
 
 	# The leap lands him in the middle of the arena, wherever he was.
 	var r := await _inferno_run(Vector3(5.0, 0, -4.0), Vector3(0, 0, 9.0), "jump")

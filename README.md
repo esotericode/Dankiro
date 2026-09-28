@@ -174,10 +174,10 @@ The kanji flashes red above him with a deep warning sound and his blades glow ho
   kick off him. That deals posture damage (×1.6 during a sweep) and staggers him out of the
   sweep. You can follow up with an air attack.
 
-### The Inferno (phase two)
+### The Inferno (phases two and three)
 
-His fire move. He opens phase two with it, then uses it again every so often (at most once
-every 40 s; phase three has it too).
+His fire move. He opens phases two and three with it (phase three's with its waves of fire, so
+you meet those at least once), then uses it again every so often (at most once every 40 s).
 
 - **The tell:** he leaps to the middle of the arena, which nothing else he does, and drives
   his staff into the stones. He channels with both hands on it while fire climbs the shaft,
@@ -251,7 +251,7 @@ the beat of the quick blows gets you hit by the one after the pause.
 - He has **three lives**, one per phase. After each deathblow he rises into the next phase.
   Phase two is faster, more aggressive and parries more, and he opens it with the Inferno.
   Phase three adds his Tempest of Fangs (see above) and a harder Inferno (waves of fire between
-  the arms; it isn't his opener there).
+  the arms), and he opens it with that one.
 
 ### His behaviour
 
@@ -277,7 +277,7 @@ the beat of the quick blows gets you hit by the one after the pause.
 | Perilous Thrust 危 | Turns side-on, draws the staff back and holds at full coil | Mikiri (neutral dodge on the release) or deflect |
 | Perilous Sweep 危 | Slides his grip to the staff's end, sinks low and coils to his left | Jump, then kick |
 | Whirling Fangs | Raises the staff level overhead with a whoosh, then cocks it at his side and the windmill spins up | Deflect each blade as it comes down on you (4 chops, one every 0.375 s, each with a whoosh that peaks on contact), then the finishing cut after a pause |
-| Inferno 危 (phase two) | Leaps to the middle of the arena and drives his staff into the stones; the floor glows out to the blast radius | Get out of the glow before the blast. Then jump each arm of fire: three on an even beat, a faster fourth (in phase three, jump the wave of fire rolling out from him between each of the first three too). Then he raises the staff over his head and plunges it into the floor: jump as the arena erupts. Hit him while he's spent |
+| Inferno 危 (phases two and three) | Leaps to the middle of the arena and drives his staff into the stones; the floor glows out to the blast radius | Get out of the glow before the blast. Then jump each arm of fire: three on an even beat, a faster fourth (in phase three, jump the wave of fire rolling out from him between each of the first three too). Then he raises the staff over his head and plunges it into the floor: jump as the arena erupts. Hit him while he's spent |
 | Tempest of Fangs (phase three) | Stamps and sinks into a deep coil with the staff low behind him; both blades flare with fire and he holds it for a beat | Deflect the set: **ta-ta · · · ta-ta · · · · ta · · · TAAA**. Two quick cuts (from your left, then your right); a pause while he steps in and coils; two quick again (left, right); the long delay, the staff held at head height with the blade over you, then a stab; a pause with the staff overhead and the blades flaring, then a lunging overhead cleave. Wait out each pause: pressing on the quick beat gets you hit. He tracks you and closes in, so backing off fails; blocking the whole set breaks your guard |
 | Shuriken volley | Quick crouch, hand to his belt with a glint of steel, leaps back and hangs for a beat at the top, throwing hand glinting | Deflect each glowing star as it reaches you: **3 in the air + 1 delayed**, or **5 in the air**. From phase 2 on, **a second set** straight after, thrown from the ground (another glint first) |
 | Running Cut | Runs at you, staff swinging up behind his shoulder | Deflect (it tracks hard) |
@@ -322,10 +322,10 @@ godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--v
 | `cancel` | Guard cancels a slash only in the early wind-up and in the recovery; a guard tap let go of long before the recovery doesn't come up in it, while one just before it does, and so does a tap during hit-stun (as the stun ends); a lost dodge release cannot leave sprint held. A guard held since before a slash doesn't stop it (it lands), nor a second slash queued during it, and is back up as the recovery opens (a blow 0.467 s in is blocked, with no fresh deflect window); a step with guard held keeps its length and ends guarding (a neutral step once its mikiri window is over); a guard pressed while paused is held on resume and blocks, a dodge held through a pause is a sprint, not a step |
 | `hitstop` | Hit-stop and slow motion last their real length (to the next whole frame) however the frame they start in goes: a 75 ms hit-stop at `HITSTOP_STRENGTH` 0.7, started in a physics step (even before `Game` has seen that frame begin) or at the end of a frame, lasts its 52.5 ms, 0.5 s of slow motion 0.5 s, and a real deflect freezes the action for its length; a shuriken that you deflect, block, that breaks your guard or hits you never freezes it; his posture break freezes, then slows, but broken by a deflected shuriken it only slows |
 | `deathblow` | His posture broken: the DEATHBLOW prompt and what an attack press does agree, in front of him, beside and behind, near and far (behind him at 2.5 m neither, at 1.5 m both) |
-| `inferno` | Phase 2 opens with the Inferno (starting there, or rising into it); he lands in the middle of the arena; the blast misses you outside its radius, knocks you down and throws you out of it inside, and walking away locked on from right beside him gets clear in time (stepping through it doesn't); jumping each arm clears all four from 4 to 14 m out, the beat holds (1.5, 1.5, 1.0 s) wherever you stand and while you walk round him; standing, guarding and dodging get burned by every arm and by the eruption; jumping on the beat gets caught by the fourth; one jump timed to the eruption clears it (in the air you're clear), earlier or later burns (it prints the window), and it rolls outward, reaching the wall a moment after it bursts beside him; after a burn the next arm, or the eruption, waits until you can jump it. Phase 3: jumping each arm, each wave and the eruption clears them all from 4 to 14 m out, each wave comes on the half-beat between two arms and there's never less than 0.9 s between two things to jump, still so walking round him or backing away; watching only the arms, a wave burns you; after any burn nothing reaches you for 2 s; it prints how early or late a jump over a wave may be; phase 2 has no waves. The ring stops you and burns; your sword glances off him; his posture holds through it; he's open afterwards; he uses it again once it's off cooldown |
+| `inferno` | Phases 2 and 3 open with the Inferno (starting there, or rising into it; phase 3's with its waves); he lands in the middle of the arena; the blast misses you outside its radius, knocks you down and throws you out of it inside, and walking away locked on from right beside him gets clear in time (stepping through it doesn't); jumping each arm clears all four from 4 to 14 m out, the beat holds (1.5, 1.5, 1.0 s) wherever you stand and while you walk round him; standing, guarding and dodging get burned by every arm and by the eruption; jumping on the beat gets caught by the fourth; one jump timed to the eruption clears it (in the air you're clear), earlier or later burns (it prints the window), and it rolls outward, reaching the wall a moment after it bursts beside him; after a burn the next arm, or the eruption, waits until you can jump it. Phase 3: jumping each arm, each wave and the eruption clears them all from 4 to 14 m out, each wave comes on the half-beat between two arms and there's never less than 0.9 s between two things to jump, still so walking round him or backing away; watching only the arms, a wave burns you; after any burn nothing reaches you for 2 s; it prints how early or late a jump over a wave may be; phase 2 has no waves. The ring stops you and burns; your sword glances off him; his posture holds through it; he's open afterwards; he uses it again once it's off cooldown |
 | `soak` | A full fight against the real AI (charges, repositioning, volleys) with a bot player that reacts to the blade and to incoming shuriken: deflects, blocks, posture breaks, deathblows (each signalling 忍殺 once, the last as the final one), the next phase and the Inferno it opens with |
 
-The run exits with code 0 when every check passes (1046 checks, including the soak). It also
+The run exits with code 0 when every check passes (1048 checks, including the soak). It also
 fails if the engine or a script reports any error during the run (it listens through a
 `Logger`), so runtime errors can't hide behind passing gameplay checks.
 
@@ -461,11 +461,17 @@ How the boss model is built (PS2-style: ~25k triangles, one 2048 px atlas with b
 
 ## Status
 
-This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (1046 checks, including
+This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (1048 checks, including
 a full-fight soak), the game boots and runs with no script errors, and every change to the
 visuals was checked on frames rendered with Movie Maker.
 
-**Latest: his blows no longer pass through you.** The leaping cleave (Falling Crescent) fixed
+**Latest: phase three opens with its Inferno.** He opened phase two with the Inferno but
+phase three only unlocked it 18 s after he rose, so you could finish him without ever meeting
+its waves of fire. Now he opens phase three with it, as he does phase two, whether he rises into
+it or the fight starts there (Options); after that it comes back on the usual 40 s cooldown.
+The `inferno` lab suite checks both openers in both phases.
+
+**Before that: his blows no longer pass through you.** The leaping cleave (Falling Crescent) fixed
 the length of its jump when he took off, from where you stood then, and stopped turning toward
 you before the staff came down. Walk in, back off or circle round him while he was in the air
 and he landed in the wrong place: the staff slammed the stones at your feet, or passed through

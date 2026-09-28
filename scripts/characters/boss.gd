@@ -9,7 +9,8 @@ extends Combatant
 ##    deathblow he rises into the next phase (2 is faster and more aggressive; 3 is 2 with
 ##    the Tempest of Fangs and a harder Inferno).
 ##  * Phase 2 on: his staff smoulders, and he has the Inferno (scripts/combat/inferno.gd):
-##    he opens phase 2 with it, then uses it every so often (INFERNO_COOLDOWN).
+##    he opens phases 2 and 3 with it (phase 3's sends waves of fire too), then uses it every
+##    so often (INFERNO_COOLDOWN).
 ##  * Phase 3: the Tempest of Fangs (b_tempest), his signature string: six blows in a rhythm
 ##    you learn, tracking you and closing in between them, so you deflect the set.
 
@@ -35,7 +36,6 @@ const ARENA_RADIUS := 13.5
 const LEAP_STRIKE := 2.0              ## how far from you a leap lands (its slam reaches ~1.2 to 2.4 m)
 const DEATHBLOW_WINDOW_END := 2.75   ## b_posture_break time when he starts rising
 const INFERNO_COOLDOWN := 40.0       ## seconds from the end of one Inferno until he may use it again
-const INFERNO_PHASE3 := 18.0         ## ...and after rising into phase 3 (which has no opener)
 
 ## steps: [options ("a|b"), chance]; range: [min_d, max_d] meters; weight; min_phase (optional)
 const SEQUENCES := {
@@ -269,8 +269,8 @@ func start_fight() -> void:
 	state_time = 0.0
 	cooldown = 1.4
 	anim.play_locomotion(LOCO, 0.25)
-	if phase == 2:
-		_opener = true              # starting in phase 2 (Options): he opens with the Inferno
+	if phase >= 2:
+		_opener = true              # starting in phase 2 or 3 (Options): he opens with the Inferno
 		cooldown = 0.5
 
 
@@ -325,8 +325,8 @@ func _physics_process(delta: float) -> void:
 				_after_deathblow()
 		S.REVIVE:
 			if anim.finished:
-				if phase == 2 and not passive and opponent != null:
-					begin_inferno()      # he opens phase 2 with the Inferno
+				if phase >= 2 and not passive and opponent != null:
+					begin_inferno()      # he opens phases 2 and 3 with the Inferno
 				else:
 					_to_neutral(0.8)
 		S.INFERNO:
@@ -1238,12 +1238,12 @@ func _enter_phase(n: int, fanfare := true) -> void:
 		aura.amount = int(cfg["aura"])
 		if eye_light:
 			eye_light.light_energy = float(cfg["eye_light"])
-	# Phase 2 opens with the Inferno (which lights the staff); in phase 3 it's already alight.
+	# He opens phases 2 and 3 with the Inferno (REVIVE, start_fight); after that one it's his again
+	# once it's off cooldown (inferno_spent). In phase 3 the staff's already alight.
+	if phase >= 2:
+		_inferno_at = INF
 	if phase >= 3:
 		staff_fire.set_level(StaffFire.SMOULDER, 1.0)
-		_inferno_at = Game.clock + INFERNO_PHASE3
-	elif phase == 2:
-		_inferno_at = INF
 	vitals_changed.emit()
 	if fanfare:
 		Sfx.play_ui("roar", 0.0)
