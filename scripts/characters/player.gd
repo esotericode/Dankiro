@@ -874,6 +874,13 @@ func _in_clip_iframes() -> bool:
 	return anim.time >= float(a[0]) and anim.time <= float(a[1])
 
 
+## A blow's hit-stop, but never a projectile's: freezing on every shuriken of a volley looks
+## wrong (the rest of it hangs in the air), so those spark, ring and shake without it.
+func _hitstop(info: Dictionary, duration: float) -> void:
+	if str(info.get("kind", "")) != "projectile":
+		Game.hitstop(duration)
+
+
 func _do_deflect(info: Dictionary, attacker: Combatant, dt: float) -> void:
 	_last_press_deflected = true
 	spam_level = 0
@@ -898,7 +905,7 @@ func _do_deflect(info: Dictionary, attacker: Combatant, dt: float) -> void:
 	# A flurry's deflects ring up a scale: a clean exchange rings out as a rising phrase instead
 	# of the same clang over and over.
 	Sfx.play_deflect(pos, deflect_chain)
-	Game.hitstop(Combat.HITSTOP_DEFLECT)
+	_hitstop(info, Combat.HITSTOP_DEFLECT)
 	Game.shake(0.22, 0.16)
 	Game.rumble(0.25, 0.55, 0.1)
 	push(-forward() * 1.4)
@@ -911,21 +918,21 @@ func _do_block(info: Dictionary, attacker: Combatant, pos: Vector3) -> void:
 	Fx.sparks(get_parent(), pos, Vector3.UP, Fx.SPARK_BLOCK)
 	Sfx.play("block", pos, 1.0, 1.0, 0.07)
 	if broke:
-		_guard_break()
+		_guard_break(info)
 		return
 	_start_state(S.BLOCK)
 	anim.play("p_block", 0.03)
-	Game.hitstop(Combat.HITSTOP_BLOCK)
+	_hitstop(info, Combat.HITSTOP_BLOCK)
 	Game.shake(0.12, 0.12)
 	push(-forward() * 2.0)
 
 
-func _guard_break() -> void:
+func _guard_break(info: Dictionary) -> void:
 	_start_state(S.GUARD_BREAK)
 	anim.play("p_guard_break", 0.04)
 	Sfx.play("guard_break", global_position + Vector3.UP * 1.2, 2.0)
 	Fx.sparks(get_parent(), global_position + Vector3.UP * 1.25 + forward() * 0.3, Vector3.UP, Fx.SPARK_BREAK)
-	Game.hitstop(Combat.HITSTOP_POSTURE_BREAK)
+	_hitstop(info, Combat.HITSTOP_POSTURE_BREAK)
 	Game.shake(0.45, 0.3)
 	Game.rumble(0.6, 1.0, 0.3)
 	# guard_held stays as the button is: a guard still held when the stagger ends comes back up
@@ -943,7 +950,7 @@ func _do_hit(info: Dictionary, attacker: Combatant, pos: Vector3) -> void:
 	else:
 		Fx.blood(get_parent(), pos, away + Vector3.UP * 0.2, 36)
 		Sfx.play("hit", pos, 2.0, 1.0, 0.08)
-	Game.hitstop(Combat.HITSTOP_HIT)
+	_hitstop(info, Combat.HITSTOP_HIT)
 	Game.shake(0.4, 0.25)
 	Game.rumble(0.7, 0.8, 0.2)
 	if Game.hud != null and Game.hud.has_method("flash_damage"):

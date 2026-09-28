@@ -148,10 +148,12 @@ func precise_now() -> float:
 	return clock + clampf(real_dt, 0.0, max_dt) * Engine.time_scale
 
 
-## Freezes the action for `duration` real seconds (time slowed to `scale`).
+## Freezes the action for `duration` real seconds (time slowed to `scale`), scaled by
+## Combat.HITSTOP_STRENGTH.
 func hitstop(duration: float, scale := 0.02) -> void:
 	if not time_effects_enabled:
 		return
+	duration *= Combat.HITSTOP_STRENGTH
 	if _hitstop_left <= 0.0:
 		_hitstop_scale = scale
 		_hitstop_fresh = not _between_frames()   # (started mid-frame: count from the next)

@@ -1819,10 +1819,12 @@ func suite_cancel() -> void:
 ## scales a frame's delta by the time scale in force as the frame began, so a freeze started
 ## during a frame (a deflect, in a physics step) must count that frame by the old scale. (Counting
 ## it by the new one ended a deflect's 75 ms freeze at once.) At the lab's 120 fps each frame is
-## 8.3 ms of real time, and each effect lasts exactly its length in frames (the frame it starts in
-## isn't part of it: that one ran at full speed).
+## 8.3 ms of real time, and each effect lasts its length rounded up to whole frames (the frame it
+## starts in isn't part of it: that one ran at full speed). Every hit-stop is scaled by
+## Combat.HITSTOP_STRENGTH, and shuriken never cause one.
 func suite_hitstop() -> void:
 	Game.time_effects_enabled = true
+	var k := Combat.HITSTOP_STRENGTH
 	var cases := [["a hit-stop started in a physics step", "physics", 0.075, 0.02],
 		["a hit-stop started in physics before Game sees the frame begin", "early", 0.075, 0.02],
 		["a hit-stop started at the end of a frame (deferred)", "deferred", 0.075, 0.02],
@@ -1843,10 +1845,11 @@ func suite_hitstop() -> void:
 			Game.slowmo(dur, float(cs[3]))
 		else:
 			Game.hitstop(dur, float(cs[3]))
+		var length := dur if dur > 0.2 else dur * k     # (slow motion isn't scaled)
 		var n := await _slowed_frames()
-		var want := int(round(dur * 120.0))
-		print("  %s (%.0f ms): %d frames = %.0f ms" % [cs[0], dur * 1000.0, n, n * 1000.0 / 120.0])
-		check(n == want, "%s lasts its %.0f ms (%.0f ms)" % [cs[0], dur * 1000.0, n * 1000.0 / 120.0])
+		print("  %s (%.1f ms): %d frames = %.0f ms" % [cs[0], length * 1000.0, n, n * 1000.0 / 120.0])
+		check(n == _frames_for(length), "%s lasts its %.1f ms, to the next whole frame (%d frames = %.0f ms)" % [
+			cs[0], length * 1000.0, n, n * 1000.0 / 120.0])
 		Game.clear_time_effects()
 	# The real thing: a deflect's hit-stop.
 	await setup(2.2)
@@ -1854,17 +1857,68 @@ func suite_hitstop() -> void:
 	await ticks(2)
 	var r := player.receive_attack({"dmg": 12.0, "kind": "normal", "time": Game.clock}, boss)
 	var frames := await _slowed_frames()
-	var want_ms := Combat.HITSTOP_DEFLECT * 1000.0
-	check(r == Combat.RESULT_DEFLECT and frames == int(round(Combat.HITSTOP_DEFLECT * 120.0)),
-		"a deflect freezes the action for its %.0f ms (%s, %.0f ms)" % [want_ms, res_name(r), frames * 1000.0 / 120.0])
+	var deflect_len := Combat.HITSTOP_DEFLECT * k
+	check(r == Combat.RESULT_DEFLECT and frames == _frames_for(deflect_len),
+		"a deflect freezes the action for its %.1f ms (%s, %d frames = %.0f ms)" % [deflect_len * 1000.0, res_name(r),
+		frames, frames * 1000.0 / 120.0])
 	Game.clear_time_effects()
+	# Shuriken never freeze it: deflecting one, blocking one, one that breaks your guard or hits
+	# you. (A freeze on each shuriken of a volley hangs the rest of it in the air.)
+	for how in ["deflects", "blocks", "breaks the guard", "hits"]:
+		await setup(2.2)
+		if how != "hits":
+			player.press_guard(Game.clock)
+			await ticks(2 if how == "deflects" else 60)
+		if how == "breaks the guard":
+			player.posture = player.max_posture - 1.0
+		var res := player.receive_attack({"kind": "projectile", "dir": "mid", "dmg": 8.0, "posture_block": 9.0,
+			"posture_deflect": 3.0, "time": Game.clock}, boss)
+		var want_res: int = {"deflects": Combat.RESULT_DEFLECT, "blocks": Combat.RESULT_BLOCK,
+			"breaks the guard": Combat.RESULT_BLOCK, "hits": Combat.RESULT_HIT}[how]
+		var broke := player.state == Player.S.GUARD_BREAK
+		var slowed := await _slowed_frames(30)
+		check(res == want_res and broke == (how == "breaks the guard") and slowed == 0,
+			"a shuriken that %s doesn't freeze the action (%s%s, %d slowed frames)" % [how, res_name(res),
+			", guard broken" if broke else "", slowed])
+		Game.clear_time_effects()
+	# His posture break: a freeze, then slow motion. Broken by a shuriken you deflect (him on the
+	# ground), only the slow motion.
+	for by_shuriken in [false, true]:
+		await setup(3.0)
+		boss.posture = boss.max_posture - 1.0
+		if by_shuriken:
+			boss.projectile_deflected({"boss_posture": 4.0})
+		else:
+			boss._posture_break()
+		var broken := boss.state == Boss.S.STAGGER
+		var frozen := 0
+		var slow := 0
+		for i in 80:
+			await get_tree().process_frame
+			var d := get_process_delta_time()
+			if d < DT * 0.1:
+				frozen += 1
+			elif d < DT * 0.99:
+				slow += 1
+		var want_frozen := 0 if by_shuriken else _frames_for(Combat.HITSTOP_POSTURE_BREAK * k)
+		check(broken and frozen == want_frozen and frozen + slow == _frames_for(0.45),
+			"his posture broken by %s: %d frames frozen, then %d in slow motion (%d frozen and %d in all wanted)" % [
+			"a deflected shuriken" if by_shuriken else "the blade", frozen, slow, want_frozen, _frames_for(0.45)])
+		Game.clear_time_effects()
 	Game.time_effects_enabled = false
 
 
-## How many frames from now run slowed (their delta scaled down), until the first one that doesn't.
-func _slowed_frames() -> int:
+## How many frames at 120 fps a hit-stop or slow motion of this length (in real seconds) runs
+## for: its length rounded up to whole frames, as Game counts it down.
+static func _frames_for(length: float) -> int:
+	return ceili((length - 0.0001) * 120.0)
+
+
+## How many frames from now run slowed (their delta scaled down), until the first one that
+## doesn't; 0 if none does within `wait` frames.
+func _slowed_frames(wait := 400) -> int:
 	var n := 0
-	for k in 400:
+	for i in wait:
 		await get_tree().process_frame
 		if get_process_delta_time() < DT * 0.99:
 			n += 1

@@ -203,7 +203,9 @@ godot --headless --editor --quit               # import
   with `Game.unscaled(delta)`, never `delta / Engine.time_scale` (that ended every deflect's
   freeze at once). `Game` reads the frame's scale off each physics step's delta, treats any
   change made during physics as the next frame's, and counts the effects in its `_process`,
-  which runs last (`process_priority` 1000). The lab's `hitstop` suite checks all of it.
+  which runs last (`process_priority` 1000). `Game.hitstop` scales every length by
+  `Combat.HITSTOP_STRENGTH` (tune the overall feel there), and projectiles never hit-stop
+  (`Player._hitstop`). The lab's `hitstop` suite checks all of it.
 - The player's guard: a fresh press opens a deflect window (`_begin_guard`); a guard that's
   still held comes back up as a block whenever the current action allows it
   (`Player._held_guard_returns`: a slash's recovery, not its wind-up); presses and releases

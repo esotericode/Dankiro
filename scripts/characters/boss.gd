@@ -1119,7 +1119,9 @@ func receive_kick(p: Player, foot: Vector3) -> void:
 
 
 # ---------------------------------------------------------------------------- posture break / deathblow
-func _posture_break() -> void:
+## `by_projectile`: a deflected shuriken of his broke it. Then there's no hit-stop (projectiles
+## never freeze the action, see Player._hitstop), just the break's slow motion.
+func _posture_break(by_projectile := false) -> void:
 	_break_on_landing = false
 	state = S.STAGGER
 	state_time = 0.0
@@ -1132,7 +1134,8 @@ func _posture_break() -> void:
 	var chest := rig.joint_world("chest") + Vector3(0, 0.15, 0)
 	Fx.sparks(get_parent(), chest + forward() * 0.3, Vector3.UP, Fx.SPARK_BREAK)
 	Sfx.play_ui("posture_break", 0.0)
-	Game.hitstop(Combat.HITSTOP_POSTURE_BREAK)
+	if not by_projectile:
+		Game.hitstop(Combat.HITSTOP_POSTURE_BREAK)
 	Game.slowmo(0.45, 0.45)
 	Game.shake(0.5, 0.35)
 	Game.rumble(0.6, 1.0, 0.3)
@@ -1344,7 +1347,7 @@ func projectile_deflected(info: Dictionary) -> void:
 		if _airborne():
 			_break_on_landing = true
 		else:
-			_posture_break()
+			_posture_break(true)
 
 
 ## Both feet off the ground (in a leap, or hanging in the air to throw shuriken).

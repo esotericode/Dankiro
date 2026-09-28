@@ -37,6 +37,11 @@ const DEFLECT_CHAIN_BONUS := 0.12
 const DEFLECT_CHAIN_MAX_STEPS := 3
 
 # --- Hit reactions ---------------------------------------------------------------------
+## Hit-stop (Game.hitstop): the action freezes for a moment as blows land. These lengths are the
+## full freezes; Game.hitstop scales every one of them, the boss's too, by HITSTOP_STRENGTH, so
+## that one number makes them all milder or stronger. Projectiles never freeze it (see
+## Player._hitstop).
+const HITSTOP_STRENGTH := 0.7
 const HITSTOP_DEFLECT := 0.075
 const HITSTOP_BLOCK := 0.035
 const HITSTOP_HIT := 0.06

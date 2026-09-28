@@ -81,9 +81,16 @@ The input map is registered in code (`scripts/autoload/game_input.gd`); actions 
 
 - Pressing guard opens a **0.200 s deflect window** (12 frames at 60 fps, as in Sekiro). If a
   blade touches you inside the window, you deflect. You get a bright golden spark burst with
-  streaks, a star flash, a light pulse, a loud ringing "clang", a ~75 ms hit-stop, a small
+  streaks, a star flash, a light pulse, a loud ringing "clang", a brief hit-stop, a small
   shove, controller rumble, and posture damage to the boss. A deflect can never break your own
   posture.
+- **Hit-stop.** Blows that land freeze the action for a beat: about 50 ms for a deflect, less
+  for a block, more for a mikiri, a posture break or a deathblow. The lengths in
+  `scripts/combat/combat.gd` are the full freezes, and `Combat.HITSTOP_STRENGTH` (0.7) scales
+  them all, so that one number makes every freeze milder or stronger. Shuriken never freeze
+  it: deflected, blocked or landing, they spark, ring and shake, but a freeze on each one of a
+  volley would hang the rest in the air. (If one you deflect breaks his posture, the break
+  keeps its slow motion, without the freeze.)
 - **Spam penalty (as in Sekiro).** Pressing guard within **0.5 s of releasing it** shrinks the
   next window: 200 → 133 → 100 → 67 → 0 ms. It clears after 0.5 s without a quick re-press, and
   **immediately after a successful deflect**, so deflecting a flurry in rhythm works but
@@ -311,12 +318,12 @@ godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--v
 | `escape` | A pummeling (he's reeling and you keep hitting): in each phase he reels from at most his share of hits (3, then 3, then 2), then gets out of it, in at least four different ways over twelve pummelings and never the same way twice running; with his back to the wall he never escapes backwards into it. Running round you: he backpedals facing you before he turns, never has his back to you within 3.2 m, never comes nearer than he started, his speed changes no faster than 9 m/s² (12 when charging), he ends up 45° or more round you at 3.4–7.6 m, stays inside the plaza and squares up to you before he acts |
 | `attack` | Slash reach, and that mashing is rate-limited (no two hits within 0.38 s) |
 | `cancel` | Guard cancels a slash only in the early wind-up and in the recovery; a guard tap let go of long before the recovery doesn't come up in it, while one just before it does, and so does a tap during hit-stun (as the stun ends); a lost dodge release cannot leave sprint held. A guard held since before a slash doesn't stop it (it lands), nor a second slash queued during it, and is back up as the recovery opens (a blow 0.467 s in is blocked, with no fresh deflect window); a step with guard held keeps its length and ends guarding (a neutral step once its mikiri window is over); a guard pressed while paused is held on resume and blocks, a dodge held through a pause is a sprint, not a step |
-| `hitstop` | Hit-stop and slow motion last their real length however the frame they start in goes: a 75 ms hit-stop started in a physics step (even before `Game` has seen that frame begin) or at the end of a frame lasts 75 ms, 0.5 s of slow motion 0.5 s, and a real deflect freezes the action for its 75 ms |
+| `hitstop` | Hit-stop and slow motion last their real length (to the next whole frame) however the frame they start in goes: a 75 ms hit-stop at `HITSTOP_STRENGTH` 0.7, started in a physics step (even before `Game` has seen that frame begin) or at the end of a frame, lasts its 52.5 ms, 0.5 s of slow motion 0.5 s, and a real deflect freezes the action for its length; a shuriken that you deflect, block, that breaks your guard or hits you never freezes it; his posture break freezes, then slows, but broken by a deflected shuriken it only slows |
 | `deathblow` | His posture broken: the DEATHBLOW prompt and what an attack press does agree, in front of him, beside and behind, near and far (behind him at 2.5 m neither, at 1.5 m both) |
 | `inferno` | Phase 2 opens with the Inferno (starting there, or rising into it); he lands in the middle of the arena; the blast misses you outside its radius, knocks you down and throws you out of it inside, and walking away locked on from right beside him gets clear in time (stepping through it doesn't); jumping each arm clears all four from 4 to 14 m out, the beat holds (1.5, 1.5, 1.0 s) wherever you stand and while you walk round him; standing, guarding and dodging get burned by every arm and by the eruption; jumping on the beat gets caught by the fourth; one jump timed to the eruption clears it (in the air you're clear), earlier or later burns (it prints the window), and it rolls outward, reaching the wall a moment after it bursts beside him; after a burn the next arm, or the eruption, waits until you can jump it. Phase 3: jumping each arm, each wave and the eruption clears them all from 4 to 14 m out, each wave comes on the half-beat between two arms and there's never less than 0.9 s between two things to jump, still so walking round him or backing away; watching only the arms, a wave burns you; after any burn nothing reaches you for 2 s; it prints how early or late a jump over a wave may be; phase 2 has no waves. The ring stops you and burns; your sword glances off him; his posture holds through it; he's open afterwards; he uses it again once it's off cooldown |
 | `soak` | A full fight against the real AI (charges, repositioning, volleys) with a bot player that reacts to the blade and to incoming shuriken: deflects, blocks, posture breaks, deathblows (each signalling 忍殺 once, the last as the final one), the next phase and the Inferno it opens with |
 
-The run exits with code 0 when every check passes (879 checks, including the soak). It also
+The run exits with code 0 when every check passes (885 checks, including the soak). It also
 fails if the engine or a script reports any error during the run (it listens through a
 `Logger`), so runtime errors can't hide behind passing gameplay checks.
 
@@ -443,8 +450,8 @@ How the boss model is built (PS2-style: ~25k triangles, one 2048 px atlas with b
 
 ## Tuning
 
-- `scripts/combat/combat.gd` holds the deflect windows, spam penalty, hit-stop lengths, HP,
-  posture and regen values, and mikiri and kick posture damage.
+- `scripts/combat/combat.gd` holds the deflect windows, spam penalty, hit-stop lengths and
+  strength, HP, posture and regen values, and mikiri and kick posture damage.
 - `scripts/characters/boss.gd` holds `SEQUENCES`, his attack strings: the options at each step,
   the chance to continue, distance ranges and weights.
 - Per-attack damage and posture numbers are in the `hits` entries in `tools/build_animations.py`
@@ -452,7 +459,7 @@ How the boss model is built (PS2-style: ~25k triangles, one 2048 px atlas with b
 
 ## Status
 
-This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (879 checks, including
+This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (885 checks, including
 a full-fight soak), the game boots and runs with no script errors, and every change to the
 visuals was checked on frames rendered with Movie Maker.
 

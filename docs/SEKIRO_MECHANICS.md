@@ -21,7 +21,7 @@ The automated checks in `tests/` (see the README) verify the rules marked **[tes
 | A **deflect** negates the damage, adds a *small* amount of your posture, and **can never break your posture**. | `add_posture(x, false)` clamps below max. **[tested]** |
 | A deflect deals **large posture damage to the attacker**. Deflecting a combo's last hit staggers them briefly, giving you an opening. | `boss_posture` per hit, a ×1.35 bonus on a combo's final hit, and a `b_recoil` opening. |
 | Deflecting several hits in quick succession deals more posture damage. | Chain bonus: +12% per consecutive deflect within 1.2 s, up to +36%. |
-| Deflect feedback: a **huge spray of orange sparks** and a **loud, high-pitched CLANG**, instantly distinguishable from a block. | Layered streak sparks, star flash, light pulse, a bright "ting", ~75 ms hit-stop, shake and rumble. Blocks get a small dull spark and a quiet low clank. |
+| Deflect feedback: a **huge spray of orange sparks** and a **loud, high-pitched CLANG**, instantly distinguishable from a block. | Layered streak sparks, star flash, light pulse, a bright "ting", ~50 ms hit-stop (none for shuriken), shake and rumble. Blocks get a small dull spark and a quiet low clank. |
 | Attacks from behind can't be guarded. | `GUARD_HALF_ANGLE = 110°` |
 
 ## 2. Perilous attacks (危)
