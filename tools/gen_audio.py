@@ -442,10 +442,10 @@ def loop_xfade(x, xf):
 # without looking.
 
 # The deflect has a voice of its own, in two layers. The strike (deflect_N, positional): an anvil
-# crack, a hiss of steel on steel, a crackle of sparks, a thump. The ring (deflect_ring_N, stereo,
-# played flat on top): one bright, pure note, the same in every variation, so the ear learns it
-# (that's the sound of getting it right), with its shimmer spread wide, its reverberation and
-# sparks scattered across the speakers. The game ducks everything else under both (Sfx), and a
+# crack, a hiss of steel on steel, a glint of bright air, a thump. The ring (deflect_ring_N,
+# stereo, played flat on top): one bright, pure note, the same in every variation, so the ear
+# learns it (that's the sound of getting it right), with its shimmer spread wide, its
+# reverberation and a soft wash of air round it. The game ducks everything else under both (Sfx), and a
 # flurry's rings climb a pentatonic scale from this note, so overlapping rings stay in tune.
 DEFLECT_NOTE = 1976.0          # B6
 
@@ -465,26 +465,13 @@ def sparkle(key, dur=0.5, tau=0.07):
     return decay(highpass(S(key, dur=dur), 5200, order=4), tau)
 
 
-def sparks(dur, count, seed, spread=0.0):
-    """Sparks flying off a clash: sharp little crackles above 4 kHz, thinning out fast. With
-    `spread`, stereo, each spark somewhere between the speakers."""
-    rng = np.random.default_rng(seed)
-    n = int(dur * SR)
-    out = np.zeros((n, 2))
-    for _ in range(count):
-        t = rng.exponential(dur * 0.2)
-        if t >= dur:
-            continue
-        k = max(8, int(rng.uniform(0.0004, 0.0025) * SR))
-        pop = rng.standard_normal(k) * np.exp(-np.arange(k) / (k * 0.3))
-        pop *= rng.uniform(0.25, 1.0) * math.exp(-t / (dur * 0.35))
-        i = int(t * SR)
-        m = min(k, n - i)
-        pan = 0.5 + spread * rng.uniform(-0.5, 0.5)
-        out[i:i + m, 0] += pop[:m] * math.sqrt(1 - pan)
-        out[i:i + m, 1] += pop[:m] * math.sqrt(pan)
-    out = highpass(out, 4000, order=4)
-    return out if spread else out.mean(axis=1)
+def glint(dur, seed, tau=0.05, lo=5000, hi=11000, stereo=False):
+    """The glint of a clash: a smooth burst of bright air, dying fast. (Not sparks: scattered
+    clicks read as crackle.) Stereo: a different wash each side, so it spreads wide."""
+    env = env_exp(dur, tau, 0.0015)
+    if not stereo:
+        return bandpass(noise(dur, seed), lo, hi) * env
+    return np.stack([bandpass(noise(dur, seed + k), lo, hi) * env for k in (0, 1)], axis=1)
 
 
 def deflect_note(f, dur, seed=0):
@@ -516,13 +503,13 @@ def deflect(i):
     core = hshelf(peq(highpass(core, 500), 3500, -6.0, 0.9), 9000, -4.0)
     body = decay(lowpass(repitch(S("brake_%d" % (1 + (i + 2) % 5), dur=0.2), 0.5), 1400), 0.035) * 0.7
     thump = decay(lowpass(repitch(S("frame_muted", dur=0.3), 1.5), 500), 0.05) * 0.8
-    x = mix(sat(mix(crack, core, body), 1.4), tsh, sparks(0.35, 30, 70 + i) * 0.5, thump, dur=dur)
+    x = mix(sat(mix(crack, core, body), 1.4), tsh, glint(0.3, 70 + i) * 0.35, thump, dur=dur)
     return reverb(x, 0.5, 0.08, bright=8000, seed=30 + i)
 
 
 def deflect_ring(i):
     """The ring (stereo): the note in the middle, its octave shimmering apart left and right, its
-    reverberation, and sparks scattered across the speakers."""
+    reverberation, and a soft wash of bright air round it, different each side."""
     f = DEFLECT_NOTE
     dur = 1.4
     t = t_axis(dur)
@@ -532,8 +519,8 @@ def deflect_ring(i):
     shimmer *= (np.exp(-t / 0.22) * (1 - np.exp(-t / 0.004)))[:, None] * 0.12
     out = wet.copy()
     out[:len(t)] += shimmer
-    sp = sparks(0.4, 45, 90 + i, spread=1.0) * 0.6
-    out[:len(sp)] += sp
+    air = glint(0.5, 90 + 2 * i, tau=0.1, lo=6000, hi=12000, stereo=True) * 0.12
+    out[:len(air)] += air
     return out
 
 

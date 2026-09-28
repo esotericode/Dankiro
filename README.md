@@ -404,10 +404,11 @@ filtered and layered with synthesized parts by `tools/gen_audio.py` (credits in
 `audio/CREDITS.md`).
 
 - **Deflect**: it has a voice of its own, in two layers. The strike (six variations: an anvil
-  crack, a real knife's hiss of steel on steel, a crackle of sparks, a thump) plays where the
+  crack, a real knife's hiss of steel on steel, a glint of bright air, a thump) plays where the
   blades meet. Over it, a wide stereo ring carries the deflect's note, a bright, pure B6 over a
   finger cymbal tuned to it, the same every time so you learn it as the sound of getting it
-  right, with its shimmer and sparks spread across the speakers. It plays on its own bus, and
+  right, with its shimmer and a soft wash of air spread across the speakers. The deflect,
+  block and parry sounds import uncompressed, so nothing grits them up. It plays on its own bus, and
   everything else (swings, fire, wind) ducks under it for a moment. A flurry's rings climb the
   major pentatonic (root, 2nd, 3rd, 5th), so a clean exchange rings out as a rising phrase and
   overlapping rings stay in tune.
