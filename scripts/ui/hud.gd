@@ -485,6 +485,8 @@ func _inferno_line() -> String:
 		return "inferno  used %d   next %s" % [boss.inferno_uses, "ready" if wait <= 0.0 else ("%.0f s" % wait if wait < 1e6 else "-")]
 	var s := "INFERNO  %s   passes %d/%d   burned %d   fire top %.2f m   turning %.0f deg/s" % [inf.stage_name(), inf.passes,
 		Inferno.PASSES, inf.hits, inf.fire_top, inf._omega]
+	if inf.waves_on:
+		s += "   waves %d/%d" % [inf.waves_passed, Inferno.WAVE_BEATS.size()]
 	var n := inf.next_jump_in()
 	if n < INF:
 		s += "   jump in %.2f s" % n

@@ -207,6 +207,11 @@ godot --headless --editor --quit               # import
   Fire is drawn additively in HDR: keep its colours near 1.0 and thin out overlapping flames, or
   it blows out to white under the glow. The staff's smoulder (his normal fighting) is kept low so
   strikes stay readable; captures `fire_staff [level]`, `fire_combo`, `inferno spin|plunge`.
+  Phase 3 adds waves (`_send_waves` / `_move_waves`): rings of fire sent from his ring so they
+  reach you on the half-beats between the arms (`WAVE_BEATS`), each steered like the turn
+  (speed within `WAVE_STEER`), with the turn slowed to `GAP_WAVES` so there's 0.9 s between
+  jumps (a jump and landing take ~0.77 s). The lab's `inferno` suite proves it's clearable;
+  its bot can jump out of a landing after 0.08 s like a player. Captures: add `p3`.
 - Cosmetic randomness in effects (blood splatter) comes from `Fx._rand`, not the global RNG: the
   lab seeds the global RNG and the AI draws from it, so an effect that called `randf()` would
   change how fights play out.

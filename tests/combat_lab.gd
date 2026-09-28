@@ -1696,6 +1696,62 @@ func suite_inferno() -> void:
 	check(int(r["hits"]) == 1 and float(r["after_hit"]) >= Inferno.FAIR - 0.1,
 		"after a burn the next arm comes %.2f s later and you can jump it (%d burns)" % [r["after_hit"], r["hits"]])
 
+	# Phase 3: waves of fire roll out from his ring between the passes. Jumping each arm and each
+	# wave as it comes clears them all, wherever you stand, and there's always time to land and
+	# jump again.
+	var min_gap := 99.0
+	for spot in [[4.2, 60.0], [6.0, 0.0], [10.0, 120.0], [14.0, 240.0]]:
+		var pos3 := Combat.dir_of(deg_to_rad(float(spot[1]))) * float(spot[0])
+		r = await _inferno_run(Vector3(0, 0, -2.0), pos3, "jump", {"phase": 3})
+		check(int(r["passes"]) == Inferno.PASSES and int(r["waves"]) == Inferno.WAVE_BEATS.size()
+			and int(r["hits"]) == 0 and int(r["wave_hits"]) == 0 and int(r["erupt_hits"]) == 0,
+			"phase 3 at %.0f m: jumping each arm, each wave and the eruption clears them all (%d passes, %d waves, burns: %d arm, %d wave, %d eruption)" % [
+				spot[0], r["passes"], r["waves"], r["hits"], r["wave_hits"], r["erupt_hits"]])
+		var tg3: Array = r["threat_gaps"]
+		for g3 in tg3:
+			min_gap = minf(min_gap, float(g3))
+		# each wave on its half-beat: midway between the passes either side of it
+		var pr: Array = r["pass_rel"]
+		var wr: Array = r["wave_rel"]
+		var off := 0.0
+		for k in wr.size():
+			if pr.size() > k + 1:
+				off = maxf(off, absf(float(wr[k]) - (float(pr[k]) + float(pr[k + 1])) * 0.5))
+		check(wr.size() == Inferno.WAVE_BEATS.size() and off < 0.12,
+			"phase 3 at %.0f m: each wave comes on the half-beat between two arms (off by at most %.2f s)" % [spot[0], off])
+		print("  phase 3 at %4.1f m %3.0f deg: arms %s, waves %s, gaps between jumps %s" % [spot[0], spot[1], str(pr), str(wr), str(tg3)])
+	check(min_gap >= 0.8, "phase 3: never less than %.2f s between two things to jump (a jump and landing take ~0.77 s)" % min_gap)
+	for mode3 in ["jump_strafe", "jump_away"]:
+		r = await _inferno_run(Vector3(0, 0, -2.0), Vector3(0, 0, 7.0), mode3, {"phase": 3})
+		check(int(r["hits"]) == 0 and int(r["wave_hits"]) == 0 and int(r["waves"]) == Inferno.WAVE_BEATS.size(),
+			"phase 3, %s: the waves keep their beat and jumping still clears everything (burns %d arm, %d wave; gaps %s)" % [
+				"walking round him" if mode3 == "jump_strafe" else "backing away from him", r["hits"], r["wave_hits"],
+				str(r["threat_gaps"])])
+	# The waves are real: watching only the arms, they burn you.
+	r = await _inferno_run(Vector3(0, 0, -2.0), Vector3(0, 0, 8.0), "arms_only", {"phase": 3})
+	check(int(r["wave_hits"]) >= 1, "phase 3: jumping only the arms, a wave burns you (%d wave burns)" % r["wave_hits"])
+	# Burned, you get up before anything else reaches you: the next arm waits, the waves coming
+	# at you die down.
+	for mode4 in ["arms_only", "stand"]:
+		r = await _inferno_run(Vector3(0, 0, -2.0), Vector3(0, 0, 8.0), mode4, {"phase": 3})
+		check(float(r["burn_to_next"]) >= Inferno.FAIR - 0.1,
+			"phase 3, %s: after each burn nothing reaches you for %.2f s (time to get up and jump)" % [mode4, r["burn_to_next"]])
+	# How exact the jump over a wave has to be (8 m out, jumping the arms 0.28 s ahead).
+	var wclear: Array = []
+	var wrow := PackedStringArray()
+	for wl in [0.0, 0.04, 0.08, 0.14, 0.2, 0.28, 0.36, 0.44, 0.52, 0.6]:
+		r = await _inferno_run(Vector3(0, 0, -2.0), Vector3(0, 0, 8.0), "wave_lead", {"phase": 3, "wave_lead": wl})
+		var ok := int(r["wave_hits"]) == 0 and int(r["hits"]) == 0
+		if ok:
+			wclear.append(wl)
+		wrow.append("%.2f:%s" % [wl, "clear" if ok else "burned"])
+	print("  phase 3 waves 8 m out, jumping this long before one reaches you: " + " ".join(wrow))
+	check(wclear.size() >= 5 and wclear.has(0.28), "phase 3: a wave is cleared by a jump %.2f-%.2f s before it reaches you" % [
+		float(wclear.min()) if not wclear.is_empty() else -1.0, float(wclear.max()) if not wclear.is_empty() else -1.0])
+	# Phase 2 has no waves.
+	r = await _inferno_run(Vector3(0, 0, -2.0), Vector3(0, 0, 8.0), "jump")
+	check(int(r["waves"]) == 0 and int(r["wave_hits"]) == 0, "phase 2 has no waves (%d)" % r["waves"])
+
 	# The ring of fire keeps you off him (and burns), and his fire turns your sword.
 	r = await _inferno_run(Vector3(0, 0, -2.0), Vector3(0, 0, 7.0), "rush")
 	check(float(r["closest"]) >= Inferno.RING_R - 0.5 and int(r["burns"]) >= 1,
@@ -1750,9 +1806,10 @@ func _inferno_run(boss_at: Vector3, player_at: Vector3, mode: String, opts := {}
 	await ticks(2)
 	boss.face_now(player.global_position)
 	player.face_now(boss.global_position)
-	boss._enter_phase(2, false)
+	boss._enter_phase(int(opts.get("phase", 2)), false)
 	var hp0 := boss.hp
-	var out := {"blast_hit": false, "blast_out": 0.0, "passes": 0, "hits": 0, "guarded": 0, "hit_pass": -1, "gaps": [],
+	var out := {"wave_hits": 0, "waves": 0, "wave_rel": [], "threat_gaps": [], "burn_to_next": 99.0,
+		"blast_hit": false, "blast_out": 0.0, "passes": 0, "hits": 0, "guarded": 0, "hit_pass": -1, "gaps": [],
 		"pass_rel": [], "spent": false, "landed_off": 99.0, "after_hit": 99.0, "closest": 99.0, "burns": 0,
 		"slashes": 0, "slash_hits": 0, "boss_hp_lost": 0.0, "boss_posture": 0.0, "punished": 0,
 		"erupt_hits": 0, "erupt_after_burn": 99.0, "posture_handback": -1.0, "inferno_s": 0.0}
@@ -1806,6 +1863,11 @@ func _inferno_run(boss_at: Vector3, player_at: Vector3, mode: String, opts := {}
 			if int(rr["res"]) == Combat.RESULT_HIT:
 				out["erupt_hits"] = int(out["erupt_hits"]) + 1
 			continue
+		if str(info.get("part", "")) == "wave":
+			if int(rr["res"]) == Combat.RESULT_HIT:
+				out["wave_hits"] = int(out["wave_hits"]) + 1
+				hit_times.append(float(rr["t"]))
+			continue
 		if int(rr["res"]) == Combat.RESULT_HIT:
 			out["hits"] = int(out["hits"]) + 1
 			out["hit_pass"] = int(info.get("index", -1))
@@ -1813,6 +1875,26 @@ func _inferno_run(boss_at: Vector3, player_at: Vector3, mode: String, opts := {}
 		elif int(rr["res"]) == Combat.RESULT_BLOCK or int(rr["res"]) == Combat.RESULT_DEFLECT:
 			out["guarded"] = int(out["guarded"]) + 1
 	out["passes"] = inf.passes
+	out["waves"] = inf.waves_passed
+	var wrel: Array = []
+	for w in inf.wave_times:
+		wrel.append(snappedf(float(w) - t0, 0.01))
+	out["wave_rel"] = wrel
+	# everything you had to jump, in order, and the gaps between them
+	var threats: Array = inf.pass_times.duplicate()
+	threats.append_array(inf.wave_times)
+	threats.sort()
+	var tg: Array = []
+	for i in range(1, threats.size()):
+		tg.append(snappedf(float(threats[i]) - float(threats[i - 1]), 0.01))
+	out["threat_gaps"] = tg
+	# after each burn, how long until the next thing reaches you
+	hit_times.sort()
+	for h in hit_times:
+		for th in threats:
+			if float(th) > float(h) + 0.3:
+				out["burn_to_next"] = minf(float(out["burn_to_next"]), float(th) - float(h))
+				break
 	var pt: Array = inf.pass_times
 	var rel: Array = []
 	for p in pt:
@@ -1865,6 +1947,8 @@ func _inferno_bot_tick(mode: String, st: Dictionary) -> void:
 		move = Vector2(0, 1)
 	if mode == "jump_strafe" and inf.stage == Inferno.St.SPIN:
 		move = Vector2(1, 0)
+	if mode == "jump_away" and inf.stage == Inferno.St.SPIN and to_c.length() < 14.5:
+		move = Vector2(0, 1)          # (the lab has no wall: stop where the arena's would stop you)
 	if mode == "rush" and inf.stage == Inferno.St.SPIN:
 		move = Vector2(0, -1)
 	if mode != "punish":
@@ -1881,10 +1965,17 @@ func _inferno_bot_tick(mode: String, st: Dictionary) -> void:
 		return
 	var jumped: Array = st["jumped"]
 	var erupt := inf.stage == Inferno.St.PLUNGE
-	var key := Inferno.PASSES + 1 if erupt else inf.passes     # one jump per arm, one for the eruption
+	var key := 100 if erupt else inf.passes + inf.waves_passed   # one jump per arm and wave, one for the eruption
 	var n := inf.next_jump_in()
 	var lead := float(st.get("erupt_lead", 0.28)) if erupt else 0.28
-	var free := player.state == Player.S.MOVE or player.state == Player.S.GUARD
+	if mode == "arms_only" and not erupt:
+		key = inf.passes          # (watches the arms only: the waves catch it)
+		n = inf._lead_deg() / inf._omega if inf._omega >= 1.0 else INF
+	if mode == "wave_lead" and not erupt and inf.next_wave_in() < inf._lead_deg() / maxf(inf._omega, 1.0):
+		lead = float(st["wave_lead"])     # jump the waves `wave_lead` s before they reach you
+	# (a real player can jump out of a landing after 0.08 s: Player's LAND state)
+	var free := player.state == Player.S.MOVE or player.state == Player.S.GUARD \
+		or (player.state == Player.S.LAND and player.state_time > 0.08)
 	if mode == "erupt_lead" and erupt:
 		# jump `erupt_lead` s before the flames reach you (negative: after), or `after_burst` s
 		# after the eruption bursts from his staff
@@ -1902,7 +1993,7 @@ func _inferno_bot_tick(mode: String, st: Dictionary) -> void:
 				player.press_action("jump", now)
 		return
 	match mode:
-		"jump", "escape", "jump_strafe", "punish", "rush", "erupt_lead":
+		"jump", "escape", "jump_strafe", "jump_away", "punish", "rush", "erupt_lead", "arms_only", "wave_lead":
 			if int(jumped[0]) != key and n <= lead and free:
 				jumped[0] = key
 				player.press_action("jump", now)

@@ -697,8 +697,9 @@ func shot_recovery() -> void:
 func shot_inferno() -> void:
 	var args := OS.get_cmdline_user_args()
 	var mode: String = args[1] if args.size() > 1 else "jump"
+	var p3 := args.has("p3")          # phase 3: waves of fire between the arms
 	_stage(7.0, Vector3(0, 0, -4.0))
-	boss._enter_phase(2, false)
+	boss._enter_phase(3 if p3 else 2, false)
 	if mode == "spin":
 		# straight to the turn (the arms of fire and the ring round him), for looking at the fire
 		at(0.3, func():
@@ -709,7 +710,7 @@ func shot_inferno() -> void:
 			boss.inferno.on_event("fire_whips", {})
 			boss.inferno._begin_spin())
 		set_meta("inferno_bot", "jump")
-		_end_at = 4.5
+		_end_at = 6.6 if p3 else 4.5
 		return
 	if mode.begins_with("plunge"):
 		# straight to the finisher, for looking at the eruption: he's already in the middle
@@ -749,8 +750,8 @@ func _inferno_bot_tick() -> void:
 	var to := Combat.flat(player.global_position - inf.center)
 	var escaping := boss.state == Boss.S.INFERNO and inf.stage <= Inferno.St.IGNITE and not inf.blast_hit
 	player.bot_move = Vector2(0, 1) if escaping and to.length() < Inferno.BLAST_R + 1.5 else Vector2.ZERO
-	# one jump per arm, and one for the eruption (keyed past the last pass)
-	var key := inf.passes if inf.stage == Inferno.St.SPIN else Inferno.PASSES + 1
+	# one jump per arm and wave, and one for the eruption
+	var key := inf.passes + inf.waves_passed if inf.stage == Inferno.St.SPIN else 100
 	if str(get_meta("inferno_bot")) == "jump" and key != _jumped_for and inf.next_jump_in() <= 0.28:
 		if player.state != Player.S.AIR and player.state != Player.S.KNOCKDOWN:
 			_jumped_for = key

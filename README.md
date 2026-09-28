@@ -170,6 +170,15 @@ every 40 s; phase three has it too).
   fire flares and the **fourth comes round faster** (1.0 s), to catch you if you jump on the
   beat instead of watching the fire. The beat is the same wherever you stand, even if you
   walk round him. If an arm burns you, the next one waits until you're up (about 2 s).
+- **Phase three: waves of fire.** In his last life the ring round him also throws off waves
+  of flame that roll out across the plaza to the wall, so the fire comes at you head on as well
+  as from the side. Each wave reaches you on the half-beat between two arms: arm, wave, arm,
+  wave, arm, then the fast fourth arm, a jump every 0.9 s. To leave room for that the turn is a
+  little slower than in phase two (1.8 s between arms; a jump and its landing take about
+  0.77 s). A wave is steered like the turn, so the half-beat holds wherever you stand and while
+  you move, and any jump from about 0.6 s to 0.1 s before it reaches you clears it. A
+  bright line on the stones shows where it is. If the fire knocks you down, the waves still
+  coming at you die out and nothing new comes until you're up.
 - A **ring of fire** round him keeps you off him (it burns and shoves you back), and while he
   burns your sword glances off him. His **posture holds** while it lasts, so surviving it costs
   you none of the posture you'd built; it starts recovering again once he's spent.
@@ -195,8 +204,8 @@ every 40 s; phase three has it too).
   忍殺 (shinobi execution) stamps onto the screen.
 - He has **three lives**, one per phase. After each deathblow he rises into the next phase.
   Phase two is faster, more aggressive and parries more, and he opens it with the Inferno.
-  Phase three is the same as phase two for now (the Inferno included, but not as its opener);
-  its own moves come later.
+  Phase three is phase two with a harder Inferno (waves of fire between the arms, see above;
+  it isn't his opener there); its own moves come later.
 
 ### His behaviour
 
@@ -218,7 +227,7 @@ every 40 s; phase three has it too).
 | Perilous Thrust 危 | Turns side-on, draws the staff back and holds at full coil | Mikiri (neutral dodge on the release) or deflect |
 | Perilous Sweep 危 | Slides his grip to the staff's end, sinks low and coils to his left | Jump, then kick |
 | Whirling Fangs | Raises the staff level overhead with a whoosh, then cocks it at his side and the windmill spins up | Deflect each blade as it comes down on you (4 chops, one every 0.375 s, each with a whoosh that peaks on contact), then the finishing cut after a pause |
-| Inferno 危 (phase two) | Leaps to the middle of the arena and drives his staff into the stones; the floor glows out to the blast radius | Get out of the glow before the blast. Then jump each arm of fire: three on an even beat, a faster fourth. Then he raises the staff over his head and plunges it into the floor: jump as the arena erupts. Hit him while he's spent |
+| Inferno 危 (phase two) | Leaps to the middle of the arena and drives his staff into the stones; the floor glows out to the blast radius | Get out of the glow before the blast. Then jump each arm of fire: three on an even beat, a faster fourth (in phase three, jump the wave of fire rolling out from him between each of the first three too). Then he raises the staff over his head and plunges it into the floor: jump as the arena erupts. Hit him while he's spent |
 | Shuriken volley | Quick crouch, hand to his belt with a glint of steel, leaps back and hangs for a beat at the top, throwing hand glinting | Deflect each glowing star as it reaches you: **3 in the air + 1 delayed**, or **5 in the air**. From phase 2 on, **a second set** straight after, thrown from the ground (another glint first) |
 | Running Cut | Runs at you, staff swinging up behind his shoulder | Deflect (it tracks hard) |
 | Falling Crescent | Crouches at range, leaps with the staff overhead | Deflect on landing (high) |
@@ -256,7 +265,7 @@ godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--v
 | `shuriken` | Volley rhythms (3 in the air + 1 delayed, 5 in the air), a readable tell before the first; from phase 2 on two sets, the second 0.4 to 0.55 s after the first; every throw deflectable (4 posture to him each; one that fills his posture in mid-air breaks him as he lands) or blockable, a whole double volley included |
 | `attack` | Slash reach, and that mashing is rate-limited (no two hits within 0.38 s) |
 | `cancel` | Guard cancels a slash only in the early wind-up and in the recovery; a guard tap let go of long before the recovery doesn't come up in it, while one just before it does, and so does a tap during hit-stun (as the stun ends); a lost dodge release cannot leave sprint held |
-| `inferno` | Phase 2 opens with the Inferno (starting there, or rising into it); he lands in the middle of the arena; the blast misses you outside its radius, knocks you down and throws you out of it inside, and walking away locked on from right beside him gets clear in time (stepping through it doesn't); jumping each arm clears all four from 4 to 14 m out, the beat holds (1.5, 1.5, 1.0 s) wherever you stand and while you walk round him; standing, guarding and dodging get burned by every arm and by the eruption; jumping on the beat gets caught by the fourth; one jump timed to the eruption clears it (in the air you're clear), earlier or later burns (it prints the window), and it rolls outward, reaching the wall a moment after it bursts beside him; after a burn the next arm, or the eruption, waits until you can jump it; the ring stops you and burns; your sword glances off him; his posture holds through it; he's open afterwards; he uses it again once it's off cooldown |
+| `inferno` | Phase 2 opens with the Inferno (starting there, or rising into it); he lands in the middle of the arena; the blast misses you outside its radius, knocks you down and throws you out of it inside, and walking away locked on from right beside him gets clear in time (stepping through it doesn't); jumping each arm clears all four from 4 to 14 m out, the beat holds (1.5, 1.5, 1.0 s) wherever you stand and while you walk round him; standing, guarding and dodging get burned by every arm and by the eruption; jumping on the beat gets caught by the fourth; one jump timed to the eruption clears it (in the air you're clear), earlier or later burns (it prints the window), and it rolls outward, reaching the wall a moment after it bursts beside him; after a burn the next arm, or the eruption, waits until you can jump it. Phase 3: jumping each arm, each wave and the eruption clears them all from 4 to 14 m out, each wave comes on the half-beat between two arms and there's never less than 0.9 s between two things to jump, still so walking round him or backing away; watching only the arms, a wave burns you; after any burn nothing reaches you for 2 s; it prints how early or late a jump over a wave may be; phase 2 has no waves. The ring stops you and burns; your sword glances off him; his posture holds through it; he's open afterwards; he uses it again once it's off cooldown |
 | `soak` | A full fight against the real AI (charges, repositioning, volleys) with a bot player that reacts to the blade and to incoming shuriken: deflects, blocks, posture breaks, deathblows (each signalling 忍殺 once, the last as the final one), the next phase and the Inferno it opens with |
 
 The run exits with code 0 when every check passes (734 checks, including the soak). It also
@@ -271,7 +280,7 @@ places round the rim), `ribbons` for cloth and hair in motion (`ribbons close` b
 behind him through his combo), `deathblow` (a posture break and the kill; `deathblow final`
 for his last life, then the victory screen), `inferno` for his fire move (`inferno stand` to take the
 arms, `inferno wide` from high above the arena, `inferno spin` straight to the arms of fire, `inferno plunge`
-straight to the finisher), `attack <clip> [distance]` for any single boss attack from
+straight to the finisher; add `p3` for phase three's, with the waves), `attack <clip> [distance]` for any single boss attack from
 the lock-on camera, `recovery <clip>` for one attack played to the end from a fixed 3/4 view,
 `fire_staff [level]` and `fire_combo` for the fire on his staff, `diagnostics` for the overlay, the menus `menu_title`, `menu_options`, `menu_controls`, `menu_pause` and `menu_start` (boot,
 then press Start), `help` for the controls sheet (F1) over the fight, the HUD `ui_hud`, `ui_hud_fresh` and
@@ -392,11 +401,20 @@ How the boss model is built (PS2-style: ~25k triangles, one 2048 px atlas with b
 
 ## Status
 
-This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (734 checks, including
+This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (750 checks, including
 a full-fight soak), the game boots and runs with no script errors, and every change to the
 visuals was checked on frames rendered with Movie Maker.
 
-**Latest: new sound.** Every sound effect is rebuilt from real recordings instead of pure
+**Latest: phase three's Inferno sends waves of fire.** In his last life the ring of fire round him
+throws off waves that roll out to the wall between the sweeping arms, so the fire comes at you head
+on too: arm, wave, arm, wave, arm, then the fast fourth, a jump every 0.9 s (the turn is a
+little slower to leave room for it). Each wave is steered to reach you on its half-beat
+wherever you stand, a bright line on the stones shows where it is, and after a burn the waves
+still coming die out until you're up. The lab plays it from 4 to 14 m out, walking round him and
+backing away, and clears it every time; watching only the arms gets you burned. The capture
+shots `inferno wide p3` and `inferno spin p3` film it ([from above](docs/inferno_waves.png)).
+
+**Before that: new sound.** Every sound effect is rebuilt from real recordings instead of pure
 synthesis: CC0 and CC BY material (the Versilian Community Sample Library's anvil, brake drum,
 gongs, cymbals, bells and drums; freesound recordings from Sonic Pi's sample set; Kenney's
 footsteps, cloth, steel draws and knife slices; wind, fire, fuses and flares from Blanket, Minetest Game and Veloren), cut, pitched,

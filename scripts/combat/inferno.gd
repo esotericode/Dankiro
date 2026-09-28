@@ -18,6 +18,12 @@ extends Node3D
 ##     The beat is kept wherever you stand (the turn is steered by where you are); after the
 ##     fire knocks you down, the next pass waits until you're up with time to jump it. A ring
 ##     of fire round him keeps you out, and his burning body turns your sword.
+##     Phase 3: the ring round him also throws off waves of fire that roll out to the wall, so
+##     the fire comes at you head on as well: one on each half-beat between the first three
+##     passes (arm, wave, arm, wave, arm, then the fast fourth). A wave is steered like the turn,
+##     reaching you on its half-beat wherever you stand, and the turn is a little slower
+##     (GAP_WAVES) so there's always time to land and jump again. Burned, the waves still coming
+##     at you die down, and no new one comes until you're up.
 ##  5. The finisher (b_fire_plunge, 危): the arms die away, he stands tall with the staff upright
 ##     over his head, holds it, and drives it down into the stones. Cracks of fire race out
 ##     across the floor and the whole arena erupts, rolling out from his staff: one jump, timed
@@ -40,8 +46,7 @@ const BLAST_TIME := 0.32
 const CHARGE_TIME := 1.58          ## fire_charge -> fire_blast in b_fire_ignite
 const GAP := 1.5                   ## seconds between the first three passes...
 const GAP_FAST := 1.0              ## ...and before the fourth: 0.5 s early catches anyone jumping on the beat
-const OMEGA := 180.0 / GAP         ## deg/s at full speed (two arms: one reaches you every half turn)
-const FIRST := GAP                 ## start of the turn -> first pass (spinning up from standstill)
+const GAP_WAVES := 1.8             ## ...in phase 3, with a wave between them (a jump and landing take ~0.77 s)
 const RAMP_FAST := 0.3             ## the flare: speeding up to the fourth pass's pace
 const WIND_DOWN := 0.55            ## after the last pass: the turn stops and the arms die away
 const FAIR := 2.0                  ## after the fire knocks you down, the next thing to jump waits this long
@@ -55,8 +60,31 @@ const DMG_ARM := 25.0
 const DMG_BLAST := 18.0
 const DMG_RING := 6.0
 const DMG_ERUPT := 22.0
+const DMG_WAVE := 22.0
+const WAVE_BEATS := [0.5, 1.5]     ## phase 3: a wave reaches you this many gaps after the first pass
+const WAVE_SPEED := 6.0            ## m/s: a wave's pace, steered within WAVE_STEER to keep its half-beat
+const WAVE_STEER := Vector2(0.6, 1.8)
+const WAVE_TOP := 0.55             ## the waves burn this high (like the arms): your feet have to be above it
+const WAVE_HALF_WIDTH := 0.25
 const WALL_H := 1.0                ## height of the arms' flame quads (the fire itself is lower)
 const ARM_OFFSET := 0.3            ## the staff is this far in front of him: the arms run along it
+
+## Under a wave: a bright line on the stones where its flames are, the stones it has crossed
+## still glowing behind it (a floor quad over the whole arena, additive).
+const WAVE_GLOW_SHADER := """
+shader_type spatial;
+render_mode unshaded, blend_add, depth_draw_never, cull_disabled;
+uniform float radius = 3.0;
+uniform float half_size = 16.6;
+uniform float strength = 1.0;
+uniform vec3 tint : source_color = vec3(1.0, 0.4, 0.09);
+void fragment() {
+	float d = length((UV - 0.5) * 2.0 * half_size);
+	float edge = exp(-pow((d - radius) / 0.35, 2.0));
+	float trail = smoothstep(radius - 2.2, radius, d) * step(d, radius) * 0.22;
+	ALBEDO = tint * (edge * 1.6 + trail) * strength;
+}
+"""
 
 var boss: Boss
 var player: Player
@@ -69,10 +97,19 @@ var fire_top := FIRE_TOP
 var blast_hit := false
 var erupt_time := -1.0             ## Game.clock when the arena erupted (-1: not yet)
 var erupt_hit := false
+var gap := GAP                     ## this Inferno's beat (GAP, or GAP_WAVES in phase 3)
+var waves_on := false              ## phase 3: waves of fire between the passes
+var waves_passed := 0              ## waves that have gone past you (or died down before reaching you)
+var wave_hits := 0
+var wave_times: Array = []         ## Game.clock of each wave reaching you (its middle where you stand)
 
 var _tau := 0.0                    ## time along the planned turn (slowed after you're knocked down)
 var _omega := 0.0                  ## deg/s he's turning (clockwise from above)
+var _omega_full := 180.0 / GAP     ## deg/s at full speed (two arms: one reaches you every half turn)
+var _first := GAP                  ## start of the turn -> first pass (spinning up from standstill)
 var _omega_fast := 0.0
+var _waves: Array = []             ## live waves: {k, r, v, target, hit, passed, whoosh, fizzle, vis}
+var _wave_next := 0                ## the next wave to send
 var _lead_prev := 90.0
 var _contact := false
 var _contact_hit := false
@@ -113,13 +150,22 @@ var _fuse_vis := -1.0              ## seconds since the plunge hit (drives the c
 var _erupt_vis := -1.0             ## seconds since the eruption (drives its fire)
 var _erupt_bands: Array = []       ## [MeshInstance3D, ShaderMaterial, radius]
 var _erupt_light: OmniLight3D
+var _wave_vis: Array = []          ## per slot: {band, mat, glow, light}
 
 
 func setup(b: Boss) -> void:
 	boss = b
 	top_level = true
-	_omega_fast = (180.0 - OMEGA * RAMP_FAST * 0.5) / (GAP_FAST - RAMP_FAST * 0.5)
+	_set_beat(GAP)
 	_build_visuals()
+
+
+## The turn's timing for a beat of `g` seconds between the first three passes.
+func _set_beat(g: float) -> void:
+	gap = g
+	_omega_full = 180.0 / g
+	_first = g
+	_omega_fast = (180.0 - _omega_full * RAMP_FAST * 0.5) / (GAP_FAST - RAMP_FAST * 0.5)
 
 
 func is_active() -> bool:
@@ -155,6 +201,13 @@ func begin() -> void:
 	_erupt_t = -1.0
 	erupt_time = -1.0
 	erupt_hit = false
+	waves_on = boss.phase >= 3
+	_set_beat(GAP_WAVES if waves_on else GAP)
+	waves_passed = 0
+	wave_hits = 0
+	wave_times.clear()
+	_waves.clear()
+	_wave_next = 0
 	# He leaps over or onto you: the two of you mustn't collide until the fire is out.
 	if player != null:
 		boss.add_collision_exception_with(player)
@@ -176,9 +229,12 @@ func update(delta: float) -> Vector3:
 				_begin_spin()
 		St.SPIN:
 			_spin(delta)
+			_send_waves()
+			_move_waves(delta)
 			_ring_check(delta)
 		St.WIND_DOWN:
 			_wind_down(delta)
+			_move_waves(delta)
 			_ring_check(delta)
 		St.PLUNGE:
 			_track(delta)
@@ -323,43 +379,43 @@ func _begin_spin() -> void:
 
 
 ## The planned turn, in time along it (`_tau`): spinning up from standstill so the first arm
-## reaches you FIRST seconds in, then OMEGA (a pass every GAP), then after the third pass it
-## speeds up so the fourth arrives GAP_FAST later.
+## reaches you `_first` seconds in, then `_omega_full` (a pass every `gap`), then after the third
+## pass it speeds up so the fourth arrives GAP_FAST later.
 func _omega_at(tau: float) -> float:
-	var t3 := FIRST + 2.0 * GAP
-	if tau < FIRST:
-		return OMEGA * tau / FIRST
+	var t3 := _first + 2.0 * gap
+	if tau < _first:
+		return _omega_full * tau / _first
 	if tau < t3:
-		return OMEGA
+		return _omega_full
 	var u := tau - t3
 	if u < RAMP_FAST:
-		return lerpf(OMEGA, _omega_fast, u / RAMP_FAST)
+		return lerpf(_omega_full, _omega_fast, u / RAMP_FAST)
 	return _omega_fast
 
 
 ## Degrees turned by `tau` (the integral of _omega_at): an arm reaches you at 90, 270, 450, 630.
 func _sigma_at(tau: float) -> float:
-	var t3 := FIRST + 2.0 * GAP
-	if tau < FIRST:
-		return OMEGA * tau * tau / (2.0 * FIRST)
+	var t3 := _first + 2.0 * gap
+	if tau < _first:
+		return _omega_full * tau * tau / (2.0 * _first)
 	if tau < t3:
-		return 90.0 + OMEGA * (tau - FIRST)
+		return 90.0 + _omega_full * (tau - _first)
 	var u := tau - t3
-	var s := 90.0 + OMEGA * 2.0 * GAP
+	var s := 90.0 + _omega_full * 2.0 * gap
 	if u < RAMP_FAST:
-		return s + OMEGA * u + (_omega_fast - OMEGA) * u * u / (2.0 * RAMP_FAST)
-	return s + (OMEGA + _omega_fast) * RAMP_FAST * 0.5 + _omega_fast * (u - RAMP_FAST)
+		return s + _omega_full * u + (_omega_fast - _omega_full) * u * u / (2.0 * RAMP_FAST)
+	return s + (_omega_full + _omega_fast) * RAMP_FAST * 0.5 + _omega_fast * (u - RAMP_FAST)
 
 
 func _tau_pass(k: int) -> float:
 	match k:
 		1:
-			return FIRST
+			return _first
 		2:
-			return FIRST + GAP
+			return _first + gap
 		3:
-			return FIRST + 2.0 * GAP
-	return FIRST + 2.0 * GAP + GAP_FAST
+			return _first + 2.0 * gap
+	return _first + 2.0 * gap + GAP_FAST
 
 
 func _spin(delta: float) -> void:
@@ -429,6 +485,7 @@ func _arm_hits() -> void:
 				hits += 1
 				_burned_at = Game.clock
 				_fair_until = Game.clock + FAIR
+				_douse_waves()
 	# the whoosh peaks as the arm reaches you
 	if _whoosh_armed and _omega > 1.0 and lead / _omega < 0.3 and lead < 90.0:
 		_whoosh_armed = false
@@ -454,6 +511,95 @@ func _flare() -> void:
 	_heat_target = 1.6
 	Sfx.play("fire_flare", center + Vector3(0, 1.2, 0), 4.0)
 	Fx.light_pulse(boss.get_parent(), center + Vector3(0, 1.5, 0), Color(1.0, 0.45, 0.1), 5.0, 12.0, 0.5)
+
+
+# ------------------------------------------------------------------------------ waves (phase 3)
+## Plan time (`_tau`) when wave `k` reaches you.
+func _wave_target(k: int) -> float:
+	return _first + float(WAVE_BEATS[k]) * gap
+
+
+func _player_r() -> float:
+	if player == null:
+		return REACH
+	return Combat.flat(player.global_position - center).length()
+
+
+## Sends the next wave from the ring when, at WAVE_SPEED, it would reach you on its half-beat.
+## Not while you're down; a wave whose moment passed while you were down is skipped, and so is
+## one that would have to rush at you to make its beat.
+func _send_waves() -> void:
+	if not waves_on:
+		return
+	while _wave_next < WAVE_BEATS.size():
+		var left := _wave_target(_wave_next) - _tau
+		var dist := maxf(_player_r() - RING_R, 0.0)
+		var down := Game.clock < _fair_until
+		if left <= 0.0 or (not down and dist > left * WAVE_SPEED * WAVE_STEER.y):
+			_wave_next += 1
+			waves_passed += 1          # (it never comes: count it as gone, like one that's passed)
+			continue
+		if down or dist < left * WAVE_SPEED:
+			return
+		_waves.append({"k": _wave_next, "r": RING_R, "v": WAVE_SPEED, "target": _wave_target(_wave_next),
+			"hit": false, "passed": false, "at_you": false, "whoosh": false, "fizzle": -1.0, "vis": 0.0})
+		_wave_next += 1
+		Sfx.play("fire_ignite", center + Vector3(0, 0.8, 0), 3.0, 1.15, 0.0)
+		Fx.light_pulse(boss.get_parent(), center + Vector3(0, 1.0, 0), Color(1.0, 0.5, 0.15), 3.5, 9.0, 0.35)
+
+
+## Rolls the waves out, steering each to reach you on its half-beat (within WAVE_STEER of
+## WAVE_SPEED), and burns you if one reaches you with your feet below WAVE_TOP.
+func _move_waves(delta: float) -> void:
+	if _waves.is_empty():
+		return
+	var rp := _player_r()
+	var hr := player.hurt_radius if player != null else 0.3
+	for w in _waves:
+		if float(w["fizzle"]) >= 0.0:
+			w["fizzle"] = float(w["fizzle"]) + delta
+			w["r"] = float(w["r"]) + float(w["v"]) * delta
+			continue
+		var left := float(w["target"]) - _tau
+		if not bool(w["passed"]) and left > 0.02:
+			w["v"] = clampf((rp - float(w["r"])) / left, WAVE_SPEED * WAVE_STEER.x, WAVE_SPEED * WAVE_STEER.y)
+		w["r"] = float(w["r"]) + float(w["v"]) * delta
+		var r := float(w["r"])
+		# the whoosh peaks as it reaches you
+		if player != null and not bool(w["whoosh"]) and not bool(w["passed"]) and rp > r and (rp - r) / float(w["v"]) < 0.28:
+			w["whoosh"] = true
+			Sfx.play("fire_whoosh", player.global_position + Vector3(0, 0.4, 0), 3.0, 0.9, 0.05)
+		if player != null and not bool(w["hit"]) and absf(rp - r) < WAVE_HALF_WIDTH + hr and player.can_be_hit() \
+				and Game.clock - _burned_at > 1.0:
+			var feet := player.global_position.y - center.y
+			if feet < WAVE_TOP + 0.01:
+				w["hit"] = true
+				var info := {"kind": "sweep", "element": "fire", "part": "wave", "dmg": DMG_WAVE, "posture_block": 0,
+					"posture_deflect": 0, "boss_posture": 0, "dir": "low", "final": true, "clip": "inferno",
+					"index": int(w["k"]), "point": player.global_position + Vector3(0, 0.35, 0), "time": Game.clock}
+				if player.receive_attack(info, boss) == Combat.RESULT_HIT:
+					wave_hits += 1
+					hits += 1
+					_burned_at = Game.clock
+					_fair_until = Game.clock + FAIR
+					_douse_waves()
+		if not bool(w["at_you"]) and r >= rp:
+			w["at_you"] = true
+			wave_times.append(Game.clock)
+		if not bool(w["passed"]) and r - WAVE_HALF_WIDTH > rp + hr:
+			w["passed"] = true
+			waves_passed += 1
+	_waves = _waves.filter(func(w): return float(w["r"]) < ARENA_R + 0.6 and float(w["fizzle"]) < 0.5)
+
+
+## You've been burned: the waves still coming at you die down (count as gone).
+func _douse_waves() -> void:
+	var rp := _player_r()
+	for w in _waves:
+		if not bool(w["passed"]) and float(w["fizzle"]) < 0.0 and float(w["r"]) < rp:
+			w["fizzle"] = 0.0
+			w["passed"] = true
+			waves_passed += 1
 
 
 func _wind_down(delta: float) -> void:
@@ -640,7 +786,7 @@ func charging() -> bool:
 ## the eruption's flames reaching you once he's started the plunge (INF when neither is coming).
 func next_jump_in() -> float:
 	if stage == St.SPIN and _omega >= 1.0:
-		return _lead_deg() / _omega
+		return minf(_lead_deg() / _omega, next_wave_in())
 	if stage == St.PLUNGE and player != null and boss.anim.is_playing("b_fire_plunge"):
 		var reach := eruption_delay(player.global_position)
 		if erupt_time < 0.0:
@@ -648,6 +794,29 @@ func next_jump_in() -> float:
 		if Game.clock <= erupt_time + reach:
 			return erupt_time + reach - Game.clock
 	return INF
+
+
+## Seconds until the next wave reaches you (one on its way, or the next to be sent; INF if none).
+func next_wave_in() -> float:
+	if not waves_on or player == null:
+		return INF
+	var rp := _player_r()
+	var best := INF
+	for w in _waves:
+		if not bool(w["passed"]) and float(w["fizzle"]) < 0.0 and float(w["r"]) < rp:
+			best = minf(best, (rp - float(w["r"]) - WAVE_HALF_WIDTH - player.hurt_radius) / maxf(float(w["v"]), 0.1))
+	if best == INF and _wave_next < WAVE_BEATS.size() and stage == St.SPIN:
+		best = _wave_target(_wave_next) - _tau
+	return maxf(best, 0.0)
+
+
+## Radii of the waves rolling out (for the diagnostics overlay).
+func wave_radii() -> Array:
+	var out: Array = []
+	for w in _waves:
+		if float(w["fizzle"]) < 0.0:
+			out.append(float(w["r"]))
+	return out
 
 
 # ============================================================================== visuals
@@ -787,6 +956,30 @@ func _build_visuals() -> void:
 		band2.visible = false
 		add_child(band2)
 		_erupt_bands.append([band2, m2, r])
+	# phase 3's waves: a band of flame rolling out, a glowing line on the stones under it, and a
+	# light where it's coming at you
+	for i in 2:
+		var band3 := MeshInstance3D.new()
+		band3.mesh = FireFx.band_mesh(1.0, 160)
+		var m3 := FireFx.wall_material(TAU * RING_R, true, 1.0)
+		band3.material_override = m3
+		band3.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		band3.visible = false
+		add_child(band3)
+		var glow3 := FireFx.floor_quad((ARENA_R + 1.0) * 2.0, 0.04)
+		var gm := FireFx._material("wave_glow", WAVE_GLOW_SHADER, {"half_size": ARENA_R + 1.0}, 1)
+		glow3.material_override = gm
+		glow3.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		glow3.visible = false
+		add_child(glow3)
+		var l3 := OmniLight3D.new()
+		l3.light_color = Color(1.0, 0.5, 0.16)
+		l3.omni_range = 6.0
+		l3.omni_attenuation = 1.2
+		l3.light_energy = 0.0
+		l3.shadow_enabled = false
+		add_child(l3)
+		_wave_vis.append({"band": band3, "mat": m3, "glow": glow3, "gmat": gm, "light": l3})
 	_erupt_light = OmniLight3D.new()
 	_erupt_light.light_color = Color(1.0, 0.45, 0.12)
 	_erupt_light.omni_range = 34.0
@@ -824,6 +1017,7 @@ func _process(delta: float) -> void:
 	_update_blast(real_dt)
 	_update_eruption(delta)
 	_update_ring(delta)
+	_update_waves(delta)
 	_update_arms(delta)
 	_update_roar(delta)
 
@@ -924,6 +1118,42 @@ func _update_ring(delta: float) -> void:
 	_ring_mat.set_shader_parameter("heat", 0.5 + 0.2 * _heat)
 	(_ring_glow.material_override as StandardMaterial3D).albedo_color = Color(1.1, 0.95, 0.85, _ring_level)
 	(_ring.get_node("RingLight") as OmniLight3D).light_energy = 2.0 * _ring_level
+
+
+func _update_waves(delta: float) -> void:
+	for i in _wave_vis.size():
+		var slot: Dictionary = _wave_vis[i]
+		var band: MeshInstance3D = slot["band"]
+		var glow: MeshInstance3D = slot["glow"]
+		var light: OmniLight3D = slot["light"]
+		var on := i < _waves.size()
+		band.visible = on
+		glow.visible = on
+		light.light_energy = 0.0
+		if not on:
+			continue
+		var w: Dictionary = _waves[i]
+		w["vis"] = float(w["vis"]) + delta
+		var r := float(w["r"])
+		var dying := clampf(float(w["fizzle"]) / 0.45, 0.0, 1.0) if float(w["fizzle"]) >= 0.0 else 0.0
+		var fade := clampf(float(w["vis"]) / 0.12, 0.0, 1.0) * (1.0 - dying)
+		fade *= 1.0 - smoothstep(ARENA_R - 1.0, ARENA_R + 0.5, r)
+		band.global_position = center
+		band.scale = Vector3(r, 0.95 * (1.0 - 0.7 * dying), r)
+		var m: ShaderMaterial = slot["mat"]
+		m.set_shader_parameter("scale_x", TAU * r)
+		m.set_shader_parameter("heat", 0.95)
+		m.set_shader_parameter("height", 0.85)
+		m.set_shader_parameter("alpha_mult", fade)
+		glow.global_position = center + Vector3(0, 0.04, 0)
+		var gm: ShaderMaterial = slot["gmat"]
+		gm.set_shader_parameter("radius", r)
+		gm.set_shader_parameter("strength", fade)
+		if player != null:
+			var to := Combat.flat(player.global_position - center)
+			var d := to.normalized() if to.length() > 0.05 else boss.forward()
+			light.global_position = center + d * r + Vector3(0, 0.6, 0)
+			light.light_energy = 1.8 * fade
 
 
 func _update_arms(delta: float) -> void:

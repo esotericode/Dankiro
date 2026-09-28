@@ -195,6 +195,9 @@ func _inferno() -> void:
 		_ring(c, br, C_FIRE, 64)
 	if inf.ring_live():
 		_ring(c, Inferno.RING_R, C_FIRE, 48)
+	for wr in inf.wave_radii():
+		_ring(c + Vector3(0, Inferno.WAVE_TOP, 0), float(wr), C_FIRE, 96)
+		_ring(c, float(wr), Color(C_FIRE, 0.5), 96)
 	if inf.fusing() or inf.erupting():
 		var ec := C_FIRE if inf.erupting() else Color(C_FIRE, 0.35)
 		for r in [2.0, 5.0, 8.0, 11.0, 14.0]:
