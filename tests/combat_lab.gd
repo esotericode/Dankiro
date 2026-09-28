@@ -2295,3 +2295,4 @@ func _blade_time_to_contact(only := "") -> float:
 func _first_hit(c: ClipData) -> float:
 	return float(c.hits[0]["from"])
 
+

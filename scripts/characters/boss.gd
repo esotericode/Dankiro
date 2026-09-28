@@ -1060,7 +1060,7 @@ func _recover() -> void:
 		return
 	_punished_seq = _seq_name
 	var r := randf()
-	if r < 0.55:
+	if r < 0.55 or has_meta("force_escape"):
 		_pummel = 0
 		_endure = _roll_endure()
 		_start_escape(_pick_escape(false))
