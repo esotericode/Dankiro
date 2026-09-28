@@ -119,11 +119,16 @@ The input map is registered in code (`scripts/autoload/game_input.gd`); actions 
   his guard and he **parries** you, knocking your sword away, then counters, and often keeps
   pressing after the counter.
 - Deflecting the end of his string, a kick or a punished recovery staggers him, and your first
-  hits make him reel. After two (one or two in phase two) he **breaks out** instead of reeling
-  again: he parries your next swing, hops back out of reach (your swings whiff while he's in
-  the air) into a thrust or a leap, or takes the blow and answers with a fast cut or a sweep.
-  Once he's back on his feet he often backs off, throws shuriken or attacks at once, and he
-  avoids opening with the attack you just punished. You can't stun-lock him.
+  hits make him reel. He takes a pummeling for a little while (three hits in his first life,
+  two or three in his second, two in his last; the last one still lands), then **escapes**
+  instead of reeling again, a different way each time and never the same twice running: a big
+  leap back, a shuriken volley from the air, a backstep hop into a thrust or a leap, a hop
+  aside (then maybe a cut from there), a perilous sweep through your combo (jump it), or a parry
+  of your swing and a counter. Your swings whiff while he's in the air. He picks one there's
+  room for, so with his back to the wall he goes aside or through you, not backwards. If his
+  flinch ends before your next hit lands he usually escapes or attacks at once anyway, and he
+  avoids opening with the attack you just punished. You can't stun-lock him, and you still get
+  your hits in.
 
 ### Dodging
 
@@ -236,7 +241,11 @@ the beat of the quick blows gets you hit by the one after the pause.
   close is no escape. During wind-ups he shuffles in to his striking distance and tracks you
   hard, so a strike started at the edge of his range still arrives.
 - He moves with intent: he stalks at a varying pace, sometimes stops to watch you, runs to a new
-  spot and opens with a special from there, and **runs at you** to flow into a running cut.
+  spot and opens from there, and **runs at you** to flow into a running cut. He moves like a
+  fighter: his pace builds and eases off (no instant starts, stops or about-turns). To get
+  round you he backs off facing you, then runs an arc round you (side-on, not his back to you),
+  keeping off the wall, pulls up, turns to face you and settles a beat before he leaps,
+  thrusts, throws, charges or walks back in.
   Backing off or running away makes him charge or leap after you. If you keep your distance he
   may plant his staff with a stamp and a slow breath, daring you in, which leaves him open.
 - He guards most attacks from neutral and often strikes right after you stop hitting his guard.
@@ -288,6 +297,7 @@ godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--v
 | `sweep` | Guarding and dodge i-frames fail against the sweep, and so does getting away (stepping back or aside, two backsteps, sprinting or walking away, from 1.5 to 3.4 m); jumping clears it, and the kick deals posture |
 | `shuriken` | Volley rhythms (3 in the air + 1 delayed, 5 in the air), a readable tell before the first; from phase 2 on two sets, the second 0.4 to 0.55 s after the first; every throw deflectable (4 posture to him each; one that fills his posture in mid-air breaks him as he lands) or blockable, a whole double volley included |
 | `tempest` | Phase three's Tempest of Fangs: deflecting each blow as it comes clears all six from 2.2 and 3.4 m and loads his posture, and the rhythm holds (two quick, a pause, two quick, a long delay, one, a pause, the last); pressing guard on the quick blows' beat deflects those but gets hit by each blow after a pause; holding guard blocks every blow and the last breaks your guard; backing away locked on doesn't get you out of it; he only picks it in phase three (it's also in `reach`, `tells` and `flurry`) |
+| `escape` | A pummeling (he's reeling and you keep hitting): in each phase he reels from at most his share of hits (3, then 3, then 2), then gets out of it, in at least four different ways over twelve pummelings and never the same way twice running; with his back to the wall he never escapes backwards into it. Running round you: he backpedals facing you before he turns, never has his back to you within 3.2 m, never comes nearer than he started, his speed changes no faster than 9 m/s² (12 when charging), he ends up 45° or more round you at 3.4–7.6 m, stays inside the plaza and squares up to you before he acts |
 | `attack` | Slash reach, and that mashing is rate-limited (no two hits within 0.38 s) |
 | `cancel` | Guard cancels a slash only in the early wind-up and in the recovery; a guard tap let go of long before the recovery doesn't come up in it, while one just before it does, and so does a tap during hit-stun (as the stun ends); a lost dodge release cannot leave sprint held |
 | `inferno` | Phase 2 opens with the Inferno (starting there, or rising into it); he lands in the middle of the arena; the blast misses you outside its radius, knocks you down and throws you out of it inside, and walking away locked on from right beside him gets clear in time (stepping through it doesn't); jumping each arm clears all four from 4 to 14 m out, the beat holds (1.5, 1.5, 1.0 s) wherever you stand and while you walk round him; standing, guarding and dodging get burned by every arm and by the eruption; jumping on the beat gets caught by the fourth; one jump timed to the eruption clears it (in the air you're clear), earlier or later burns (it prints the window), and it rolls outward, reaching the wall a moment after it bursts beside him; after a burn the next arm, or the eruption, waits until you can jump it. Phase 3: jumping each arm, each wave and the eruption clears them all from 4 to 14 m out, each wave comes on the half-beat between two arms and there's never less than 0.9 s between two things to jump, still so walking round him or backing away; watching only the arms, a wave burns you; after any burn nothing reaches you for 2 s; it prints how early or late a jump over a wave may be; phase 2 has no waves. The ring stops you and burns; your sword glances off him; his posture holds through it; he's open afterwards; he uses it again once it's off cooldown |
@@ -300,7 +310,9 @@ fails if the engine or a script reports any error during the run (it listens thr
 **Captures**: `tests/capture.tscn` stages shots (`overview`, `deflect`, `deflect_offcenter`,
 `block`, `mikiri`, `thrust_backstep`, `sweep`, `sweep_flee`, `whirl`, `shuriken`, `shuriken5` (`double` for
 phase 2's two sets),
-`charge`, `slashes`, `parried`, `tempest` for phase three's six-blow string (`tempest side` from beside
+`charge`, `slashes`, `parried`, `reposition` (he runs round you to a new spot; `reposition wide` from high
+above), `pummel [phase] [seed] [escape]` (you keep hitting him while he reels until he escapes; name
+the escape to film that one), `tempest` for phase three's six-blow string (`tempest side` from beside
 the fighters, `tempest hold` holding guard through it), `edge` (the lock-on camera with your back to the fence at eight
 places round the rim), `ribbons` for cloth and hair in motion (`ribbons close` behind you, `ribbons boss`
 behind him through his combo), `deathblow` (a posture break and the kill; `deathblow final`
@@ -431,7 +443,18 @@ This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (8
 a full-fight soak), the game boots and runs with no script errors, and every change to the
 visuals was checked on frames rendered with Movie Maker.
 
-**Latest: the Tempest of Fangs, phase three's own attack.** In his last life he has a signature
+**Latest: he moves like a fighter, and escapes a pummeling.** Running round you to a new
+spot, he used to go from standing to a sprint in one step, turn his back on you, run a
+straight line and snap round to face you. Now he backs off facing you, runs an arc round you
+(side-on), his pace building and easing off, keeps off the wall, pulls up, turns to face you
+and settles before he acts; his stalking and charging ease in and out of speed too. And he
+takes a pummeling for a little while (three hits, then two or three, then two as his lives
+go), then escapes a different way each time: a new evasive leap back, a new hop aside, a
+shuriken volley from the air, a backstep into a thrust or leap, a sweep through your combo or
+a parry and counter, only where there's room for it. The new `escape` lab suite checks both,
+and the capture shots `reposition` and `pummel` film them.
+
+**Before that: the Tempest of Fangs, phase three's own attack.** In his last life he has a signature
 string, in the spirit of Genichiro's Floating Passage: he stamps, sinks into a deep coil and
 both blades flare with fire, then comes at you with six blows in a rhythm you can learn,
 **ta-ta · · · ta-ta · · · · ta · · · TAAA**: two quick cuts from alternating sides, a pause while

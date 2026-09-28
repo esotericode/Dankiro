@@ -29,7 +29,7 @@ the script backs off and retries, so let it run. For another version, set
   script error during the run also fails it):
   `godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--verbose]`
   Suites: reach, tells, deflect, flurry, punish, loop, phases, menu, camera, ribbons, spam, mikiri, dodge,
-  sweep, shuriken, attack, cancel, inferno, tempest, soak. `camera` loads the real arena (main.tscn), like
+  sweep, shuriken, attack, cancel, inferno, tempest, escape, soak. `camera` loads the real arena (main.tscn), like
   `menu`. `menu` drives the real menus with simulated gamepad input
   (`Input.parse_input_event`); it sets `Game.save_enabled = false` so tests never overwrite the
   saved options.
@@ -251,5 +251,11 @@ godot --headless --editor --quit               # import
   `anim_preview.py` clamps the same way), and its `close` windows (a list, one per gap between
   blows) bring him back to it if you back off. Without it he walks into you and the fighters
   overlap. A sequence's `min_phase` keeps a move to the later phases.
+- His own movement in neutral (stalking, charging, the run round you) goes through `Boss._move_vel`,
+  eased toward what he wants (`MOVE_ACCEL`, `WALK_ACCEL`, `CHARGE_ACCEL`), and `_loco_anim()` plays
+  the run only when he runs the way he faces (the walk clips otherwise), so feet don't slide. Being
+  pummeled: `_pummel` counts hits that leave him reeling; at `_endure` he escapes (`ESCAPES`, needs
+  `_room()` in that direction, never the same as `_escapes[0]`). Lab suite `escape`; captures
+  `reposition [wide]`, `pummel [phase] [seed] [escape]`.
 - The combat camera frames deathblows itself (`CombatCamera.play_deathblow`, called by the
   player): it swings beside the fighters while the kill plays out, then eases back.
