@@ -1099,8 +1099,13 @@ func _on_anim_event(_clip: String, ev: Dictionary) -> void:
 			_flare_off_at = Game.clock + float(ev.get("hold", 0.55))
 			_flare_fade = float(ev.get("fade", 1.6))
 			Sfx.play("fire_flare", rig.joint_world("chest"), 1.0, 1.1, 0.03)
-			# (the flash comes from the staff, in front of him, so it lights him rather than glowing on his chest)
-			Fx.light_pulse(get_parent(), rig.weapon_world_xf().origin + forward() * 0.4, Color(1.0, 0.5, 0.15), 2.2, 6.0, 0.4)
+			# (the flash comes from the burning upper blade, so it lights him like the fire does
+			# instead of glowing on his chest)
+			var up_blade := rig.blade_world("upper")
+			var flash_at := rig.weapon_world_xf().origin
+			if up_blade.size() >= 2:
+				flash_at = (up_blade[0] + up_blade[up_blade.size() - 1]) * 0.5
+			Fx.light_pulse(get_parent(), flash_at, Color(1.0, 0.5, 0.15), 2.2, 6.0, 0.4)
 		"roar":
 			_enter_phase(phase + 1)
 		"fire_plant", "fire_charge", "fire_blast", "fire_whips", "fire_plunge", "fire_erupt":
