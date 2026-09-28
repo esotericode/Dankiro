@@ -6,10 +6,12 @@ extends Combatant
 ##    and punished with a counter.
 ##  * Posture regenerates unless pressured; regen slows as his vitality drops.
 ##  * Posture break (or 0 vitality) -> kneels, deathblow window. Three lives: after each
-##    deathblow he rises into the next phase (2 is faster and more aggressive; 3 is a copy
-##    of 2 for now).
+##    deathblow he rises into the next phase (2 is faster and more aggressive; 3 is 2 with
+##    the Tempest of Fangs and a harder Inferno).
 ##  * Phase 2 on: his staff smoulders, and he has the Inferno (scripts/combat/inferno.gd):
 ##    he opens phase 2 with it, then uses it every so often (INFERNO_COOLDOWN).
+##  * Phase 3: the Tempest of Fangs (b_tempest), his signature string: six blows in a rhythm
+##    you learn, tracking you and closing in between them, so you deflect the set.
 
 signal posture_broken
 signal life_lost(lives_left: int)
@@ -31,7 +33,7 @@ const DEATHBLOW_WINDOW_END := 2.75   ## b_posture_break time when he starts risi
 const INFERNO_COOLDOWN := 40.0       ## seconds from the end of one Inferno until he may use it again
 const INFERNO_PHASE3 := 18.0         ## ...and after rising into phase 3 (which has no opener)
 
-## steps: [options ("a|b"), chance]; range: [min_d, max_d] meters; weight
+## steps: [options ("a|b"), chance]; range: [min_d, max_d] meters; weight; min_phase (optional)
 const SEQUENCES := {
 	"fang_string": {"steps": [["b_combo_1", 1.0], ["b_combo_2", 0.85], ["b_combo_3|b_thrust|b_sweep|b_sweep|b_backhand", 0.75]],
 		"range": [0.0, 3.3], "weight": 3.0},
@@ -47,6 +49,7 @@ const SEQUENCES := {
 	"shuriken_4": {"steps": [["b_shuriken_4", 1.0], ["b_leap|b_thrust", 0.4]], "range": [0.0, 4.5], "weight": 1.1},
 	"shuriken_5": {"steps": [["b_shuriken_5", 1.0], ["b_leap", 0.35]], "range": [0.0, 4.5], "weight": 0.8},
 	"dash_cut": {"steps": [["b_dash_cut", 1.0], ["b_combo_2|b_sweep|b_thrust", 0.5]], "range": [3.0, 4.2], "weight": 1.0},
+	"tempest": {"steps": [["b_tempest", 1.0]], "range": [0.0, 4.4], "weight": 2.4, "min_phase": 3},
 }
 
 ## Non-attack behaviours that compete with the sequences: [min, max] distance and weight.
@@ -67,7 +70,8 @@ const SPECIALS := ["leap", "thrust", "shuriken_4", "shuriken_5", "charge"]
 const DOUBLE_VOLLEY := {"b_shuriken_4": "b_shuriken_4x2", "b_shuriken_5": "b_shuriken_5x2"}
 
 ## What changes when he rises into a phase (phase 1 is his base setup). Everything that
-## checks `phase >= 2` applies to phase 3 as well. Phase 3 is a copy of phase 2 for now.
+## checks `phase >= 2` applies to phase 3 as well. Phase 3 adds the Tempest of Fangs (SEQUENCES
+## "tempest", min_phase 3) and waves of fire in the Inferno.
 const PHASE_TWO := {"attack_speed": 1.08, "aggression": 1.5, "glow": 0.9, "aura": 48, "eye_light": 0.4}
 const PHASES := {2: PHASE_TWO, 3: PHASE_TWO}
 
@@ -119,6 +123,8 @@ var inferno_uses := 0
 var _inferno_at := INF              ## Game.clock from when he may use the Inferno again
 var _opener := false                ## open with the Inferno as soon as the fight starts
 var _break_on_landing := false      ## a deflected shuriken filled his posture while he was in the air
+var _flare_off_at := -1.0           ## Game.clock when a Tempest flare of his blades dies back down
+var _flare_fade := 1.6              ## ...and how fast (level per second)
 
 
 func _ready() -> void:
@@ -497,6 +503,8 @@ func _pick_action(d: float) -> String:
 		catalog[mname] = MOVES[mname]
 	for sname in catalog:
 		var sd: Dictionary = catalog[sname]
+		if int(sd.get("min_phase", 1)) > phase:
+			continue
 		var r: Array = sd["range"]
 		if d < float(r[0]) or d > float(r[1]):
 			continue
@@ -561,6 +569,14 @@ func _play_attack(clip_name: String, start: float) -> void:
 		root_scale = clampf((distance_to_opponent() - 2.1) / reach, 0.35, 1.7)
 
 
+## A string that steps in with every blow ("hold_distance") keeps its striking distance instead
+## of walking into you when you stand your ground.
+func hold_distance() -> float:
+	if state == S.ATTACK and anim.clip != null and not anim.loco_active:
+		return maxf(min_opponent_distance, anim.clip.get_float("hold_distance", 0.0))
+	return min_opponent_distance
+
+
 func _state_attack(delta: float) -> Vector3:
 	var c := anim.clip
 	if c == null:
@@ -610,11 +626,20 @@ func _state_attack(delta: float) -> Vector3:
 	return _close_distance(c, t)
 
 
-## Gap-closing during a wind-up (clip "close": [from, to, ideal distance, max speed]): he
-## shuffles in so a strike started at the edge of his range still arrives, like Souls bosses.
+## Gap-closing during a wind-up (clip "close": [from, to, ideal distance, max speed], or a list
+## of them for a string that closes in before each blow): he shuffles in so a strike started at
+## the edge of his range still arrives, like Souls bosses.
 func _close_distance(c: ClipData, t: float) -> Vector3:
-	var close: Array = c.raw.get("close", [])
-	if close.size() < 4 or opponent == null or t < float(close[0]) or t > float(close[1]):
+	var windows: Array = c.raw.get("close", [])
+	if windows.is_empty() or not (windows[0] is Array):
+		windows = [windows]
+	var close: Array = []
+	for w in windows:
+		var wa: Array = w
+		if wa.size() >= 4 and t >= float(wa[0]) and t <= float(wa[1]):
+			close = wa
+			break
+	if close.is_empty() or opponent == null:
 		return Vector3.ZERO
 	var to := Combat.flat(opponent.global_position - global_position)
 	var d := to.length()
@@ -1068,6 +1093,14 @@ func _on_anim_event(_clip: String, ev: Dictionary) -> void:
 			_throw_shuriken(int(ev.get("index", 0)))
 		"glint":
 			Fx.flash(get_parent(), rig.joint_world("hand_l"), 0.28, Color(1.0, 0.85, 0.6), true)
+		"tempest":
+			# The Tempest's tell: both blades flare up, then die back to their smoulder.
+			staff_fire.set_level(float(ev.get("level", 1.0)), 9.0)
+			_flare_off_at = Game.clock + float(ev.get("hold", 0.55))
+			_flare_fade = float(ev.get("fade", 1.6))
+			Sfx.play("fire_flare", rig.joint_world("chest"), 1.0, 1.1, 0.03)
+			# (the flash comes from the staff, in front of him, so it lights him rather than glowing on his chest)
+			Fx.light_pulse(get_parent(), rig.weapon_world_xf().origin + forward() * 0.4, Color(1.0, 0.5, 0.15), 2.2, 6.0, 0.4)
 		"roar":
 			_enter_phase(phase + 1)
 		"fire_plant", "fire_charge", "fire_blast", "fire_whips", "fire_plunge", "fire_erupt":
@@ -1136,6 +1169,9 @@ func _end_perilous() -> void:
 func _update_glow(delta: float) -> void:
 	if _perilous_clip != "" and (anim.clip == null or anim.clip.name != _perilous_clip):
 		_end_perilous()
+	if _flare_off_at > 0.0 and Game.clock >= _flare_off_at and state != S.INFERNO:
+		_flare_off_at = -1.0
+		staff_fire.set_level(StaffFire.SMOULDER, _flare_fade)
 	_glow = move_toward(_glow, _glow_target, delta * (12.0 if _glow_target > _glow else 3.0))
 	if blade_mat:
 		blade_mat.emission_energy_multiplier = _glow

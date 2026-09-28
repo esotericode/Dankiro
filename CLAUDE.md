@@ -29,7 +29,7 @@ the script backs off and retries, so let it run. For another version, set
   script error during the run also fails it):
   `godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--verbose]`
   Suites: reach, tells, deflect, flurry, punish, loop, phases, menu, camera, ribbons, spam, mikiri, dodge,
-  sweep, shuriken, attack, cancel, inferno, soak. `camera` loads the real arena (main.tscn), like
+  sweep, shuriken, attack, cancel, inferno, tempest, soak. `camera` loads the real arena (main.tscn), like
   `menu`. `menu` drives the real menus with simulated gamepad input
   (`Input.parse_input_event`); it sets `Game.save_enabled = false` so tests never overwrite the
   saved options.
@@ -48,7 +48,7 @@ the script backs off and retries, so let it run. For another version, set
   attack from the lock-on camera, `diagnostics` shows the hitbox overlay, `edge` the lock-on camera
   with your back to the fence round the rim, `deathblow [final]` a
   posture break and the kill (the camera's deathblow shot, blood, 忍殺), `help` and
-  `menu_controls` the controls sheet, and `inferno`
+  `menu_controls` the controls sheet, `tempest` (`side`, `hold`) phase 3's six-blow string, and `inferno`
   (`stand`, `wide`) films phase 2's fire move (about 16 s: render it at 640x360 to iterate). Contact-sheet the
   PNGs with PIL, then look at them. `--fixed-fps 10` renders a third of the frames for a quick look.
 - The game boots to a title menu. The capture harness sets `Game.skip_title` (and ignores the
@@ -246,5 +246,10 @@ godot --headless --editor --quit               # import
   near 1 Hz and flutter well above it (they resonate). The lab's `ribbons` suite measures it; for
   tuning, `RIBBON_SET="flutter=0,..."`, `RIBBON_NOCOLLIDE=1`, `RIBBON_DUMP=<json>` and
   `RIBBON_BENCH=1` (see the suite's comment), and the capture shot `ribbons` films it.
+- A boss string that steps in with every blow (phase 3's Tempest of Fangs, `b_tempest`) sets
+  `hold_distance` on its clip: root motion stops that far from you (`Boss.hold_distance()`, and
+  `anim_preview.py` clamps the same way), and its `close` windows (a list, one per gap between
+  blows) bring him back to it if you back off. Without it he walks into you and the fighters
+  overlap. A sequence's `min_phase` keeps a move to the later phases.
 - The combat camera frames deathblows itself (`CombatCamera.play_deathblow`, called by the
   player): it swings beside the fighters while the kill plays out, then eases back.

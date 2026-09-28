@@ -690,6 +690,24 @@ func shot_recovery() -> void:
 	_end_at = 0.3 + AnimLibrary.get_clip(clip).length + 0.5
 
 
+## Phase 3's Tempest of Fangs from the lock-on camera, every blow deflected (`-- tempest side`:
+## from a fixed 3/4 view beside the two of you; `-- tempest hold`: holding guard, which breaks on
+## the last blow).
+func shot_tempest() -> void:
+	var args := OS.get_cmdline_user_args()
+	var mode: String = args[1] if args.size() > 1 else ""
+	_stage(2.6)
+	boss._enter_phase(3, false)
+	if mode == "side":
+		_art_camera(4.6, 1.6, 1.3, 0.0, 40.0)
+	if mode == "hold":
+		at(0.1, func(): player.press_guard(Game.clock))
+	else:
+		auto_guard(0.06, 0.05)
+	at(0.3, func(): boss_string(["b_tempest"]))
+	_end_at = 0.3 + AnimLibrary.get_clip("b_tempest").length + 0.4
+
+
 ## Phase 2's fire move (the Inferno) from the lock-on camera: he leaps to the middle, you back
 ## out of the blast radius while he channels, then jump each arm of fire and the eruption at
 ## the end (the bot jumps 0.28 s before each). `-- inferno stand` stands still and gets burned instead;

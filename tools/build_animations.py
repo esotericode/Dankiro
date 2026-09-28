@@ -1217,6 +1217,158 @@ def build_boss():
     shuriken_clip("b_shuriken_5x2", set5, land_t=1.42, end_t=2.80, apex_h=2.15,
                   ground=[(1.74, 0.12), (1.865, 0.08), (1.99, 0.08), (2.115, 0.08), (2.24, 0.08)])
 
+    # ---- Tempest of Fangs (phase 3): his signature string, six blows in a rhythm you learn:
+    #   ta-ta . . ta-ta-ta . . . TAAA
+    # The tell: he stamps, sinks into a deep coil with the staff low behind him and both blades
+    # flare with fire (the "tempest" event), held for a beat. Then a figure-eight of cuts that
+    # alternate sides, each a swing you've seen on its own (Rising Fang from your left, a
+    # backhand from your right; a pause as he coils at his right side and steps in; Turning Fang
+    # from your left, a backhand from your right, a stab), then the delay that catches anyone
+    # mashing: he rises tall with the staff overhead, the blades flare again, and he
+    # lunges in with an overhead cleave. He tracks you and closes in between the blows, so
+    # backing off doesn't get you out of it: deflect the set. Blocking it all breaks your guard
+    # on the last blow (18 x 5 + 32 posture).
+    def root_at(d, z):
+        d = dict(d)
+        d["root"] = [0, 0, round(z, 3)]
+        return d
+
+    def shifted(sw_keys, z0):
+        for k in sw_keys:
+            rz = k["set"].get("root", [0, 0, 0])[2]
+            k["set"]["root"] = [0, 0, round(z0 + rz, 3)]
+        return sw_keys
+
+    TT = {"b1": 0.74, "b2": 1.12, "b3": 1.74, "b4": 2.10, "b5": 2.46, "b6": 3.26}   # each blow's swing starts
+    tw = wind.copy()                                 # the coil: deeper than Rising Fang's wind-up
+    tw.update({"hips_pos": [0, 0.90, 0.14], "hips": [0, -46, 0], "spine": [-6, -14, 0], "chest": [-4, -36, 0],
+               "neck": [6, 44, 0], "head": [4, 20, 0], "foot_l": [-0.20, 0.08, -0.42], "foot_r": [0.26, 0.08, 0.34],
+               "elbow_l": [-0.5, -1, 0.1], "elbow_r": [0.7, -0.8, 0.5]})
+    place(tw, [0.46, 1.02, 0.16], shaft_w, edge_for(ax1, ls, -1.0), -0.05, 0.45, S["weapon_rot"])
+    stamp_up = S.copy()                              # lifting the lead foot for the stamp
+    stamp_up.update({"hips_pos": [0, 1.00, 0.06], "hips": [0, -30, 0], "chest": [-4, -20, 0], "neck": [4, 26, 0],
+                     "foot_l": [-0.18, 0.24, -0.26], "foot_l_rot": [12, -10, 0]})
+    place(stamp_up, [0.30, 1.10, 0.10], shaft_w, edge_for(ax1, ls, -1.0), -0.05, 0.45, S["weapon_rot"])
+    keys = [key(0.0, "b_stance"), key(0.14, stamp_up, ease="inout_sine"),
+            key(0.22, dict(tw, hips_pos=[0, 0.94, 0.12], foot_l_rot=[0, -10, 0]), ease="in_quad"),     # stamp
+            key(0.40, tw, ease="out_quad"),
+            key(0.60, dict(tw, hips_pos=[0, 0.88, 0.15], chest=[-4, -38, 0]), ease="inout_sine"),     # the hold
+            key(TT["b1"], dict(tw, hips_pos=[0, 0.90, 0.14], chest=[-2, -36, 0],
+                               weapon_pos=r3(np.array(tw["weapon_pos"]) + [0.02, -0.02, 0.04])), ease="inout_sine")]
+    # 1. Rising Fang (lower blade, from your left)
+    t0 = TT["b1"]
+    sw1, _ = hswing(t0, t0 + 0.17, 7, np.array(R0) + shaft_w * 0.25, ax1, total1, R0, shaft_w, edge_for(ax1, ls, -1.0),
+                    -0.05, tw["weapon_rot"], ease=in_quad, pivot_move=[-0.20, 0.12, -0.40])
+    keys += shifted(bkeys_from_swing(sw1, lambda u: {
+        "hips": [0, -46 + 60 * u, 0], "chest": [-2 - 8 * u, -36 + 78 * u, 0], "spine": [-6 - 2 * u, -14 + 26 * u, 0],
+        "neck": [6, 44 - 58 * u, 0], "head": [4, 20 - 28 * u, 0],
+        "hips_pos": [0, 0.90 + 0.07 * u, 0.14 - 0.26 * u], "foot_l": lerp3([-0.20, 0.08, -0.42], [-0.18, 0.08, -0.56], smooth(u)),
+        "root": [0, 0, -0.8 * u], "elbow_l": [-0.8, -0.6, 0.2], "elbow_r": [0.7, -0.7, 0.4]}), 0.0)
+    z = -0.8
+    # 2. Backhand (upper blade, from your right): the staff comes back across the way it went
+    t0 = TT["b2"]
+    keys.append(key(t0 - 0.12, root_at(dict(bwind, chest=[-4, 38, 0]), z), ease="inout_sine"))
+    sw2b, _ = hswing(t0, t0 + 0.14, 7, np.array(RB) + bs_ * 0.2, axb, abk + 80, RB, bs_, eb, -0.30, bwind["weapon_rot"],
+                     ease=in_quad, pivot_move=[0.05, 0.0, -0.5])
+    keys += shifted(bkeys_from_swing(sw2b, lambda u: {
+        "hips": [0, 32 - 64 * u, 0], "chest": [-4 - 6 * u, 40 - 92 * u, 0], "spine": [-4, 14 - 30 * u, 0],
+        "neck": [4, -36 + 56 * u, 0], "head": [0, -16 + 26 * u, 0],
+        "hips_pos": [0, 0.99 - 0.02 * u, 0.04 - 0.12 * u], "root": [0, 0, -0.7 * u],
+        "foot_r": lerp3([0.22, 0.08, 0.30], [0.24, 0.08, 0.02], smooth(u)),
+        "elbow_l": [-0.7, -0.7, 0.3], "elbow_r": [0.6, -0.8, 0.4]}), z)
+    z -= 0.7
+    # the first pause: he carries the cut round to his right and coils there, stepping in
+    t0 = TT["b3"]
+    keys.append(key(TT["b2"] + 0.30, root_at({"chest": [-10, -50, 0], "hips": [0, -30, 0], "neck": [4, 46, 0],
+                                             "head": [0, 20, 0], "hips_pos": [0, 0.96, 0.02]}, z - 0.1), ease="out_quad"))
+    keys.append(key(t0 - 0.16, root_at(dict(wind2, hips_pos=[0, 0.97, 0.06]), z - 0.35), ease="inout_sine"))
+    keys.append(key(t0, root_at(dict(wind2, chest=[-4, -36, 0]), z - 0.4), ease="linear"))
+    z -= 0.4
+    # 3. Turning Fang (upper blade, flat, from your left)
+    sw3t, _ = hswing(t0, t0 + 0.15, 7, np.array(R2) - us * 0.22, ax2, a2 + 85, R2, us, e2, 0.15, wind2["weapon_rot"],
+                     ease=in_quad, pivot_move=[-0.05, 0.0, -0.35])
+    keys += shifted(bkeys_from_swing(sw3t, lambda u: {
+        "hips": [0, -40 + 70 * u, 0], "chest": [-4 - 6 * u, -36 + 95 * u, 0], "spine": [-4, -14 + 32 * u, 0],
+        "neck": [4, 40 - 60 * u, 0], "head": [0, 18 - 28 * u, 0],
+        "hips_pos": [0, 0.98 - 0.02 * u, 0.06 - 0.12 * u], "root": [0, 0, -0.7 * u],
+        "foot_r": lerp3([0.24, 0.08, 0.28], [0.26, 0.08, 0.02], smooth(u)),
+        "elbow_l": [-0.7, -0.7, 0.3], "elbow_r": [0.5, -0.9, 0.4]}), z)
+    z -= 0.7
+    # 4. Backhand again (from your right)
+    t0 = TT["b4"]
+    keys.append(key(t0 - 0.12, root_at(dict(bwind, chest=[-4, 38, 0]), z), ease="inout_sine"))
+    sw4b, _ = hswing(t0, t0 + 0.14, 7, np.array(RB) + bs_ * 0.2, axb, abk + 80, RB, bs_, eb, -0.30, bwind["weapon_rot"],
+                     ease=in_quad, pivot_move=[0.05, 0.0, -0.5])
+    keys += shifted(bkeys_from_swing(sw4b, lambda u: {
+        "hips": [0, 32 - 64 * u, 0], "chest": [-4 - 6 * u, 40 - 92 * u, 0], "spine": [-4, 14 - 30 * u, 0],
+        "neck": [4, -36 + 56 * u, 0], "head": [0, -16 + 26 * u, 0],
+        "hips_pos": [0, 0.99 - 0.02 * u, 0.04 - 0.12 * u], "root": [0, 0, -0.6 * u],
+        "foot_r": lerp3([0.22, 0.08, 0.30], [0.24, 0.08, 0.02], smooth(u)),
+        "elbow_l": [-0.7, -0.7, 0.3], "elbow_r": [0.6, -0.8, 0.4]}), z)
+    z -= 0.6
+    # 5. The stab: from the end of the backhand he snaps the staff up to his shoulder and
+    # drives the blade down into your chest (as the jabs do)
+    t0 = TT["b5"]
+    keys.append(key(t0 - 0.05, root_at(ja, z), ease="out_quad"))
+    keys.append(key(t0 + 0.04, root_at(ja2, z - 0.05), ease="inout_sine"))
+    keys.append(key(t0 + 0.13, root_at(jo, z - 0.4), ease="out_cubic"))
+    z -= 0.4
+    # the second pause (the delay): he pulls the staff up overhead and rises onto his toes, the
+    # blades flare, and he hangs there a beat before the lunge
+    t0 = TT["b6"]
+    keys.append(key(TT["b5"] + 0.32, root_at(dict(jr, hips_pos=[0, 0.98, 0.04]), z - 0.05), ease="inout_sine"))
+    keys.append(key(t0 - 0.42, root_at(up, z - 0.1), ease="inout_sine"))
+    keys.append(key(t0 - 0.12, root_at(dict(up, hips_pos=[0, 1.06, 0.10], chest=[16, 0, 0],
+                                            foot_l=[-0.16, 0.14, -0.34], foot_r=[0.20, 0.16, 0.28]), z - 0.1),
+                    ease="inout_sine"))
+    keys.append(key(t0, root_at(dict(up, hips_pos=[0, 1.04, 0.08], chest=[15, 0, 0]), z - 0.15), ease="in_sine"))
+    z -= 0.15
+    # 6. The lunging cleave (upper blade, overhead): a long forward drive (stretched to reach
+    # you if you backed off: lunge_reach)
+    sw6, _ = hswing(t0, t0 + 0.12, 7, piv3, ax3, -185, R3, ob, oe, -0.10, up["weapon_rot"], ease=in_quad,
+                    pivot_move=[0.0, -0.45, -0.45])
+    keys += shifted(bkeys_from_swing(sw6, lambda u: {
+        "chest": [15 - 44 * u, 0, 0], "spine": [8 - 26 * u, 0, 0], "neck": [-8 + 22 * u, 0, 0],
+        "hips_pos": [0, 1.04 - 0.20 * u, 0.08 - 0.30 * u], "root": [0, 0, -0.9 * u],
+        "foot_l": lerp3([-0.16, 0.08, -0.32], [-0.16, 0.08, -0.66], smooth(u)),
+        "elbow_l": [-0.6, -0.8, 0.3], "elbow_r": [0.6, -0.8, 0.3]}), z)
+    z -= 0.9
+    keys.append(key(t0 + 0.26, root_at({"chest": [-30, 0, 0]}, z - 0.05), ease="out_quad"))
+    keys.append(key(t0 + 0.70, root_at({"chest": [-24, 0, 0], "hips_pos": [0, 0.86, -0.14]}, z - 0.08)))
+    keys.append({"t": round(t0 + 1.12, 3), "pose": "b_stance", "set": {"root": [0, 0, round(z - 0.1, 3)]}, "ease": "inout_sine"})
+
+    def tempest_hit(frm, blade, dir_, dmg=20, pb=18, pd=5, bp=9, final=False):
+        h = {"from": round(frm, 3), "to": round(frm + 0.13, 3), "blade": blade, "kind": "normal", "dmg": dmg,
+             "posture_block": pb, "posture_deflect": pd, "boss_posture": bp, "dir": dir_}
+        if final:
+            h["final"] = True
+        return h
+    hits = [tempest_hit(TT["b1"] + 0.05, "lower", "left"), tempest_hit(TT["b2"] + 0.03, "upper", "right"),
+            tempest_hit(TT["b3"] + 0.03, "upper", "left"), tempest_hit(TT["b4"] + 0.03, "upper", "right"),
+            tempest_hit(TT["b5"] + 0.03, "upper", "mid"),
+            tempest_hit(TT["b6"], "upper", "high", dmg=36, pb=32, pd=10, bp=18, final=True)]
+    # swing_heavy peaks 0.21 s in: each whoosh is loudest as the blade reaches you
+    events = [{"t": 0.04, "type": "sfx", "name": "draw"}, {"t": 0.22, "type": "sfx", "name": "stamp"},
+              {"t": 0.26, "type": "tempest", "level": 0.9, "hold": 0.3, "fade": 3.5}]   # dies back before the first blow
+    events += [{"t": round(h["from"] + 0.06 - 0.21, 3), "type": "sfx", "name": "swing_heavy"} for h in hits[:4]]
+    events += [{"t": round(TT["b5"] + 0.02, 3), "type": "sfx", "name": "jab"},
+               {"t": round(TT["b6"] - 0.34, 3), "type": "tempest", "level": 0.8, "hold": 0.5, "fade": 2.5},   # burns through the cleave
+               {"t": round(TT["b6"] + 0.07 - 0.21, 3), "type": "sfx", "name": "swing_heavy"},
+               {"t": round(TT["b6"] + 0.12, 3), "type": "ground_impact", "blade": "upper"}]
+    # He steps in with every blow but keeps his striking distance (hold_distance: root motion
+    # stops 2 m from you, where every blow still lands), and closes back to it between blows
+    # if you back off.
+    gaps = [[0.10, TT["b1"] + 0.02, 2.0, 4.6]] + [[round(a, 3), round(b, 3), 2.0, 5.0] for a, b in (
+        (TT["b1"] + 0.18, TT["b2"] - 0.02), (TT["b2"] + 0.16, TT["b3"] - 0.02), (TT["b3"] + 0.16, TT["b4"] - 0.02),
+        (TT["b4"] + 0.16, TT["b5"] - 0.04), (TT["b5"] + 0.16, TT["b6"] - 0.06))]
+    clip("b_tempest", "boss", keys, chain=round(TT["b6"] + 0.9, 3), close=gaps, hold_distance=2.0, vuln=[round(TT["b6"] + 0.30, 3), round(TT["b6"] + 1.05, 3)],
+         lunge_reach=[round(TT["b6"] - 0.02, 3), round(TT["b6"] + 0.14, 3), 3.4, 0.9],
+         track=[[0.0, 0.62, 480], [0.62, TT["b1"] + 0.06, 240],
+                [TT["b1"] + 0.17, TT["b2"] + 0.03, 360], [TT["b2"] + 0.16, TT["b3"] + 0.03, 420],
+                [TT["b3"] + 0.16, TT["b4"] + 0.03, 360], [TT["b4"] + 0.16, TT["b5"] + 0.02, 360],
+                [TT["b5"] + 0.14, TT["b6"] - 0.04, 420], [TT["b6"] - 0.04, TT["b6"] + 0.04, 200]],
+         hits=hits, events=events)
+
     # =========================================================== REACTIONS
     rec = S.copy()
     rec.update({"hips_pos": [0, 1.00, 0.16], "chest": [14, 10, 0], "spine": [8, 5, 0], "neck": [-10, 0, 0], "root": [0, 0, 0.35]})

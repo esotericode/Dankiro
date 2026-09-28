@@ -56,7 +56,7 @@ func _ready() -> void:
 		if not a.begins_with("--"):
 			suites.append(a)
 	if suites.is_empty():
-		suites = ["reach", "tells", "deflect", "flurry", "punish", "loop", "phases", "menu", "camera", "ribbons", "spam", "mikiri", "dodge", "sweep", "shuriken", "attack", "cancel", "inferno", "soak"]
+		suites = ["reach", "tells", "deflect", "flurry", "tempest", "punish", "loop", "phases", "menu", "camera", "ribbons", "spam", "mikiri", "dodge", "sweep", "shuriken", "attack", "cancel", "inferno", "soak"]
 	await get_tree().physics_frame
 	for s in suites:
 		print("\n=== suite: %s ===" % s)
@@ -192,7 +192,7 @@ func _run_escape(how: String, t: float) -> void:
 func contact_times(clip: String, dist: float) -> Array:
 	await setup(dist)
 	var t0 := boss_attack(clip)
-	await run_until_boss_done()
+	await run_until_boss_done(6.0)
 	await ticks(60)                       # shuriken still in flight when he's done
 	var out: Array = []
 	for r in _results:
@@ -207,7 +207,7 @@ const BOSS_ATTACKS := {
 	# far end of the range the AI uses the attack from (Boss.SEQUENCES) plus a little.
 	"b_combo_1": [1.0, 3.4], "b_combo_2": [1.0, 3.4], "b_combo_3": [1.0, 3.4], "b_backhand": [1.0, 3.4],
 	"b_jab": [1.0, 3.5], "b_whirl": [1.0, 3.0], "b_parry_counter": [1.0, 3.0], "b_thrust": [1.0, 5.6],
-	"b_sweep": [1.0, 3.4], "b_leap": [4.8, 8.0], "b_dash_cut": [1.3, 3.8],
+	"b_sweep": [1.0, 3.4], "b_leap": [4.8, 8.0], "b_dash_cut": [1.3, 3.8], "b_tempest": [1.0, 4.4],
 }
 
 
@@ -241,7 +241,7 @@ func suite_reach() -> void:
 ## at least TELL_MIN of warning before its first blow.
 const TELL_MIN := 0.45
 const TELL_OPENERS := ["b_combo_1", "b_backhand", "b_jab", "b_whirl", "b_thrust", "b_sweep", "b_leap",
-	"b_dash_cut", "b_parry_counter"]
+	"b_dash_cut", "b_parry_counter", "b_tempest"]
 
 
 func suite_tells() -> void:
@@ -338,7 +338,7 @@ func suite_deflect() -> void:
 ## the first blow lands, holding guard blocks (or deflects) everything that follows, and
 ## spamming guard through a string never lets a blow through.
 func suite_flurry() -> void:
-	for clip in ["b_whirl", "b_jab", "b_shuriken_4", "b_shuriken_5", "b_shuriken_4x2", "b_shuriken_5x2"]:
+	for clip in ["b_whirl", "b_jab", "b_shuriken_4", "b_shuriken_5", "b_shuriken_4x2", "b_shuriken_5x2", "b_tempest"]:
 		var cts := await contact_times(clip, 2.4)
 		if cts.size() < 2:
 			check(false, "%s: expected several blows against a still player (%d)" % [clip, cts.size()])
@@ -349,7 +349,7 @@ func suite_flurry() -> void:
 		var t0 := boss_attack(clip)
 		var pg: float = t0 + first + 0.02
 		at(pg, func(): player.press_guard(pg))
-		await run_until_boss_done(4.5)
+		await run_until_boss_done(6.0)
 		await ticks(60)
 		var got: Array = _results.map(func(r): return res_name(int(r["res"])))
 		print("  %-13s hit, then hold guard: %s" % [clip, " ".join(got)])
@@ -366,7 +366,7 @@ func suite_flurry() -> void:
 				player.press_guard(tp))
 			var tr: float = tp + 0.07
 			at(tr, func(): player.release_guard(tr))
-		await run_until_boss_done(4.5)
+		await run_until_boss_done(6.0)
 		await ticks(60)
 		got = _results.map(func(r): return res_name(int(r["res"])))
 		print("  %-13s spamming guard:     %s" % [clip, " ".join(got)])
@@ -394,6 +394,103 @@ func suite_flurry() -> void:
 	print("  guard broken while held, still held: back up %s, next blow %s" % [up, " ".join(after)])
 	check(saw_break and up and after == ["BLOCK"],
 		"guard broken while held: the held guard is back up after the stagger and blocks the next blow (%s, %s)" % [up, " ".join(after)])
+
+
+## Phase 3's Tempest of Fangs: six blows in a rhythm (ta-ta . . ta-ta-ta . . . TAAA), tracking
+## you. Deflecting each as its blade comes clears the set and loads his posture; blocking it
+## all breaks your guard on the last blow; backing off doesn't get you out of reach; it's only
+## his in phase 3.
+func suite_tempest() -> void:
+	for d in [2.2, 3.4]:
+		var r := await _tempest_run("deflect", d)
+		var res: Array = r["res"]
+		print("  tempest %.1f m, deflecting each: %s  contacts %s  gaps %s  his posture +%.0f" % [d, " ".join(res),
+			str(r["times"]), str(r["gaps"]), r["posture"]])
+		check(res.size() == 6 and res.count("DEFLECT") == 6 and not bool(r["broke"]),
+			"tempest at %.1f m: deflecting each blow as it comes clears all six (%s)" % [d, " ".join(res)])
+		check(float(r["posture"]) >= 50.0, "tempest at %.1f m: deflecting the set loads his posture (+%.0f)" % [d, r["posture"]])
+		var g: Array = r["gaps"]
+		if g.size() == 5:
+			check(float(g[0]) < 0.45 and float(g[1]) >= 0.5 and float(g[2]) < 0.45 and float(g[3]) < 0.45 and float(g[4]) >= 0.65,
+				"tempest at %.1f m: the rhythm is two quick, a pause, three quick, a longer pause, the last (%s)" % [d, str(g)])
+	var r2 := await _tempest_run("hold", 2.4)
+	print("  tempest, holding guard: %s  guard broken %s" % [" ".join(r2["res"]), r2["broke"]])
+	check((r2["res"] as Array).count("HIT") == 0 and bool(r2["broke"]) and (r2["res"] as Array).size() == 6,
+		"tempest: blocking the whole set breaks your guard on the last blow (%s)" % " ".join(r2["res"]))
+	var r3 := await _tempest_run("back", 2.4)
+	print("  tempest, backing away locked on: %s" % " ".join(r3["res"]))
+	check((r3["res"] as Array).size() >= 5, "tempest: backing away doesn't get you out of it (%d of 6 blows reach you)" % (r3["res"] as Array).size())
+	# His in phase 3 only.
+	var counts := {1: 0, 2: 0, 3: 0}
+	for ph in [1, 2, 3]:
+		await setup(2.5)
+		boss._enter_phase(ph, false)
+		seed(77)
+		for k in 600:
+			if boss._pick_action(2.5) == "tempest":
+				counts[ph] = int(counts[ph]) + 1
+	print("  tempest picked out of 600 at 2.5 m: phase 1 %d, phase 2 %d, phase 3 %d" % [counts[1], counts[2], counts[3]])
+	check(int(counts[1]) == 0 and int(counts[2]) == 0 and int(counts[3]) >= 30,
+		"the Tempest is his in phase 3 only (phase 1 %d, 2 %d, 3 %d of 600 picks)" % [counts[1], counts[2], counts[3]])
+
+
+## One Tempest (phase 3 speed) against the player at `d`: "deflect" taps guard as each blade
+## comes (100 ms before contact, like a player reading it), "hold" holds guard, "back" walks
+## away locked on.
+func _tempest_run(mode: String, d: float) -> Dictionary:
+	await setup(d)
+	boss._enter_phase(3, false)
+	var p0 := boss.posture
+	var broke := false
+	if mode == "hold":
+		player.press_guard(Game.clock)
+		await ticks(30)
+	var t0 := boss_attack("b_tempest")
+	var handled := {}
+	var release_at := -1.0
+	var t_end := Game.clock + 7.0
+	await ticks(1)
+	while boss.state == Boss.S.ATTACK and Game.clock < t_end:
+		var now := Game.clock
+		player.camera_yaw = Combat.yaw_of(Combat.flat(boss.global_position - player.global_position))
+		if mode == "back":
+			player.bot_move = Vector2(0, 1)
+		if release_at > 0.0 and now >= release_at:
+			player.release_guard(now)
+			release_at = -1.0
+		if mode == "deflect" and boss.anim.clip != null and not boss.anim.loco_active:
+			for i in boss.anim.clip.hits.size():
+				var h: Dictionary = boss.anim.clip.hits[i]
+				if handled.has(i):
+					continue
+				# (watch the blade that's coming for this blow, from just before its window opens)
+				var ttc := _blade_time_to_contact(str(h["blade"])) if boss.anim.time >= float(h["from"]) - 0.12 else 99.0
+				if ttc <= 0.10 or boss.anim.time >= float(h["from"]) + 0.03:
+					handled[i] = true
+					if player.guard_held:
+						player.release_guard(now)
+					player.press_guard(now)
+					release_at = now + 0.05
+					if verbose:
+						print("    tap %d at %.3f (clip %.3f, window from %.3f) ttc %.3f state %s window %.3f spam %d dist %.2f" % [i, now - t0,
+							boss.anim.time, float(h["from"]), ttc, Player.S.keys()[player.state], player.guard_window, player.spam_level,
+							boss.distance_to_opponent()])
+				break
+		broke = broke or player.state == Player.S.GUARD_BREAK
+		await ticks(1)
+	player.bot_move = Vector2.ZERO
+	for k in 20:
+		broke = broke or player.state == Player.S.GUARD_BREAK
+		await ticks(1)
+	var res: Array = []
+	var times: Array = []
+	for rr in _results:
+		res.append(res_name(int(rr["res"])))
+		times.append(snappedf(float(rr["t"]) - t0, 0.01))
+	var gaps: Array = []
+	for i in range(1, times.size()):
+		gaps.append(snappedf(float(times[i]) - float(times[i - 1]), 0.01))
+	return {"res": res, "times": times, "gaps": gaps, "posture": boss.posture - p0, "broke": broke}
 
 
 ## Spam penalty: window per press depends on the time since the last *release*.
@@ -2023,10 +2120,12 @@ var _ttc_prev: Dictionary = {}
 
 ## Seconds until the boss's weapon reaches the player's hurtbox at its current closing speed
 ## (99 when it isn't closing in).
-func _blade_time_to_contact() -> float:
+func _blade_time_to_contact(only := "") -> float:
 	var cap := player.hurt_capsule()
 	var best := 99.0
 	for bn in boss.rig.blades:
+		if only != "" and bn != only:
+			continue
 		var pts := boss.rig.blade_world(bn)
 		var dmin := 99.0
 		for k in range(pts.size() - 1):

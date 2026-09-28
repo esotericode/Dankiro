@@ -103,6 +103,11 @@ func distance_to_opponent() -> float:
 	return Combat.flat(opponent.global_position - global_position).length()
 
 
+## How close root motion may carry us to the opponent.
+func hold_distance() -> float:
+	return min_opponent_distance
+
+
 ## Horizontal velocity from the animator's root motion (facing space -> world).
 func root_motion_velocity(delta: float) -> Vector3:
 	if not root_motion_enabled or delta <= 0.0:
@@ -115,7 +120,7 @@ func root_motion_velocity(delta: float) -> Vector3:
 		if dist > 0.001:
 			var n := to / dist
 			var toward := world.dot(n)
-			var allowed := maxf(0.0, dist - min_opponent_distance)
+			var allowed := maxf(0.0, dist - hold_distance())
 			if toward > allowed:
 				world -= n * (toward - allowed)
 	return world / delta

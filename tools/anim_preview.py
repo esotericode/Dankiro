@@ -40,7 +40,8 @@ def pose_at(rig, clip, t):
     tgt = ROOT_CLAMP["target"]
     if tgt is not None and rig.name == "boss":
         ch["root"] = np.array(ch["root"], dtype=float)
-        ch["root"][2] = max(ch["root"][2], -(tgt - 1.4))
+        # root motion stops short of the player, as in the game (a clip's "hold_distance")
+        ch["root"][2] = max(ch["root"][2], -(tgt - clip.data.get("hold_distance", 1.4)))
     chd = {k: (float(v[0]) if rm.DIM[k] == 1 else v) for k, v in ch.items()}
     P, B, WP, WB, err = rm.solve(rig, chd)
     R, root = world_frame(clip, ch)
