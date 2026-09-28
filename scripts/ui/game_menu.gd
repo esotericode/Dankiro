@@ -1,6 +1,6 @@
 class_name GameMenu
 extends CanvasLayer
-## Title menu (on boot) and pause menu, with Options and Controls pages. Built in code like the
+## Title menu (on boot) and pause menu, with Options, Controls and Lore pages. Built in code like the
 ## HUD, for the same 1920x1080 canvas, in UiTheme's look: words on the left, no boxes, a
 ## vermilion line gliding to the highlighted one; the pause menu sits over the fight, blurred.
 ## Mouse, keyboard (arrows + Enter, Esc to go back) and gamepad (D-pad or left stick + A, B to
@@ -26,6 +26,7 @@ const HINTS := {
 	"pause": [MOVE, SELECT, [["Esc"], ["B"], "Resume"]],
 	"options": [MOVE, [["Left", "Right"], ["D-pad"], "Change"], SELECT, [["Esc"], ["B"], "Back"]],
 	"controls": [SELECT, [["Esc"], ["B"], "Back"]],
+	"lore": [SELECT, [["Esc"], ["B"], "Back"]],
 }
 
 var _root: Control
@@ -39,10 +40,11 @@ var _buttons: VBoxContainer
 var _note: Label
 var _hints: UiTheme.HintBar
 var _controls: ControlsSheet
+var _lore: LoreSheet
 var _marker: ColorRect
 var _marker_y := -1.0
 var _page := ""
-var _root_page := "title"           ## where Back leads from Options / Controls
+var _root_page := "title"           ## where Back leads from Options / Controls / Lore
 var _quiet := false                 ## no focus sound while a page is being built
 var _stick := {JOY_AXIS_LEFT_X: 0, JOY_AXIS_LEFT_Y: 0}   ## left stick direction held past the threshold
 
@@ -130,6 +132,9 @@ func _build() -> void:
 	_controls = ControlsSheet.new()
 	UiTheme.place(_controls, Vector2(0, 0), Vector2(566, 128), Vector2(1284, 760))
 	_root.add_child(_controls)
+	_lore = LoreSheet.new()
+	UiTheme.place(_lore, Vector2(0, 0), Vector2(566, 128), Vector2(LoreSheet.WIDTH, 820))
+	_root.add_child(_lore)
 
 
 func _gap(h: float) -> Control:
@@ -321,11 +326,11 @@ func is_open() -> bool:
 	return visible
 
 
-## Esc / (B): from Options or Controls back to the menu they came from. Returns false on a
-## root page (the caller decides what that means: resume, or nothing on the title).
+## Esc / (B): from Options, Controls or Lore back to the menu they came from. Returns false on
+## a root page (the caller decides what that means: resume, or nothing on the title).
 func back() -> bool:
-	if _page == "options" or _page == "controls":
-		_show(_root_page, "Options" if _page == "options" else "Controls")
+	if _page in ["options", "controls", "lore"]:
+		_show(_root_page, _page.capitalize())
 		return true
 	return false
 
@@ -341,7 +346,8 @@ func _show(page: String, focus_on := "") -> void:
 		c.queue_free()
 	_note.text = ""
 	_controls.visible = page == "controls"
-	_title_shade.visible = _root_page == "title" and page != "controls"
+	_lore.visible = page == "lore"
+	_title_shade.visible = _root_page == "title" and page != "controls" and page != "lore"
 	_backdrop.visible = not _title_shade.visible
 	_hints.set_items(HINTS[page])
 	var title := page == "title"
@@ -356,6 +362,7 @@ func _show(page: String, focus_on := "") -> void:
 			first = _button("Start fight", func(): start_pressed.emit())
 			_button("Options", func(): _show("options"))
 			_button("Controls", func(): _show("controls"))
+			_button("Lore", func(): _show("lore"))
 			_button("Quit", func(): quit_pressed.emit())
 			if Game.start_phase > 1:
 				_note.text = "The fight starts in phase %d (Options)." % Game.start_phase
@@ -365,6 +372,7 @@ func _show(page: String, focus_on := "") -> void:
 			_button("Restart fight", func(): restart_pressed.emit())
 			_button("Options", func(): _show("options"))
 			_button("Controls", func(): _show("controls"))
+			_button("Lore", func(): _show("lore"))
 			_button("Quit to title", func(): title_pressed.emit())
 		"options":
 			_heading.text = "Options"
@@ -373,7 +381,7 @@ func _show(page: String, focus_on := "") -> void:
 				func(): return Game.start_phase - 1,
 				func(i: int): Game.set_start_phase(i + 1),
 				"The phase the fight starts in, for testing: the earlier lives count as taken. " +
-				"Phase 3 is the same as phase 2 for now." + later)
+				"Phase 3 adds the Tempest of Fangs and waves of fire in the Inferno." + later)
 			_option("Diagnostics", ["Off", "On"],
 				func(): return 1 if Game.debug else 0,
 				func(i: int): Game.set_diagnostics(i == 1),
@@ -383,6 +391,9 @@ func _show(page: String, focus_on := "") -> void:
 			_button("Back", func(): back())
 		"controls":
 			_heading.text = "Controls"
+			first = _button("Back", func(): back())
+		"lore":
+			_heading.text = "Lore"
 			first = _button("Back", func(): back())
 	_column.offset_top = 200 if title else 150
 	for c in _buttons.get_children():

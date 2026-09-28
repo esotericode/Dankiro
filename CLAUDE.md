@@ -59,7 +59,9 @@ the script backs off and retries, so let it run. For another version, set
 ## The UI (built in code)
 
 - `scripts/ui/`: `Hud` (the fight's HUD and its overlays), `GameMenu` (title, pause, Options,
-  Controls), `ControlsSheet` (bindings + how to fight), `VitalityBar`, `PostureBar`, and `UiTheme`,
+  Controls, Lore), `ControlsSheet` (bindings + how to fight), `LoreSheet` (the Lore page: the
+  text in `LoreText`, set in deliberately unreadable 4 px type; it's a joke, keep it tiny),
+  `VitalityBar`, `PostureBar`, and `UiTheme`,
   which holds the look: the colours, the two fonts (`UiTheme.sans(weight, tracking)` is Jost,
   `serif()` Cormorant Garamond, both variable: `FontVariation`s cached by weight and tracking),
   label and placement helpers, the blurred backdrop (`shaders/ui_backdrop.gdshader`), and the key
@@ -73,7 +75,7 @@ the script backs off and retries, so let it run. For another version, set
 - Iterate in flat mode: `DANKIRO_FLAT=<png>` makes `tests/capture.gd` skip the 3D world and put
   that still picture behind the live UI. Render the plate once at 1920x1080 (shots `plate_fight`,
   `menu_plate`), then `ui_hud`, `ui_hud_low`, `ui_moment <namecard|callout|deathblow|execution|death|victory|help>`,
-  `menu_title`, `menu_options`, `menu_controls`, `menu_pause` take about 15 s each. The HUD's
+  `menu_title`, `menu_options`, `menu_controls`, `menu_lore`, `menu_pause` take about 15 s each. The HUD's
   animations cap a frame's time at 0.1 s, so render at 10 fps or more to see them at speed. Check
   the result on real 3D frames too (the blur reads the screen).
 

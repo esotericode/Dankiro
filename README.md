@@ -50,14 +50,17 @@ The input map is registered in code (`scripts/autoload/game_input.gd`); actions 
 
 ## Menus and options
 
-- **Title menu** (on launch): Start fight, Options, Controls, Quit. He waits in the arena
+- **Title menu** (on launch): Start fight, Options, Controls, Lore, Quit. He waits in the arena
   behind it.
 - **Navigating:** mouse, keyboard (arrows, Enter, Esc) or gamepad (D-pad or left stick, A to
   select, B to go back). Left / right change an option's value; the list wraps round. Going
-  back from Options or Controls returns to the item you came from.
-- **Pause menu** (Esc / Start): Resume, Restart fight, Options, Controls, Quit to title.
+  back from Options, Controls or Lore returns to the item you came from.
+- **Pause menu** (Esc / Start): Resume, Restart fight, Options, Controls, Lore, Quit to title.
   After a death or a victory, Enter / (A) goes straight back into the fight and Esc / (Start)
   goes to the title.
+- **Lore**: *The Chronicle of the Dried Root*, complete and unabridged, under a proper title,
+  in 4 px type (on the 1080p canvas): the whole thing fits on one screen and can barely be read,
+  if at all. That's the point. The text is `LoreText.CHRONICLE` (`scripts/ui/lore_text.gd`).
 - **Options** (saved to `user://settings.cfg`):
   - **Starting phase** (1, 2 or 3): start the fight in a later phase, for testing. The
     earlier lives count as taken. It applies when a fight starts.
@@ -289,7 +292,7 @@ godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--v
 | `phases` | Three lives, one per phase: the starting-phase option starts a fight in phase 2 or 3 with the earlier lives taken, each deathblow raises him into the next phase, the last one ends the fight |
 | `camera` | In the real arena: with your back to the fence anywhere round the rim, the lock-on camera keeps its full distance (the wall that keeps the fighters in doesn't squeeze it onto your back), and that wall still stops both fighters |
 | `ribbons` | Cloth and hair (your scarf and headband tails, his mane, sashes and tassels): on a bench, a scarf on a walking body sways gently and a towed or turned chain never folds; in the arena every tip sways under 2.5 Hz while you both stand and while you walk round him, and through his combo his hair and sashes move no quicker than his body |
-| `menu` | The menus with a gamepad only (simulated pad input through Godot's input pipeline): D-pad and stick move one row per push, A selects, left / right change options, B goes back, Start pauses and A on Resume carries on; a closed menu lets go of its highlight; the hints show the keyboard's keys until the pad is used, then its buttons |
+| `menu` | The menus with a gamepad only (simulated pad input through Godot's input pipeline): D-pad and stick move one row per push, A selects, left / right change options, B goes back, Start pauses and A on Resume carries on; Lore (on both menus) shows the whole chronicle in type of 5 px or less, all on one screen, and B comes back to it; a closed menu lets go of its highlight; the hints show the keyboard's keys until the pad is used, then its buttons |
 | `loop` | Two 90 s fights against bots that deflect everything, one hitting him only when he's open and one hitting whenever he's in reach: no more than 3 hits leave him reeling between his attacks, and he rarely reopens with the attack he was just punished for |
 | `spam` | The window shrinks 200/133/100/67/0 ms when mashing, clears after 0.5 s and on a deflect |
 | `mikiri` | Only a neutral step from the release on counters the thrust; during the pull-back is too early; forward-held and side steps never counter. Backstepping (once or twice), an early side step, or a backstep into a sprint all still get stabbed, from 2.4 to 4.4 m |
@@ -320,7 +323,7 @@ for his last life, then the victory screen), `inferno` for his fire move (`infer
 arms, `inferno wide` from high above the arena, `inferno spin` straight to the arms of fire, `inferno plunge`
 straight to the finisher; add `p3` for phase three's, with the waves), `attack <clip> [distance]` for any single boss attack from
 the lock-on camera, `recovery <clip>` for one attack played to the end from a fixed 3/4 view,
-`fire_staff [level]` and `fire_combo` for the fire on his staff, `diagnostics` for the overlay, the menus `menu_title`, `menu_options`, `menu_controls`, `menu_pause` and `menu_start` (boot,
+`fire_staff [level]` and `fire_combo` for the fire on his staff, `diagnostics` for the overlay, the menus `menu_title`, `menu_options`, `menu_controls`, `menu_lore`, `menu_pause` and `menu_start` (boot,
 then press Start), `help` for the controls sheet (F1) over the fight, the HUD `ui_hud`, `ui_hud_fresh` and
 `ui_hud_low` (both fighters hurt, the fight's start, nearly finished), `ui_moment <what>` for one of its
 moments (`namecard`, `callout`, `deathblow`, `execution`, `death`, `victory`, `help`), the model close-ups `model`, `model_head`, `model_face`,

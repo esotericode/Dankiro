@@ -539,6 +539,15 @@ func shot_menu_controls() -> void:
 	_end_at = 1.6
 
 
+## The title menu's Lore page: the Chronicle of the Dried Root, in type too small to read.
+func shot_menu_lore() -> void:
+	at(0.3, func():
+		for b in (main.get("menu") as GameMenu).find_children("*", "Button", true, false):
+			if (b as Button).text == "Lore":
+				(b as Button).pressed.emit())
+	_end_at = 1.6
+
+
 ## UI work: the fight from the lock-on camera with the HUD hidden (a plate for DANKIRO_FLAT).
 ## The fighters stand as in shot_ui_hud.
 func shot_plate_fight() -> void:

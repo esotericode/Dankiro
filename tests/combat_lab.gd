@@ -891,6 +891,27 @@ func suite_menu() -> void:
 	await _pad_button(JOY_BUTTON_B)
 	check(menu._page == "title" and str(focus.call()) == "Options", "B goes back to the title menu, on Options (%s, %s)" % [
 		menu._page, focus.call()])
+	# Lore: the whole Chronicle of the Dried Root, in type too small to read.
+	await _pad_button(JOY_BUTTON_DPAD_DOWN)
+	await _pad_button(JOY_BUTTON_DPAD_DOWN)
+	check(str(focus.call()) == "Lore", "Lore sits below Controls (%s)" % focus.call())
+	await _pad_button(JOY_BUTTON_A)
+	await ticks(2)
+	var lore: LoreSheet = menu._lore
+	var shown := lore.body.get_parsed_text()
+	var px := lore.body.get_theme_font_size("normal_font_size")
+	var bottom := lore.body.get_global_rect().end.y
+	check(menu._page == "lore" and lore.is_visible_in_tree() and not menu._controls.visible and str(focus.call()) == "Back",
+		"A on Lore opens the Lore page, on Back (%s, %s)" % [menu._page, focus.call()])
+	check(shown.length() > 26000 and shown.begins_with("The castle was called Nagatsuki") and shown.strip_edges().ends_with("with dried root."),
+		"the Lore page shows the whole chronicle (%d characters)" % shown.length())
+	check(px <= 5 and bottom < 1000.0,
+		"in comically small type (%d px on the 1080p canvas), all of it on one screen (it ends %.0f px down)" % [px, bottom])
+	await _pad_button(JOY_BUTTON_B)
+	check(menu._page == "title" and str(focus.call()) == "Lore", "B goes back to the title menu, on Lore (%s, %s)" % [
+		menu._page, focus.call()])
+	await _pad_button(JOY_BUTTON_DPAD_UP)
+	await _pad_button(JOY_BUTTON_DPAD_UP)
 	await _pad_button(JOY_BUTTON_DPAD_UP)
 	await _pad_button(JOY_BUTTON_DPAD_UP)
 	check(str(focus.call()) == "Quit", "D-pad up wraps round from the top to Quit (%s)" % focus.call())
@@ -903,6 +924,8 @@ func suite_menu() -> void:
 	await _pad_button(JOY_BUTTON_START)
 	check(get_tree().paused and menu.is_open() and menu._page == "pause", "Start pauses the fight into the pause menu")
 	check(str(focus.call()) == "Resume", "the pause menu opens on Resume (%s)" % focus.call())
+	var items := menu._buttons.get_children().map(func(c): return (c as Button).text)
+	check("Lore" in items, "the pause menu has Lore too (%s)" % ", ".join(items))
 	await _pad_button(JOY_BUTTON_DPAD_DOWN)
 	await _pad_button(JOY_BUTTON_DPAD_DOWN)
 	await _pad_button(JOY_BUTTON_A)
