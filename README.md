@@ -194,17 +194,21 @@ every 40 s; phase three has it too).
 ### The Tempest of Fangs (phase three)
 
 His signature string in his last life, a set you learn and then deflect, like Genichiro's
-Floating Passage: six blows in a fixed rhythm, **ta-ta · ta-ta-ta · · TAAA**.
+Floating Passage: six blows in a fixed rhythm, **ta-ta · · · ta-ta · · · · ta · · · TAAA**. The
+pauses are the point: each one is a visible wind-up for what comes next, and pressing guard on
+the beat of the quick blows gets you hit by the one after the pause.
 
 - **The tell:** he stamps, sinks into a deep coil with the staff low behind him, and both blades
   flare with fire. He holds it for a beat (0.8 s before the first blow lands).
-- **Two quick cuts:** a rising cut from your left, then a backhand from your right (0.3 s apart).
-- **A pause** (0.6 s): he carries the cut round to his right, coils there and steps in.
-- **Three quick:** a flat cut from your left, a backhand from your right, then he snaps the staff
-  up to his shoulder and stabs down into your chest (0.3 s apart).
-- **The delay** (0.8 s): he rises tall with the staff overhead, the blades flare again,
-  and he hangs there a beat, long enough to catch you if you're mashing guard. Then he lunges
-  in and cleaves down on you.
+- **Two quick cuts:** a rising cut from your left, then a backhand from your right (0.4 s apart).
+- **A pause** (0.9 s): he carries the staff round to his right, steps in and sinks into a coil,
+  winding it a little tighter while he waits.
+- **Two quick cuts again:** a flat cut from your left, a backhand from your right (0.35 s apart).
+- **The long delay** (1.1 s): he stamps and lifts the staff to head height, drawn back with the
+  blade over you (the jabs' tell), holds it and draws back further, then stabs down into your
+  chest.
+- **A last pause** (0.9 s): he rises tall with the staff overhead, the blades flare again, and he
+  lunges in with an overhead cleave.
 - He tracks you through the whole set and closes in between the blows, so backing off doesn't
   get you out of it, but he keeps his striking distance (about 2 m) instead of crowding you if
   you stand your ground. Blocking every blow breaks your guard on the cleave; deflecting the
@@ -247,7 +251,7 @@ Floating Passage: six blows in a fixed rhythm, **ta-ta · ta-ta-ta · · TAAA**.
 | Perilous Sweep 危 | Slides his grip to the staff's end, sinks low and coils to his left | Jump, then kick |
 | Whirling Fangs | Raises the staff level overhead with a whoosh, then cocks it at his side and the windmill spins up | Deflect each blade as it comes down on you (4 chops, one every 0.375 s, each with a whoosh that peaks on contact), then the finishing cut after a pause |
 | Inferno 危 (phase two) | Leaps to the middle of the arena and drives his staff into the stones; the floor glows out to the blast radius | Get out of the glow before the blast. Then jump each arm of fire: three on an even beat, a faster fourth (in phase three, jump the wave of fire rolling out from him between each of the first three too). Then he raises the staff over his head and plunges it into the floor: jump as the arena erupts. Hit him while he's spent |
-| Tempest of Fangs (phase three) | Stamps and sinks into a deep coil with the staff low behind him; both blades flare with fire and he holds it for a beat | Deflect the set: **ta-ta · ta-ta-ta · · TAAA**. Two quick cuts (from your left, then your right), a pause while he coils at his right side, three quick (left, right, a stab), then he rises tall with the staff overhead, the blades flare again, and a lunging overhead cleave comes down after the longest pause. He tracks you and closes in, so backing off fails; blocking the whole set breaks your guard |
+| Tempest of Fangs (phase three) | Stamps and sinks into a deep coil with the staff low behind him; both blades flare with fire and he holds it for a beat | Deflect the set: **ta-ta · · · ta-ta · · · · ta · · · TAAA**. Two quick cuts (from your left, then your right); a pause while he steps in and coils; two quick again (left, right); the long delay, the staff held at head height with the blade over you, then a stab; a pause with the staff overhead and the blades flaring, then a lunging overhead cleave. Wait out each pause: pressing on the quick beat gets you hit. He tracks you and closes in, so backing off fails; blocking the whole set breaks your guard |
 | Shuriken volley | Quick crouch, hand to his belt with a glint of steel, leaps back and hangs for a beat at the top, throwing hand glinting | Deflect each glowing star as it reaches you: **3 in the air + 1 delayed**, or **5 in the air**. From phase 2 on, **a second set** straight after, thrown from the ground (another glint first) |
 | Running Cut | Runs at you, staff swinging up behind his shoulder | Deflect (it tracks hard) |
 | Falling Crescent | Crouches at range, leaps with the staff overhead | Deflect on landing (high) |
@@ -283,7 +287,7 @@ godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--v
 | `dodge` | Steps are short (1.5 m, 1.1 m for the neutral step) and have Sekiro's i-frames (0.2 s, 0.3 s forward, forward not against thrusts) |
 | `sweep` | Guarding and dodge i-frames fail against the sweep, and so does getting away (stepping back or aside, two backsteps, sprinting or walking away, from 1.5 to 3.4 m); jumping clears it, and the kick deals posture |
 | `shuriken` | Volley rhythms (3 in the air + 1 delayed, 5 in the air), a readable tell before the first; from phase 2 on two sets, the second 0.4 to 0.55 s after the first; every throw deflectable (4 posture to him each; one that fills his posture in mid-air breaks him as he lands) or blockable, a whole double volley included |
-| `tempest` | Phase three's Tempest of Fangs: deflecting each blow as it comes clears all six from 2.2 and 3.4 m and loads his posture, and the rhythm holds (two quick, a pause, three quick, a longer pause, the last); holding guard blocks every blow and the last breaks your guard; backing away locked on doesn't get you out of it; he only picks it in phase three (it's also in `reach`, `tells` and `flurry`) |
+| `tempest` | Phase three's Tempest of Fangs: deflecting each blow as it comes clears all six from 2.2 and 3.4 m and loads his posture, and the rhythm holds (two quick, a pause, two quick, a long delay, one, a pause, the last); pressing guard on the quick blows' beat deflects those but gets hit by each blow after a pause; holding guard blocks every blow and the last breaks your guard; backing away locked on doesn't get you out of it; he only picks it in phase three (it's also in `reach`, `tells` and `flurry`) |
 | `attack` | Slash reach, and that mashing is rate-limited (no two hits within 0.38 s) |
 | `cancel` | Guard cancels a slash only in the early wind-up and in the recovery; a guard tap let go of long before the recovery doesn't come up in it, while one just before it does, and so does a tap during hit-stun (as the stun ends); a lost dodge release cannot leave sprint held |
 | `inferno` | Phase 2 opens with the Inferno (starting there, or rising into it); he lands in the middle of the arena; the blast misses you outside its radius, knocks you down and throws you out of it inside, and walking away locked on from right beside him gets clear in time (stepping through it doesn't); jumping each arm clears all four from 4 to 14 m out, the beat holds (1.5, 1.5, 1.0 s) wherever you stand and while you walk round him; standing, guarding and dodging get burned by every arm and by the eruption; jumping on the beat gets caught by the fourth; one jump timed to the eruption clears it (in the air you're clear), earlier or later burns (it prints the window), and it rolls outward, reaching the wall a moment after it bursts beside him; after a burn the next arm, or the eruption, waits until you can jump it. Phase 3: jumping each arm, each wave and the eruption clears them all from 4 to 14 m out, each wave comes on the half-beat between two arms and there's never less than 0.9 s between two things to jump, still so walking round him or backing away; watching only the arms, a wave burns you; after any burn nothing reaches you for 2 s; it prints how early or late a jump over a wave may be; phase 2 has no waves. The ring stops you and burns; your sword glances off him; his posture holds through it; he's open afterwards; he uses it again once it's off cooldown |
@@ -430,10 +434,12 @@ visuals was checked on frames rendered with Movie Maker.
 **Latest: the Tempest of Fangs, phase three's own attack.** In his last life he has a signature
 string, in the spirit of Genichiro's Floating Passage: he stamps, sinks into a deep coil and
 both blades flare with fire, then comes at you with six blows in a rhythm you can learn,
-**ta-ta · ta-ta-ta · · TAAA**: two quick cuts from alternating sides, a pause while he coils and
-steps in, three quick (the last a stab), then he rises with the staff overhead, the blades
-flare again, and after the longest pause he lunges in with an overhead cleave. Each blow is a
-swing you've seen on its own, with its own wind-up and a whoosh that peaks as it reaches you.
+**ta-ta · · · ta-ta · · · · ta · · · TAAA**: two quick cuts from alternating sides, a pause while
+he steps in and coils, two quick again, the long delay (the staff held at head height with the
+blade over you) and a stab, then he rises with the staff overhead, the blades flare again, and
+he lunges in with an overhead cleave. The pauses are visible wind-ups, and pressing on the quick
+beat gets you hit by the blow after each one. Each blow is a swing you've seen on its own, with
+its own wind-up and a whoosh that peaks as it reaches you.
 He tracks you and closes in between the blows, so you can't back out of it: deflect the set
 (it loads +88 on his posture); block it all and the cleave breaks your guard. He keeps his
 striking distance (about 2 m) instead of walking into you (a clip's new `hold_distance`). The

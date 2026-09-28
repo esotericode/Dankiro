@@ -396,10 +396,11 @@ func suite_flurry() -> void:
 		"guard broken while held: the held guard is back up after the stagger and blocks the next blow (%s, %s)" % [up, " ".join(after)])
 
 
-## Phase 3's Tempest of Fangs: six blows in a rhythm (ta-ta . . ta-ta-ta . . . TAAA), tracking
-## you. Deflecting each as its blade comes clears the set and loads his posture; blocking it
-## all breaks your guard on the last blow; backing off doesn't get you out of reach; it's only
-## his in phase 3.
+## Phase 3's Tempest of Fangs: six blows in a rhythm (ta-ta . . . ta-ta . . . . ta . . . TAAA),
+## tracking you. Deflecting each as its blade comes clears the set and loads his posture;
+## pressing on an even beat instead misses the blows that come after a pause; blocking it all
+## breaks your guard on the last blow; backing off doesn't get you out of reach; it's only his
+## in phase 3.
 func suite_tempest() -> void:
 	for d in [2.2, 3.4]:
 		var r := await _tempest_run("deflect", d)
@@ -411,8 +412,14 @@ func suite_tempest() -> void:
 		check(float(r["posture"]) >= 50.0, "tempest at %.1f m: deflecting the set loads his posture (+%.0f)" % [d, r["posture"]])
 		var g: Array = r["gaps"]
 		if g.size() == 5:
-			check(float(g[0]) < 0.45 and float(g[1]) >= 0.5 and float(g[2]) < 0.45 and float(g[3]) < 0.45 and float(g[4]) >= 0.65,
-				"tempest at %.1f m: the rhythm is two quick, a pause, three quick, a longer pause, the last (%s)" % [d, str(g)])
+			check(float(g[0]) < 0.5 and float(g[1]) >= 0.8 and float(g[2]) < 0.5 and float(g[3]) >= 1.0 and float(g[4]) >= 0.8,
+				"tempest at %.1f m: the rhythm is two quick, a pause, two quick, a long delay, one, a pause, the last (%s)" % [d, str(g)])
+	var rb := await _tempest_run("beat", 2.4)
+	var rbr: Array = rb["res"]
+	print("  tempest, pressing on an even beat (0.33 s after each blow): %s" % " ".join(rbr))
+	check(rbr.size() == 6 and rbr[1] == "DEFLECT" and rbr[3] == "DEFLECT" and rbr[2] != "DEFLECT" and rbr[4] != "DEFLECT"
+			and rbr[5] != "DEFLECT",
+		"tempest: pressing on the quick beat deflects the quick blows but misses each one after a pause (%s)" % " ".join(rbr))
 	var r2 := await _tempest_run("hold", 2.4)
 	print("  tempest, holding guard: %s  guard broken %s" % [" ".join(r2["res"]), r2["broke"]])
 	check((r2["res"] as Array).count("HIT") == 0 and bool(r2["broke"]) and (r2["res"] as Array).size() == 6,
@@ -448,6 +455,8 @@ func _tempest_run(mode: String, d: float) -> Dictionary:
 	var t0 := boss_attack("b_tempest")
 	var handled := {}
 	var release_at := -1.0
+	var seen := 0
+	var beat_at := -1.0
 	var t_end := Game.clock + 7.0
 	await ticks(1)
 	while boss.state == Boss.S.ATTACK and Game.clock < t_end:
@@ -458,7 +467,19 @@ func _tempest_run(mode: String, d: float) -> Dictionary:
 		if release_at > 0.0 and now >= release_at:
 			player.release_guard(now)
 			release_at = -1.0
-		if mode == "deflect" and boss.anim.clip != null and not boss.anim.loco_active:
+		if mode == "beat":
+			# (the first blow deflected as it comes, then a press 0.33 s after each blow lands: the
+			# quick pairs' beat)
+			if _results.size() > seen:
+				seen = _results.size()
+				beat_at = now + 0.33
+			if beat_at > 0.0 and now >= beat_at:
+				beat_at = -1.0
+				if player.guard_held:
+					player.release_guard(now)
+				player.press_guard(now)
+				release_at = now + 0.05
+		if (mode == "deflect" or (mode == "beat" and seen == 0)) and boss.anim.clip != null and not boss.anim.loco_active:
 			for i in boss.anim.clip.hits.size():
 				var h: Dictionary = boss.anim.clip.hits[i]
 				if handled.has(i):

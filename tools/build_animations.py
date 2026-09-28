@@ -1218,16 +1218,19 @@ def build_boss():
                   ground=[(1.74, 0.12), (1.865, 0.08), (1.99, 0.08), (2.115, 0.08), (2.24, 0.08)])
 
     # ---- Tempest of Fangs (phase 3): his signature string, six blows in a rhythm you learn:
-    #   ta-ta . . ta-ta-ta . . . TAAA
+    #   ta-ta . . . ta-ta . . . . ta . . . TAAA
     # The tell: he stamps, sinks into a deep coil with the staff low behind him and both blades
     # flare with fire (the "tempest" event), held for a beat. Then a figure-eight of cuts that
-    # alternate sides, each a swing you've seen on its own (Rising Fang from your left, a
-    # backhand from your right; a pause as he coils at his right side and steps in; Turning Fang
-    # from your left, a backhand from your right, a stab), then the delay that catches anyone
-    # mashing: he rises tall with the staff overhead, the blades flare again, and he
-    # lunges in with an overhead cleave. He tracks you and closes in between the blows, so
-    # backing off doesn't get you out of it: deflect the set. Blocking it all breaks your guard
-    # on the last blow (18 x 5 + 32 posture).
+    # alternate sides, each a swing you've seen on its own, with the pauses between them spent
+    # visibly winding up the next: Rising Fang from your left and a backhand from your right;
+    # a pause as he carries the staff round, steps in and coils at his right side; Turning Fang
+    # from your left and a backhand from your right; the long delay, the jabs' aim (a stamp,
+    # the staff at head height with the blade over you) held and drawn back further, then the
+    # stab; and a last pause as he rises tall with the staff overhead, the blades flare again,
+    # and he lunges in with an overhead cleave. The delays catch anyone who presses guard on
+    # the beat. He tracks you and closes in between the blows, so backing off doesn't get you
+    # out of it: deflect the set. Blocking it all breaks your guard on the last blow
+    # (18 x 5 + 32 posture).
     def root_at(d, z):
         d = dict(d)
         d["root"] = [0, 0, round(z, 3)]
@@ -1239,7 +1242,9 @@ def build_boss():
             k["set"]["root"] = [0, 0, round(z0 + rz, 3)]
         return sw_keys
 
-    TT = {"b1": 0.74, "b2": 1.12, "b3": 1.74, "b4": 2.10, "b5": 2.46, "b6": 3.26}   # each blow's swing starts
+    # Each blow's swing start. Between contacts: 0.42 s, a pause of 0.9 (he steps in and coils),
+    # 0.36, the long delay of 1.1 (the jab's aim, held), then 0.9 (the staff goes overhead).
+    TT = {"b1": 0.74, "b2": 1.18, "b3": 2.13, "b4": 2.51, "b5": 3.74, "b6": 4.65}
     tw = wind.copy()                                 # the coil: deeper than Rising Fang's wind-up
     tw.update({"hips_pos": [0, 0.90, 0.14], "hips": [0, -46, 0], "spine": [-6, -14, 0], "chest": [-4, -36, 0],
                "neck": [6, 44, 0], "head": [4, 20, 0], "foot_l": [-0.20, 0.08, -0.42], "foot_r": [0.26, 0.08, 0.34],
@@ -1277,11 +1282,17 @@ def build_boss():
         "foot_r": lerp3([0.22, 0.08, 0.30], [0.24, 0.08, 0.02], smooth(u)),
         "elbow_l": [-0.7, -0.7, 0.3], "elbow_r": [0.6, -0.8, 0.4]}), z)
     z -= 0.7
-    # the first pause: he carries the cut round to his right and coils there, stepping in
+    # the first pause: he carries the cut round to his right, steps in (a footfall) and sinks
+    # into the coil, then winds it a little tighter while he waits: you see the next cut coming
     t0 = TT["b3"]
     keys.append(key(TT["b2"] + 0.30, root_at({"chest": [-10, -50, 0], "hips": [0, -30, 0], "neck": [4, 46, 0],
                                              "head": [0, 20, 0], "hips_pos": [0, 0.96, 0.02]}, z - 0.1), ease="out_quad"))
-    keys.append(key(t0 - 0.16, root_at(dict(wind2, hips_pos=[0, 0.97, 0.06]), z - 0.35), ease="inout_sine"))
+    keys.append(key(TT["b2"] + 0.56, root_at(dict(wind2, hips_pos=[0, 1.00, 0.02], chest=[-6, -26, 0], hips=[0, -30, 0]),
+                                             z - 0.3), ease="inout_sine"))
+    keys.append(key(t0 - 0.34, root_at(dict(wind2, hips_pos=[0, 0.96, 0.07], chest=[-4, -40, 0]), z - 0.38),
+                    ease="inout_sine"))
+    keys.append(key(t0 - 0.10, root_at(dict(wind2, hips_pos=[0, 0.94, 0.09], chest=[-4, -43, 0]), z - 0.4),
+                    ease="inout_sine"))
     keys.append(key(t0, root_at(dict(wind2, chest=[-4, -36, 0]), z - 0.4), ease="linear"))
     z -= 0.4
     # 3. Turning Fang (upper blade, flat, from your left)
@@ -1306,15 +1317,22 @@ def build_boss():
         "foot_r": lerp3([0.22, 0.08, 0.30], [0.24, 0.08, 0.02], smooth(u)),
         "elbow_l": [-0.7, -0.7, 0.3], "elbow_r": [0.6, -0.8, 0.4]}), z)
     z -= 0.6
-    # 5. The stab: from the end of the backhand he snaps the staff up to his shoulder and
-    # drives the blade down into your chest (as the jabs do)
+    # the long delay: from the end of the backhand he lifts the staff to head height with a
+    # stamp, the blade drawn back over you (the jabs' tell), and holds it, drawing back further,
+    # long enough to catch a guard pressed on the beat
     t0 = TT["b5"]
-    keys.append(key(t0 - 0.05, root_at(ja, z), ease="out_quad"))
+    keys.append(key(TT["b4"] + 0.34, root_at(jl, z - 0.05), ease="out_quad"))
+    keys.append(key(TT["b4"] + 0.52, root_at(ja, z - 0.15), ease="out_quad"))
+    keys.append(key(t0 - 0.40, root_at(ja2, z - 0.18), ease="inout_sine"))
+    keys.append(key(t0 - 0.14, root_at(dict(ja2, hips_pos=[0, 0.92, 0.21], chest=[6, -29, 0], neck=[0, 57, 0]), z - 0.2),
+                    ease="inout_sine"))
+    z -= 0.2
+    # 5. The stab: he drives the blade down into your chest (as the jabs do)
     keys.append(key(t0 + 0.04, root_at(ja2, z - 0.05), ease="inout_sine"))
     keys.append(key(t0 + 0.13, root_at(jo, z - 0.4), ease="out_cubic"))
     z -= 0.4
-    # the second pause (the delay): he pulls the staff up overhead and rises onto his toes, the
-    # blades flare, and he hangs there a beat before the lunge
+    # the last pause: he pulls the staff up overhead and rises tall, the blades flare, and he
+    # hangs there a beat before the lunge
     t0 = TT["b6"]
     keys.append(key(TT["b5"] + 0.32, root_at(dict(jr, hips_pos=[0, 0.98, 0.04]), z - 0.05), ease="inout_sine"))
     keys.append(key(t0 - 0.42, root_at(up, z - 0.1), ease="inout_sine"))
@@ -1349,10 +1367,12 @@ def build_boss():
             tempest_hit(TT["b6"], "upper", "high", dmg=36, pb=32, pd=10, bp=18, final=True)]
     # swing_heavy peaks 0.21 s in: each whoosh is loudest as the blade reaches you
     events = [{"t": 0.04, "type": "sfx", "name": "draw"}, {"t": 0.22, "type": "sfx", "name": "stamp"},
-              {"t": 0.26, "type": "tempest", "level": 0.9, "hold": 0.3, "fade": 3.5}]   # dies back before the first blow
+              {"t": 0.26, "type": "tempest", "level": 0.9, "hold": 0.3, "fade": 3.5},   # dies back before the first blow
+              {"t": round(TT["b2"] + 0.56, 3), "type": "sfx", "name": "step"},       # the step into the first pause's coil
+              {"t": round(TT["b4"] + 0.52, 3), "type": "sfx", "name": "stamp"}]      # the delay's aim
     events += [{"t": round(h["from"] + 0.06 - 0.21, 3), "type": "sfx", "name": "swing_heavy"} for h in hits[:4]]
     events += [{"t": round(TT["b5"] + 0.02, 3), "type": "sfx", "name": "jab"},
-               {"t": round(TT["b6"] - 0.34, 3), "type": "tempest", "level": 0.8, "hold": 0.5, "fade": 2.5},   # burns through the cleave
+               {"t": round(TT["b6"] - 0.40, 3), "type": "tempest", "level": 0.8, "hold": 0.55, "fade": 2.5},   # burns through the cleave
                {"t": round(TT["b6"] + 0.07 - 0.21, 3), "type": "sfx", "name": "swing_heavy"},
                {"t": round(TT["b6"] + 0.12, 3), "type": "ground_impact", "blade": "upper"}]
     # He steps in with every blow but keeps his striking distance (hold_distance: root motion
