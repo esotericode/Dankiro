@@ -947,7 +947,7 @@ func _react(clip_name: String) -> void:
 func _hit_reeling(info: Dictionary, pos: Vector3, facing_ok: bool) -> int:
 	_since_hit = 0.0
 	_pummel += 1
-	if _pummel >= _endure:
+	if _pummel >= _endure and not passive:
 		return _escape(info, pos, facing_ok)
 	return _take_hit(info, true)
 
