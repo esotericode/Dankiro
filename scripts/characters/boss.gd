@@ -34,6 +34,7 @@ const WALK_ACCEL := 5.0              ## ...and his walking and strafing (no inst
 const CHARGE_ACCEL := 12.0
 const ARENA_RADIUS := 13.5
 const LEAP_STRIKE := 2.0              ## how far from you a leap lands (its slam reaches ~1.2 to 2.4 m)
+const KICK_AFTER_SWEEP := 0.6        ## how long after his sweep's blade has passed you can still kick off him
 const DEATHBLOW_WINDOW_END := 2.75   ## b_posture_break time when he starts rising
 const INFERNO_COOLDOWN := 40.0       ## seconds from the end of one Inferno until he may use it again
 
@@ -1118,6 +1119,18 @@ func _on_weapon_contact(info: Dictionary) -> int:
 		Combat.RESULT_BLOCK:
 			anim.kick(Vector3(0.0, 0.3, 0.6), Vector3(0.8, 0.0, 0.0))
 	return res
+
+
+## Whether a jump kick can land on him: only off his perilous sweep, from just before its blade
+## comes (you jumped it) until KICK_AFTER_SWEEP after it has passed. That's the answer to a sweep:
+## jump it, then kick off his head. Any other time, a second jump press in the air does nothing.
+func kick_open() -> bool:
+	if state != S.ATTACK or anim.clip == null or anim.loco_active or str(anim.clip.raw.get("perilous", "")) != "sweep":
+		return false
+	for h in anim.clip.hits:
+		if anim.time >= float(h["from"]) - 0.35 and anim.time <= float(h["to"]) + KICK_AFTER_SWEEP:
+			return true
+	return false
 
 
 func receive_kick(p: Player, foot: Vector3) -> void:

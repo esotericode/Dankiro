@@ -821,6 +821,46 @@ func suite_sweep() -> void:
 	await run_until_boss_done()
 	print("  jump+kick: boss posture %.0f, boss state %s" % [boss.posture, Boss.S.keys()[boss.state]])
 	check(boss.posture >= Combat.KICK_POSTURE, "kicking off him during the sweep deals posture (%.0f)" % boss.posture)
+	# The kick only works off his sweep (Boss.kick_open): jumping it, or jumping again straight
+	# after you land, until KICK_AFTER_SWEEP after the blade has passed. Not later, and not at any
+	# other time: while he stands, guards or swings anything else, a second jump press does nothing.
+	var sw := AnimLibrary.get_clip("b_sweep")
+	var h_from := float(sw.hits[0]["from"])
+	var h_to := float(sw.hits[0]["to"])
+	var krow := PackedStringArray()
+	for cs in [["b_sweep", [h_from - 0.25, h_from + 0.05], true, "in the jump over the sweep"],
+			["b_sweep", [h_from - 0.25, h_to + 0.18, h_to + 0.46], true, "jumping again as you land, just after the blade passes"],
+			["b_sweep", [h_from - 0.25, h_to + 0.57, h_to + 0.87], false, "long after the blade has passed"],
+			["", [0.3, 0.6], false, "while he stands"],
+			["guard", [0.3, 0.6], false, "while he guards"],
+			["b_combo_1", [0.1, 0.35], false, "during another attack"]]:
+		var got := await _kick_try(str(cs[0]), cs[1])
+		var kicked: bool = got["kicked"]
+		krow.append("%s:%s" % [str(cs[3]).split(" ")[0] + ("" if str(cs[0]) == "" else "/" + str(cs[0])), "kick" if kicked else "-"])
+		check(kicked == bool(cs[2]) and (float(got["posture"]) >= Combat.KICK_POSTURE) == bool(cs[2]),
+			"a jump kick %s: %s (his posture %+.0f)" % [cs[3], "it lands" if kicked else "nothing", float(got["posture"])])
+	print("  kicks: %s" % " ".join(krow))
+
+
+## Presses jump at each of `jumps` (seconds from the start; a press in the air is the kick) with
+## him doing `what` ("b_sweep" or another attack, "guard", or "" to stand there); whether a kick
+## came out, and his posture afterwards.
+func _kick_try(what: String, jumps: Array) -> Dictionary:
+	await setup(2.0)
+	var t0 := Game.clock
+	if what == "guard":
+		boss._enter_guard(4.0)
+	elif what != "":
+		t0 = boss_attack(what)
+	for j in jumps:
+		var tj: float = t0 + float(j)
+		at(tj, func(): player.press_action("jump", tj))
+	var kicked := false
+	var t_end: float = t0 + float(jumps[jumps.size() - 1]) + 0.6
+	while Game.clock < t_end:
+		await ticks(1)
+		kicked = kicked or player.state == Player.S.JUMP_KICK
+	return {"kicked": kicked, "posture": boss.posture}
 
 
 ## Shuriken volleys: he leaps back and throws 3 fast + 1 delayed, or 5 fast; from phase 2 on,

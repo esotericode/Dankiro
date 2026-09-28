@@ -725,6 +725,8 @@ func _state_air(delta: float) -> Vector3:
 func _can_kick() -> bool:
 	if lock_target == null:
 		return false
+	if lock_target is Boss and not (lock_target as Boss).kick_open():
+		return false          # only off his sweep (Boss.kick_open), not whenever you jump at him
 	var d := distance_to_opponent()
 	var height := global_position.y - lock_target.global_position.y
 	return d < 2.5 and height > 0.25

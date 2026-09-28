@@ -170,9 +170,11 @@ The kanji flashes red above him with a deep warning sound and his blades glow ho
 - **Perilous sweep:** he slides his grip to the end of the staff, sinks low and spins a full
   turn with the far blade flat at shin height, ~2.5 m out, travelling forward. It can't be
   blocked or deflected, dodge i-frames don't save you, and he chases you down during the
-  coil, so stepping, walking or sprinting away doesn't get you out of range. **Jump** over it. While airborne near him, press **jump again** to
-  kick off him. That deals posture damage (×1.6 during a sweep) and staggers him out of the
-  sweep. You can follow up with an air attack.
+  coil, so stepping, walking or sprinting away doesn't get you out of range. **Jump** over it.
+  While airborne near him, press **jump again** to kick off him. That deals posture damage
+  (×1.6 during the sweep) and staggers him out of it. You can follow up with an air attack.
+  The kick is only there off his sweep: in the jump over it, or jumping again as you land,
+  until 0.6 s after the blade has passed. Any other time, a second jump press does nothing.
 
 ### The Inferno (phases two and three)
 
@@ -275,7 +277,7 @@ the beat of the quick blows gets you hit by the one after the pause.
 | Rising Fang → Turning Fang → Heaven's Fall | Coils right, low blade trails behind | Deflect each hit. The overhead finisher is **delayed**, so wait for it. |
 | Fang Jabs | Stamps and lifts the staff to head height, drawn back with the blade over you, and holds it for a beat (no kanji) | Deflect twice: each stab drops the blade into your chest. Mikiri doesn't work on these. |
 | Perilous Thrust 危 | Turns side-on, draws the staff back and holds at full coil | Mikiri (neutral dodge on the release) or deflect |
-| Perilous Sweep 危 | Slides his grip to the staff's end, sinks low and coils to his left | Jump, then kick |
+| Perilous Sweep 危 | Slides his grip to the staff's end, sinks low and coils to his left | Jump, then kick off him (the kick only works off his sweep) |
 | Whirling Fangs | Raises the staff level overhead with a whoosh, then cocks it at his side and the windmill spins up | Deflect each blade as it comes down on you (4 chops, one every 0.375 s, each with a whoosh that peaks on contact), then the finishing cut after a pause |
 | Inferno 危 (phases two and three) | Leaps to the middle of the arena and drives his staff into the stones; the floor glows out to the blast radius | Get out of the glow before the blast. Then jump each arm of fire: three on an even beat, a faster fourth (in phase three, jump the wave of fire rolling out from him between each of the first three too). Then he raises the staff over his head and plunges it into the floor: jump as the arena erupts. Hit him while he's spent |
 | Tempest of Fangs (phase three) | Stamps and sinks into a deep coil with the staff low behind him; both blades flare with fire and he holds it for a beat | Deflect the set: **ta-ta · · · ta-ta · · · · ta · · · TAAA**. Two quick cuts (from your left, then your right); a pause while he steps in and coils; two quick again (left, right); the long delay, the staff held at head height with the blade over you, then a stab; a pause with the staff overhead and the blades flaring, then a lunging overhead cleave. Wait out each pause: pressing on the quick beat gets you hit. He tracks you and closes in, so backing off fails; blocking the whole set breaks your guard |
@@ -312,7 +314,7 @@ godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--v
 | `spam` | The window shrinks 200/133/100/67/0 ms when mashing, clears after 0.5 s and on a deflect |
 | `mikiri` | Only a neutral step from the release on counters the thrust; during the pull-back is too early; forward-held and side steps never counter. Backstepping (once or twice), an early side step, or a backstep into a sprint all still get stabbed, from 2.4 to 4.4 m |
 | `dodge` | Steps are short (1.5 m, 1.1 m for the neutral step) and have Sekiro's i-frames (0.2 s, 0.3 s forward, forward not against thrusts) |
-| `sweep` | Guarding and dodge i-frames fail against the sweep, and so does getting away (stepping back or aside, two backsteps, sprinting or walking away, from 1.5 to 3.4 m); jumping clears it, and the kick deals posture |
+| `sweep` | Guarding and dodge i-frames fail against the sweep, and so does getting away (stepping back or aside, two backsteps, sprinting or walking away, from 1.5 to 3.4 m); jumping clears it, and the kick deals posture; the kick only lands off his sweep (in the jump over it, or jumping again as you land, until 0.6 s after the blade has passed), not later, and not while he stands, guards or swings anything else |
 | `shuriken` | Volley rhythms (3 in the air + 1 delayed, 5 in the air), a readable tell before the first; from phase 2 on two sets, the second 0.4 to 0.55 s after the first; every throw deflectable (4 posture to him each; one that fills his posture in mid-air breaks him as he lands) or blockable, a whole double volley included |
 | `tempest` | Phase three's Tempest of Fangs: deflecting each blow as it comes clears all six from 2.2 and 3.4 m and loads his posture, and the rhythm holds (two quick, a pause, two quick, a long delay, one, a pause, the last); pressing guard on the quick blows' beat deflects those but gets hit by each blow after a pause; holding guard blocks every blow and the last breaks your guard; backing away locked on doesn't get you out of it; he only picks it in phase three (it's also in `reach`, `tells` and `flurry`) |
 | `escape` | A pummeling (he's reeling and you keep hitting): in each phase he reels from at most his share of hits (3, then 3, then 2), then gets out of it, in at least four different ways over twelve pummelings and never the same way twice running; with his back to the wall he never escapes backwards into it. Running round you: he backpedals facing you before he turns, never has his back to you within 3.2 m, never comes nearer than he started, his speed changes no faster than 9 m/s² (12 when charging), he ends up 45° or more round you at 3.4–7.6 m, stays inside the plaza and squares up to you before he acts |
@@ -325,7 +327,7 @@ godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--v
 | `inferno` | Phases 2 and 3 open with the Inferno (starting there, or rising into it; phase 3's with its waves); he lands in the middle of the arena; the blast misses you outside its radius, knocks you down and throws you out of it inside, and walking away locked on from right beside him gets clear in time (stepping through it doesn't); jumping each arm clears all four from 4 to 14 m out, the beat holds (1.5, 1.5, 1.0 s) wherever you stand and while you walk round him; standing, guarding and dodging get burned by every arm and by the eruption; jumping on the beat gets caught by the fourth; one jump timed to the eruption clears it (in the air you're clear), earlier or later burns (it prints the window), and it rolls outward, reaching the wall a moment after it bursts beside him; after a burn the next arm, or the eruption, waits until you can jump it. Phase 3: jumping each arm, each wave and the eruption clears them all from 4 to 14 m out, each wave comes on the half-beat between two arms and there's never less than 0.9 s between two things to jump, still so walking round him or backing away; watching only the arms, a wave burns you; after any burn nothing reaches you for 2 s; it prints how early or late a jump over a wave may be; phase 2 has no waves. The ring stops you and burns; your sword glances off him; his posture holds through it; he's open afterwards; he uses it again once it's off cooldown |
 | `soak` | A full fight against the real AI (charges, repositioning, volleys) with a bot player that reacts to the blade and to incoming shuriken: deflects, blocks, posture breaks, deathblows (each signalling 忍殺 once, the last as the final one), the next phase and the Inferno it opens with |
 
-The run exits with code 0 when every check passes (1048 checks, including the soak). It also
+The run exits with code 0 when every check passes (1054 checks, including the soak). It also
 fails if the engine or a script reports any error during the run (it listens through a
 `Logger`), so runtime errors can't hide behind passing gameplay checks.
 
@@ -461,11 +463,17 @@ How the boss model is built (PS2-style: ~25k triangles, one 2048 px atlas with b
 
 ## Status
 
-This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (1048 checks, including
+This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (1054 checks, including
 a full-fight soak), the game boots and runs with no script errors, and every change to the
 visuals was checked on frames rendered with Movie Maker.
 
-**Latest: phase three opens with its Inferno.** He opened phase two with the Inferno but
+**Latest: the kick only works off his sweep.** Any jump next to him let you kick off him,
+for posture and a stagger, whenever you liked. Now the kick is his sweep's answer only: in the
+jump over it, or jumping again as you land, until 0.6 s after the blade has passed
+(`Boss.kick_open`). Any other time (he's standing, guarding, swinging anything else, or the
+sweep is long past) a second jump press does nothing. The `sweep` lab suite checks each case.
+
+**Before that: phase three opens with its Inferno.** He opened phase two with the Inferno but
 phase three only unlocked it 18 s after he rose, so you could finish him without ever meeting
 its waves of fire. Now he opens phase three with it, as he does phase two, whether he rises into
 it or the fight starts there (Options); after that it comes back on the usual 40 s cooldown.
