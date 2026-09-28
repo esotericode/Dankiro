@@ -225,7 +225,7 @@ func suite_reach() -> void:
 			for ang in [-25.0, 0.0, 25.0]:
 				await setup(d, ang)
 				boss_attack(clip)
-				await run_until_boss_done()
+				await run_until_boss_done(maxf(4.0, AnimLibrary.get_clip(clip).length + 0.5))
 				var got := {}
 				for r in _results:
 					got[int((r["info"] as Dictionary).get("index", -1))] = true
