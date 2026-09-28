@@ -24,7 +24,7 @@ func flash() -> void:
 
 
 func _process(delta: float) -> void:
-	var real_dt := minf(delta / maxf(Engine.time_scale, 0.001), 0.1)
+	var real_dt := minf(Game.unscaled(delta), 0.1)
 	_t += real_dt
 	shown = lerpf(shown, ratio, 1.0 - exp(-real_dt * 14.0))
 	var want_alpha := 1.0 if ratio > 0.005 or _flash > 0.0 else 0.0

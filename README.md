@@ -94,6 +94,13 @@ The input map is registered in code (`scripts/autoload/game_input.gd`); actions 
   guard breaks: you stagger, open to his next blow. Still holding guard when you recover, it
   comes straight back up (as a block), as in Sekiro. Pressing too early therefore blocks; only a
   very early tap lets a strike through.
+- **A held guard comes back by itself.** Hold guard and slash without letting go: the slash
+  goes (holding guard never stops an attack, nor a second slash you queue), and the moment its
+  recovery opens, once the blade has passed, the guard is back up. The same after a step (a
+  neutral one keeps its mikiri window), a flinch, a parried swing, a landing or getting up.
+  It's the guard you were holding, so it blocks: only a fresh press opens a deflect window. A
+  guard (or a held dodge) you press while the game is paused or in a menu is held when play
+  resumes; the guard comes up as a block.
 - Deflecting several strikes in a row (each within 1.2 s) hits his posture harder: +12% per
   deflect, up to +36%.
 - **Flurries** (the whirl, the jabs, a shuriken volley): missing one deflect doesn't cost you the
@@ -230,9 +237,10 @@ the beat of the quick blows gets you hit by the one after the pause.
 - His posture recovers when you ease off, and it recovers more slowly as his vitality drops.
   Hitting him makes the posture war easier. It holds through the Inferno, when you can't touch him.
 - When his posture breaks (or his vitality empties), he drops to one knee under a red mark.
-  Press **Attack** close to him to perform a **deathblow**: the camera swings round beside the
-  two of you for the kill, time slows as the blade goes in, blood sprays across the stones and
-  忍殺 (shinobi execution) stamps onto the screen.
+  Press **Attack** close to him (within 3 m, or 1.8 m from behind him) to perform a
+  **deathblow** (the DEATHBLOW prompt shows exactly when an attack would make one): the camera
+  swings round beside the two of you for the kill, time slows as the blade goes in, blood sprays
+  across the stones and 忍殺 (shinobi execution) stamps onto the screen.
 - He has **three lives**, one per phase. After each deathblow he rises into the next phase.
   Phase two is faster, more aggressive and parries more, and he opens it with the Inferno.
   Phase three adds his Tempest of Fangs (see above) and a harder Inferno (waves of fire between
@@ -302,11 +310,13 @@ godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--v
 | `tempest` | Phase three's Tempest of Fangs: deflecting each blow as it comes clears all six from 2.2 and 3.4 m and loads his posture, and the rhythm holds (two quick, a pause, two quick, a long delay, one, a pause, the last); pressing guard on the quick blows' beat deflects those but gets hit by each blow after a pause; holding guard blocks every blow and the last breaks your guard; backing away locked on doesn't get you out of it; he only picks it in phase three (it's also in `reach`, `tells` and `flurry`) |
 | `escape` | A pummeling (he's reeling and you keep hitting): in each phase he reels from at most his share of hits (3, then 3, then 2), then gets out of it, in at least four different ways over twelve pummelings and never the same way twice running; with his back to the wall he never escapes backwards into it. Running round you: he backpedals facing you before he turns, never has his back to you within 3.2 m, never comes nearer than he started, his speed changes no faster than 9 m/s² (12 when charging), he ends up 45° or more round you at 3.4–7.6 m, stays inside the plaza and squares up to you before he acts |
 | `attack` | Slash reach, and that mashing is rate-limited (no two hits within 0.38 s) |
-| `cancel` | Guard cancels a slash only in the early wind-up and in the recovery; a guard tap let go of long before the recovery doesn't come up in it, while one just before it does, and so does a tap during hit-stun (as the stun ends); a lost dodge release cannot leave sprint held |
+| `cancel` | Guard cancels a slash only in the early wind-up and in the recovery; a guard tap let go of long before the recovery doesn't come up in it, while one just before it does, and so does a tap during hit-stun (as the stun ends); a lost dodge release cannot leave sprint held. A guard held since before a slash doesn't stop it (it lands), nor a second slash queued during it, and is back up as the recovery opens (a blow 0.467 s in is blocked, with no fresh deflect window); a step with guard held keeps its length and ends guarding (a neutral step once its mikiri window is over); a guard pressed while paused is held on resume and blocks, a dodge held through a pause is a sprint, not a step |
+| `hitstop` | Hit-stop and slow motion last their real length however the frame they start in goes: a 75 ms hit-stop started in a physics step (even before `Game` has seen that frame begin) or at the end of a frame lasts 75 ms, 0.5 s of slow motion 0.5 s, and a real deflect freezes the action for its 75 ms |
+| `deathblow` | His posture broken: the DEATHBLOW prompt and what an attack press does agree, in front of him, beside and behind, near and far (behind him at 2.5 m neither, at 1.5 m both) |
 | `inferno` | Phase 2 opens with the Inferno (starting there, or rising into it); he lands in the middle of the arena; the blast misses you outside its radius, knocks you down and throws you out of it inside, and walking away locked on from right beside him gets clear in time (stepping through it doesn't); jumping each arm clears all four from 4 to 14 m out, the beat holds (1.5, 1.5, 1.0 s) wherever you stand and while you walk round him; standing, guarding and dodging get burned by every arm and by the eruption; jumping on the beat gets caught by the fourth; one jump timed to the eruption clears it (in the air you're clear), earlier or later burns (it prints the window), and it rolls outward, reaching the wall a moment after it bursts beside him; after a burn the next arm, or the eruption, waits until you can jump it. Phase 3: jumping each arm, each wave and the eruption clears them all from 4 to 14 m out, each wave comes on the half-beat between two arms and there's never less than 0.9 s between two things to jump, still so walking round him or backing away; watching only the arms, a wave burns you; after any burn nothing reaches you for 2 s; it prints how early or late a jump over a wave may be; phase 2 has no waves. The ring stops you and burns; your sword glances off him; his posture holds through it; he's open afterwards; he uses it again once it's off cooldown |
 | `soak` | A full fight against the real AI (charges, repositioning, volleys) with a bot player that reacts to the blade and to incoming shuriken: deflects, blocks, posture breaks, deathblows (each signalling 忍殺 once, the last as the final one), the next phase and the Inferno it opens with |
 
-The run exits with code 0 when every check passes (859 checks, including the soak). It also
+The run exits with code 0 when every check passes (879 checks, including the soak). It also
 fails if the engine or a script reports any error during the run (it listens through a
 `Logger`), so runtime errors can't hide behind passing gameplay checks.
 
@@ -442,7 +452,7 @@ How the boss model is built (PS2-style: ~25k triangles, one 2048 px atlas with b
 
 ## Status
 
-This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (859 checks, including
+This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (879 checks, including
 a full-fight soak), the game boots and runs with no script errors, and every change to the
 visuals was checked on frames rendered with Movie Maker.
 

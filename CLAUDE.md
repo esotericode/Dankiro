@@ -29,7 +29,7 @@ the script backs off and retries, so let it run. For another version, set
   script error during the run also fails it):
   `godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--verbose]`
   Suites: reach, tells, deflect, flurry, punish, loop, phases, menu, camera, ribbons, spam, mikiri, dodge,
-  sweep, shuriken, attack, cancel, inferno, tempest, escape, soak. `camera` loads the real arena (main.tscn), like
+  sweep, shuriken, attack, cancel, hitstop, deathblow, inferno, tempest, escape, soak. `camera` loads the real arena (main.tscn), like
   `menu`. `menu` drives the real menus with simulated gamepad input
   (`Input.parse_input_event`); it sets `Game.save_enabled = false` so tests never overwrite the
   saved options.
@@ -196,8 +196,19 @@ godot --headless --editor --quit               # import
   to happen has to be authored as many small steps.
 - Set a CharacterBody3D's `position` *before* `add_child`. Spawning two bodies at the origin
   makes one depenetrate onto the other's head, and platform logic then carries it around.
-- Hit-stop and slow-mo count unscaled frame time (`Game`), and `Game.deterministic` stamps
-  inputs with the tick clock, so the lab and Movie Maker captures are reproducible.
+- Hit-stop and slow-mo count real frame time (`Game`), and `Game.deterministic` stamps
+  inputs with the tick clock, so the lab and Movie Maker captures are reproducible. Godot scales
+  a frame's deltas by the time scale in force when the frame *began*, so a hit-stop that starts
+  mid-frame (a deflect, in a physics step) doesn't change that frame's delta: get real seconds
+  with `Game.unscaled(delta)`, never `delta / Engine.time_scale` (that ended every deflect's
+  freeze at once). `Game` reads the frame's scale off each physics step's delta, treats any
+  change made during physics as the next frame's, and counts the effects in its `_process`,
+  which runs last (`process_priority` 1000). The lab's `hitstop` suite checks all of it.
+- The player's guard: a fresh press opens a deflect window (`_begin_guard`); a guard that's
+  still held comes back up as a block whenever the current action allows it
+  (`Player._held_guard_returns`: a slash's recovery, not its wind-up); presses and releases
+  missed while paused or in a menu are reconciled with the device each physics tick. The
+  deathblow prompt and the attack share `Player.can_deathblow()`.
 - Drive the player in tests through `press_guard` / `release_guard` / `press_action` (the same
   entry points real input uses), with `bot_enabled = true`. Set `camera_yaw` so "forward"
   means toward the boss.

@@ -292,7 +292,7 @@ func _show_gourd(n: int) -> void:
 
 # ------------------------------------------------------------------------------ runtime
 func _process(delta: float) -> void:
-	var real_dt := minf(delta / maxf(Engine.time_scale, 0.001), 0.1)
+	var real_dt := minf(Game.unscaled(delta), 0.1)
 	var db_ready := false
 	if player != null:
 		_player_hp.set_ratio(player.hp / player.max_hp)
@@ -303,7 +303,7 @@ func _process(delta: float) -> void:
 		_marks.total = Combat.BOSS_LIVES
 		_marks.left = boss.lives_left
 		_update_reticle()
-		db_ready = boss.is_deathblow_ready() and player != null and player.distance_to_opponent() < 3.0
+		db_ready = player != null and player.can_deathblow()   # (the attack's own check: no false offers)
 	_prompt_alpha = move_toward(_prompt_alpha, 1.0 if db_ready else 0.0, real_dt * 8.0)
 	_prompt.modulate.a = _prompt_alpha
 	if _vignette.modulate.a > 0.0:
@@ -589,7 +589,7 @@ class Reticle extends Control:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	func _process(delta: float) -> void:
-		_t += minf(delta / maxf(Engine.time_scale, 0.001), 0.1)
+		_t += minf(Game.unscaled(delta), 0.1)
 		queue_redraw()
 
 	func _draw() -> void:

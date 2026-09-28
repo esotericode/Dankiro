@@ -1012,7 +1012,7 @@ func _roar_start() -> void:
 func _process(delta: float) -> void:
 	if boss == null:
 		return
-	var real_dt := minf(delta / maxf(Engine.time_scale, 0.001), 0.1)
+	var real_dt := minf(Game.unscaled(delta), 0.1)
 	_update_charge(delta)
 	_update_blast(real_dt)
 	_update_eruption(delta)

@@ -220,7 +220,7 @@ func _process(delta: float) -> void:
 		return
 	var r := f.get_global_rect()
 	var y := r.position.y + r.size.y * 0.5 - 1.0
-	var real_dt := minf(delta / maxf(Engine.time_scale, 0.001), 0.1)
+	var real_dt := minf(Game.unscaled(delta), 0.1)
 	_marker_y = y if _marker_y < 0.0 else lerpf(_marker_y, y, 1.0 - exp(-real_dt * 18.0))
 	_marker.position = Vector2(_column.position.x - 52.0, _marker_y)
 

@@ -89,7 +89,7 @@ func _process(delta: float) -> void:
 	if not Game.debug or player == null or boss == null:
 		_marks.clear()
 		return
-	var real_dt := minf(delta / maxf(Engine.time_scale, 0.001), 0.1)
+	var real_dt := minf(Game.unscaled(delta), 0.1)
 	_pts.clear()
 	_cols.clear()
 	_hurtboxes()

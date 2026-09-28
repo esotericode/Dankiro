@@ -112,7 +112,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func _process(delta: float) -> void:
 	if not _initialized or player == null:
 		return
-	var real_dt := delta / maxf(Engine.time_scale, 0.001)
+	var real_dt := Game.unscaled(delta)
 	real_dt = minf(real_dt, 0.1)
 	var head := player.global_position + Vector3(0, height, 0)
 	_follow = _follow.lerp(head, 1.0 - exp(-delta * 14.0))

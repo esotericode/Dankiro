@@ -29,6 +29,8 @@ const GUARD_SPEED := 1.5
 const JUMP_VELOCITY := 7.6
 const AIR_ACCEL := 6.0
 const BUFFER_TIME := 0.22
+const DEATHBLOW_REACH := 3.0         ## how far from him you can execute him...
+const DEATHBLOW_REACH_BEHIND := 1.8  ## ...and from behind him (more than 100° off his facing)
 const LOCO := {"idle": "p_idle", "fwd": "p_walk_fwd", "back": "p_walk_back", "left": "p_walk_left",
 	"right": "p_walk_right", "run": "p_run"}
 
@@ -192,10 +194,18 @@ func _physics_process(delta: float) -> void:
 		move_input = bot_move
 	else:
 		move_input = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+		# The devices' state wins over events we missed (a focus change, a press while paused, in
+		# a menu or during the intro, when nothing here was listening).
 		if guard_held and not Input.is_action_pressed("guard"):
-			release_guard(Game.clock)   # release event lost (focus change etc.)
+			release_guard(Game.clock)   # release event lost
+		elif not guard_held and Input.is_action_pressed("guard") and state != S.DEAD:
+			# Press missed: it's held now, so it comes up as a block (_held_guard_returns), with no
+			# deflect window (that press wasn't timed against anything).
+			guard_held = true
 		if _dodge_held_since >= 0.0 and not Input.is_action_pressed("dodge"):
 			release_dodge()            # don't keep sprinting after a lost release
+		elif _dodge_held_since < 0.0 and Input.is_action_pressed("dodge") and state != S.DEAD:
+			_dodge_held_since = Game.clock   # press missed: held, it's a sprint in a moment (no step)
 	if Game.camera != null and Game.camera.has_method("get_yaw"):
 		camera_yaw = float(Game.camera.call("get_yaw"))
 	if lock_target == null or (lock_target is Boss and (lock_target as Boss).is_dead()):
@@ -220,9 +230,9 @@ func _update_state(delta: float) -> Vector3:
 			and state != S.DEFLECT and state != S.BLOCK:
 		_begin_guard(Game.clock)
 		return Vector3.ZERO
-	# Guard still held through a hit: it comes back up as soon as the flinch allows, as a block
-	# (the old press keeps its time, so this is no free deflect window).
-	if guard_held and state == S.HIT and _can_guard_now():
+	# A guard that's still held comes back up as soon as whatever you're doing allows it, as a
+	# block (the old press keeps its time, so this is no free deflect window).
+	if _held_guard_returns():
 		_start_state(S.GUARD)
 		anim.play_locomotion(LOCO, 0.08)
 		anim.set_overlay("p_guard", 1.0, 30.0)
@@ -293,6 +303,31 @@ func _update_state(delta: float) -> Vector3:
 	return Vector3.ZERO
 
 
+## Whether a guard that's still held (not a fresh press: those are _guard_queued) comes back up
+## now: through a flinch or a parried swing once you can guard, a slash's recovery once the blade
+## has passed (not its wind-up: holding guard doesn't stop you attacking; and not while another
+## slash is queued, which goes first), the end of a step (a neutral step keeps its mikiri window),
+## a landing, getting up... and at once if the press itself was missed (see _physics_process).
+func _held_guard_returns() -> bool:
+	if not guard_held or _pending_guard:
+		return false
+	match state:
+		S.GUARD, S.DEFLECT, S.BLOCK, S.DEAD:
+			return false
+		S.MOVE:
+			return true
+		S.ATTACK:
+			return anim.time >= _recovery_from(anim.clip) and not _combo_queued and not _buffered("attack")
+		S.DODGE:
+			if anim.clip == null:
+				return true
+			var done := anim.clip.get_float("cancel", 0.34)   # the step's done...
+			if dodge_neutral:
+				done = maxf(done, _mikiri_until)               # ...and so is its mikiri window
+			return state_time >= done
+	return _can_guard_now()
+
+
 func _start_state(s: int) -> void:
 	state = s
 	state_time = 0.0
@@ -347,6 +382,18 @@ static func _in_guard_cancel(c: ClipData, t: float) -> bool:
 		if t >= float(wa[0]) and t <= float(wa[1]):
 			return true
 	return false
+
+
+## When a slash's recovery opens: its guard-cancel window after the blade has passed.
+static func _recovery_from(c: ClipData) -> float:
+	if c == null:
+		return 0.0
+	var first := _first_hit_from(c)
+	var t := INF
+	for w in c.raw.get("guard_cancel", []):
+		if float(w[0]) > first:
+			t = minf(t, float(w[0]))
+	return t
 
 
 static func _first_hit_from(c: ClipData) -> float:
@@ -515,17 +562,25 @@ func _on_parried() -> void:
 	Game.rumble(0.4, 0.5, 0.15)
 
 
-func _try_deathblow() -> bool:
+## Whether attacking now would execute him: his posture broken (or his vitality gone) and you
+## close enough, closer from behind him. The HUD's deathblow prompt asks the same question, so it
+## never offers an execution the attack won't make.
+func can_deathblow() -> bool:
 	if not (lock_target is Boss):
 		return false
 	var boss: Boss = lock_target
 	if not boss.is_deathblow_ready():
 		return false
 	var d := distance_to_opponent()
-	if d > 3.0:
+	if d > DEATHBLOW_REACH:
 		return false
-	if Combat.angle_to(boss.global_position, boss.forward(), global_position) > 100.0 and d > 1.8:
+	return d <= DEATHBLOW_REACH_BEHIND or Combat.angle_to(boss.global_position, boss.forward(), global_position) <= 100.0
+
+
+func _try_deathblow() -> bool:
+	if not can_deathblow():
 		return false
+	var boss: Boss = lock_target
 	_start_state(S.DEATHBLOW)
 	var from_boss := Combat.flat(global_position - boss.global_position)
 	if from_boss.length() < 0.1:

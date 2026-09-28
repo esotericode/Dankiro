@@ -56,7 +56,7 @@ func _ready() -> void:
 		if not a.begins_with("--"):
 			suites.append(a)
 	if suites.is_empty():
-		suites = ["reach", "tells", "deflect", "flurry", "tempest", "punish", "escape", "loop", "phases", "menu", "camera", "ribbons", "spam", "mikiri", "dodge", "sweep", "shuriken", "attack", "cancel", "inferno", "soak"]
+		suites = ["reach", "tells", "deflect", "flurry", "tempest", "punish", "escape", "loop", "phases", "menu", "camera", "ribbons", "spam", "mikiri", "dodge", "sweep", "shuriken", "attack", "cancel", "hitstop", "deathblow", "inferno", "soak"]
 	await get_tree().physics_frame
 	for s in suites:
 		print("\n=== suite: %s ===" % s)
@@ -1725,6 +1725,171 @@ func suite_cancel() -> void:
 	Input.action_release("dodge")
 	await ticks(2)
 	check(player._dodge_held_since < 0.0, "a lost dodge release cannot leave sprint latched")
+	# A guard held from before a slash (never let go) comes back up, as a block, the moment the
+	# slash's recovery opens, not when the whole animation ends. It doesn't stop the slash itself,
+	# nor a second slash you queue during it.
+	var rec := Player._recovery_from(c)
+	await setup(2.2)
+	boss.set_facing(PI)
+	player.press_guard(Game.clock)
+	await ticks(30)
+	var hp0 := boss.hp
+	var t0 := Game.clock
+	player.press_action("attack", t0)
+	var up_at := -1.0
+	while Game.clock - t0 < 0.467:
+		await ticks(1)
+		if up_at < 0.0 and player.state == Player.S.GUARD:
+			up_at = Game.clock - t0
+	var r := player.receive_attack({"dmg": 12.0, "kind": "normal", "time": Game.clock}, boss)
+	check(boss.hp < hp0, "holding guard doesn't stop a slash: it lands (%.0f damage)" % (hp0 - boss.hp))
+	check(up_at >= rec - 0.001 and up_at <= rec + 0.02 and r == Combat.RESULT_BLOCK,
+		"a guard held since before the slash is up as its recovery opens (%.3f s, recovery at %.2f s); a blow at 0.467 s is blocked, no fresh deflect window (%s)" % [
+		up_at, rec, res_name(r)])
+	await setup(2.2)
+	boss.set_facing(PI)
+	player.press_guard(Game.clock)
+	await ticks(30)
+	t0 = Game.clock
+	player.press_action("attack", t0)
+	await ticks(36)
+	player.press_action("attack", Game.clock)
+	await ticks(36)
+	check(player.state == Player.S.ATTACK and player.anim.clip.name == "p_attack_2",
+		"with guard held, a slash queued during the first still follows it (%s %s)" % [Player.S.keys()[player.state],
+		player.anim.clip.name if player.anim.clip != null else "-"])
+	# A dodge with guard held: the step keeps its length, then the guard is up.
+	await setup(3.0)
+	player.press_guard(Game.clock)
+	await ticks(20)
+	var p0 := player.global_position
+	player.bot_move = Vector2(0, 1)
+	player.press_action("dodge", Game.clock)
+	await ticks(2)
+	player.bot_move = Vector2.ZERO
+	await ticks(46)
+	var moved := Combat.flat(player.global_position - p0).length()
+	check(player.state == Player.S.GUARD and moved >= 1.35,
+		"a step with guard held keeps its length (%.2f m), then the guard is up (%s)" % [moved, Player.S.keys()[player.state]])
+	# ...and a neutral step (the mikiri step) keeps its whole mikiri window before the guard's up.
+	await setup(3.0)
+	player.press_guard(Game.clock)
+	await ticks(20)
+	var s0 := Game.clock
+	player.press_action("dodge", s0)
+	var guard_at := -1.0
+	while Game.clock - s0 < 0.6 and guard_at < 0.0:
+		await ticks(1)
+		if player.state == Player.S.GUARD:
+			guard_at = Game.clock - s0
+	var mk_end := float((AnimLibrary.get_clip("p_dodge_fwd").raw["mikiri"] as Array)[1])
+	check(player.dodge_neutral and guard_at >= mk_end - 0.001 and guard_at <= mk_end + 0.02,
+		"a neutral step with guard held keeps its mikiri window: the guard's up at %.2f s (the window ends at %.2f s)" % [
+		guard_at, mk_end])
+	# Guard (or dodge) held down while paused: nothing's listening then, but the button's still
+	# down when play resumes, so it's held: the guard comes up as a block (that press wasn't timed
+	# against anything, so no deflect window), the dodge as a sprint about to start (no step).
+	await setup(2.2)
+	player.bot_enabled = false
+	get_tree().paused = true
+	Input.action_press("guard")
+	await get_tree().process_frame
+	await get_tree().process_frame
+	get_tree().paused = false
+	await ticks(3)
+	var held := player.guard_held
+	r = player.receive_attack({"dmg": 12.0, "kind": "normal", "time": Game.clock}, boss)
+	check(held and r == Combat.RESULT_BLOCK, "a guard pressed while paused is held when play resumes, and blocks (%s, %s)" % [
+		held, res_name(r)])
+	Input.action_release("guard")
+	await ticks(2)
+	check(not player.guard_held, "...and lets go when the button does")
+	get_tree().paused = true
+	Input.action_press("dodge")
+	await get_tree().process_frame
+	get_tree().paused = false
+	await ticks(3)
+	check(player._dodge_held_since >= 0.0 and player.state != Player.S.DODGE,
+		"a dodge held through a pause is held when play resumes (a sprint, not a step: %s)" % Player.S.keys()[player.state])
+	Input.action_release("dodge")
+	await ticks(2)
+
+
+## Hit-stop and slow motion last their real length, however the frame they start in goes: Godot
+## scales a frame's delta by the time scale in force as the frame began, so a freeze started
+## during a frame (a deflect, in a physics step) must count that frame by the old scale. (Counting
+## it by the new one ended a deflect's 75 ms freeze at once.) At the lab's 120 fps each frame is
+## 8.3 ms of real time, and each effect lasts exactly its length in frames (the frame it starts in
+## isn't part of it: that one ran at full speed).
+func suite_hitstop() -> void:
+	Game.time_effects_enabled = true
+	var cases := [["a hit-stop started in a physics step", "physics", 0.075, 0.02],
+		["a hit-stop started in physics before Game sees the frame begin", "early", 0.075, 0.02],
+		["a hit-stop started at the end of a frame (deferred)", "deferred", 0.075, 0.02],
+		["slow motion started in a physics step", "physics", 0.5, 0.25]]
+	for cs in cases:
+		await setup(3.0)
+		await ticks(1)
+		var dur: float = cs[2]
+		if str(cs[1]) == "deferred":
+			await get_tree().process_frame
+			Game.call_deferred("hitstop", dur, float(cs[3]))   # (runs once this frame's been counted)
+		elif str(cs[1]) == "early":
+			# As if from an Area3D signal (the physics server's, before physics_frame) or a
+			# physics_frame handler connected before Game's: it still sees last frame as counted.
+			Game._frame_counted = true
+			Game.hitstop(dur, float(cs[3]))
+		elif dur > 0.2:
+			Game.slowmo(dur, float(cs[3]))
+		else:
+			Game.hitstop(dur, float(cs[3]))
+		var n := await _slowed_frames()
+		var want := int(round(dur * 120.0))
+		print("  %s (%.0f ms): %d frames = %.0f ms" % [cs[0], dur * 1000.0, n, n * 1000.0 / 120.0])
+		check(n == want, "%s lasts its %.0f ms (%.0f ms)" % [cs[0], dur * 1000.0, n * 1000.0 / 120.0])
+		Game.clear_time_effects()
+	# The real thing: a deflect's hit-stop.
+	await setup(2.2)
+	player.press_guard(Game.clock)
+	await ticks(2)
+	var r := player.receive_attack({"dmg": 12.0, "kind": "normal", "time": Game.clock}, boss)
+	var frames := await _slowed_frames()
+	var want_ms := Combat.HITSTOP_DEFLECT * 1000.0
+	check(r == Combat.RESULT_DEFLECT and frames == int(round(Combat.HITSTOP_DEFLECT * 120.0)),
+		"a deflect freezes the action for its %.0f ms (%s, %.0f ms)" % [want_ms, res_name(r), frames * 1000.0 / 120.0])
+	Game.clear_time_effects()
+	Game.time_effects_enabled = false
+
+
+## How many frames from now run slowed (their delta scaled down), until the first one that doesn't.
+func _slowed_frames() -> int:
+	var n := 0
+	for k in 400:
+		await get_tree().process_frame
+		if get_process_delta_time() < DT * 0.99:
+			n += 1
+		elif n > 0:
+			break
+	return n
+
+
+## The deathblow prompt never offers an execution the attack won't make, nor hides one it would:
+## from in front, beside and behind him, near and far, the HUD's check (Player.can_deathblow) and
+## what an attack press does agree. From behind you must be within 1.8 m, elsewhere 3 m.
+func suite_deathblow() -> void:
+	# [degrees off his facing (0 in front of him), distance, an execution?]
+	for cs in [[0.0, 2.8, true], [0.0, 1.4, true], [90.0, 2.5, true], [180.0, 1.5, true], [180.0, 2.5, false],
+			[140.0, 2.2, false], [0.0, 3.3, false]]:
+		await setup(float(cs[1]), float(cs[0]))
+		boss._posture_break()
+		await ticks(2)
+		var offered := player.can_deathblow()
+		player.press_action("attack", Game.clock)
+		await ticks(3)
+		var executed := player.state == Player.S.DEATHBLOW
+		check(offered == executed and executed == bool(cs[2]),
+			"%.0f° off his facing at %.1f m: the prompt %s, the attack %s" % [float(cs[0]), float(cs[1]),
+			"shows" if offered else "doesn't show", "executes him" if executed else "doesn't"])
 
 
 ## Full fight against the real boss AI with a bot that plays like a decent player: deflects

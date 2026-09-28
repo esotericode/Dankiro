@@ -2,9 +2,10 @@ extends Node
 ## Global game clock, hit-stop / slow motion, camera shake and shared references.
 ##
 ## `clock` is scaled game time advanced once per physics tick (before any other node,
-## see process_physics_priority). Input presses are stamped with `precise_now()`, which
-## adds the real time elapsed since the last tick, so deflect timing is measured with
-## sub-tick precision instead of being rounded to frames.
+## see process_physics_priority). Hit-stop and slow motion count real time (see `unscaled`).
+## Input presses are stamped with `precise_now()`, which adds the real time elapsed since the
+## last tick, so deflect timing is measured with sub-tick precision instead of being rounded to
+## frames.
 
 signal debug_toggled(enabled: bool)
 
@@ -19,6 +20,16 @@ var _hitstop_left := 0.0
 var _hitstop_scale := 1.0
 var _slowmo_left := 0.0
 var _slowmo_scale := 1.0
+## The time scale this frame's deltas were scaled by: Godot reads Engine.time_scale once, as a
+## frame begins, so a change during the frame (a deflect's hit-stop, in a physics step) is the
+## next frame's. A physics step's delta shows it exactly (see _physics_process). And whether
+## _process has counted this frame yet: a change after that is the next frame's too.
+var _frame_scale := 1.0
+var _frame_counted := false
+## A hit-stop or slow motion started during a frame: that frame began before it, so it isn't
+## slowed and doesn't count; the effect starts counting from the next one.
+var _hitstop_fresh := false
+var _slowmo_fresh := false
 ## Deterministic mode (Movie Maker, tests): input presses are stamped with the tick clock
 ## instead of wall-clock time, and the test lab can switch time effects off.
 var deterministic := false
@@ -45,6 +56,9 @@ var save_enabled := true
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	process_physics_priority = -1000
+	process_priority = 1000      # _process last: it counts the frame after every other node's
+	get_tree().physics_frame.connect(_new_frame)
+	get_tree().process_frame.connect(_new_frame)
 	_last_tick_usec = Time.get_ticks_usec()
 	if Engine.get_write_movie_path() != "":
 		deterministic = true
@@ -80,6 +94,7 @@ func set_start_phase(n: int) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	_frame_scale = delta * Engine.physics_ticks_per_second   # (a step is 1 / ticks of real time)
 	if get_tree().paused:
 		return
 	clock += delta
@@ -87,12 +102,41 @@ func _physics_process(delta: float) -> void:
 	_last_tick_usec = Time.get_ticks_usec()
 
 
+func _new_frame() -> void:
+	_frame_counted = false
+
+
 func _process(delta: float) -> void:
-	# `delta` is scaled by the time scale in effect this frame; undo that to count real time.
-	var real_dt := minf(delta / maxf(Engine.time_scale, 0.0001), 0.1)
-	_hitstop_left = maxf(0.0, _hitstop_left - real_dt)
-	_slowmo_left = maxf(0.0, _slowmo_left - real_dt)
+	var real_dt := minf(unscaled(delta), 0.1)
+	if not _hitstop_fresh:
+		_hitstop_left = _count_down(_hitstop_left, real_dt)
+	if not _slowmo_fresh:
+		_slowmo_left = _count_down(_slowmo_left, real_dt)
+	_hitstop_fresh = false
+	_slowmo_fresh = false
 	_apply_time_scale()
+	_frame_scale = Engine.time_scale     # the next frame's (unless it changes before it begins)
+	_frame_counted = true
+
+
+## Whether this frame's deltas are already spent, so a time-scale change now is the next
+## frame's: after _process has counted the frame, and never while physics is stepping.
+func _between_frames() -> bool:
+	return _frame_counted and not Engine.is_in_physics_frame()
+
+
+static func _count_down(left: float, dt: float) -> float:
+	left -= dt
+	return left if left > 0.0001 else 0.0     # (a float crumb mustn't hold the effect a frame longer)
+
+
+## The real (unscaled) seconds in a delta given to this frame's callbacks. Godot scales a frame's
+## deltas by the time scale in force when the frame began, so a hit-stop started during the frame
+## (a deflect, in a physics step) doesn't change them: dividing by the new Engine.time_scale would
+## count ~50x too much real time and end the freeze at once. For anything that runs in real time
+## through hit-stop and slow motion (the HUD, the menus, the camera), in _process.
+func unscaled(delta: float) -> float:
+	return delta / maxf(_frame_scale, 0.0001)
 
 
 ## Game-time stamp for an input event that arrived between physics ticks.
@@ -110,6 +154,7 @@ func hitstop(duration: float, scale := 0.02) -> void:
 		return
 	if _hitstop_left <= 0.0:
 		_hitstop_scale = scale
+		_hitstop_fresh = not _between_frames()   # (started mid-frame: count from the next)
 	else:
 		_hitstop_scale = minf(_hitstop_scale, scale)
 	_hitstop_left = maxf(_hitstop_left, duration)
@@ -119,6 +164,8 @@ func hitstop(duration: float, scale := 0.02) -> void:
 func slowmo(duration: float, scale: float) -> void:
 	if not time_effects_enabled:
 		return
+	if _slowmo_left <= 0.0:
+		_slowmo_fresh = not _between_frames()
 	_slowmo_left = maxf(_slowmo_left, duration)
 	_slowmo_scale = scale
 	_apply_time_scale()
@@ -127,8 +174,12 @@ func slowmo(duration: float, scale: float) -> void:
 func clear_time_effects() -> void:
 	_hitstop_left = 0.0
 	_slowmo_left = 0.0
+	_hitstop_fresh = false
+	_slowmo_fresh = false
 	_hitstop_scale = 1.0
 	Engine.time_scale = base_time_scale
+	if _between_frames():
+		_frame_scale = base_time_scale
 
 
 func _apply_time_scale() -> void:
@@ -140,6 +191,8 @@ func _apply_time_scale() -> void:
 	else:
 		_hitstop_scale = 1.0
 	Engine.time_scale = s
+	if _between_frames():
+		_frame_scale = s             # (the next frame's)
 
 
 func shake(strength: float, duration := 0.25) -> void:
