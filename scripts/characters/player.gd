@@ -105,6 +105,17 @@ func _ready() -> void:
 	anim.update(0.0)
 
 
+## The warm-up (Warmup): the gourd in hand and your katana's trail at `at` for a few frames
+## (`on`), so the renderer builds their pipelines before you first heal or swing; then back.
+func warm_up(on: bool, at: Vector3) -> void:
+	if _gourd:
+		_gourd.visible = on
+	if on:
+		trail.warm_up(at)
+	else:
+		trail.clear_trail()
+
+
 # ====================================================================== input
 func _unhandled_input(event: InputEvent) -> void:
 	if not controls_enabled or state == S.DEAD or bot_enabled:

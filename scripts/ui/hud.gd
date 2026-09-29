@@ -48,6 +48,7 @@ var _end_rule: ColorRect
 var _end_hints: UiTheme.HintBar
 var _end_ready := false
 var _panel: Control
+var _warm_saved: Array = []        ## [object, property, value] while warm_up shows everything
 var _help_visible := false
 var _last_timing := "—"
 var _tex: Dictionary = {}
@@ -445,6 +446,28 @@ func show_end() -> void:
 ## The end screen is up and its hints are showing: Enter fights again, Esc goes to the title.
 func end_ready() -> bool:
 	return _end_ready
+
+
+## The warm-up (Warmup): every overlay and moment up at once for a few frames (`on`), under the
+## loading screen, so the renderer builds their pipelines (the blurred backdrop, the kanji, the
+## end screen) and their words are set in type before they're first needed; then each back.
+func warm_up(on: bool) -> void:
+	if not on:
+		for i in range(_warm_saved.size() - 1, -1, -1):
+			var saved: Array = _warm_saved[i]
+			(saved[0] as Object).set(saved[1], saved[2])
+		_warm_saved.clear()
+		return
+	var put := func(o: Object, prop: String, value: Variant):
+		_warm_saved.append([o, prop, o.get(prop)])
+		o.set(prop, value)
+	for c: CanvasItem in [_backdrop, _overlay, _execution, _end, _panel]:
+		put.call(c, "visible", true)
+	for c: CanvasItem in [_backdrop, _overlay, _execution, _end, _end_title, _end_hints, _callout, _namecard]:
+		put.call(c, "modulate", Color(1, 1, 1, 1))
+	put.call(_overlay_kanji, "texture", _tex.get("kanji_death"))
+	put.call(_overlay_title, "text", "SHINOBI EXECUTION")
+	put.call(_callout_text, "text", "MIKIRI COUNTER")
 
 
 func hide_overlay() -> void:

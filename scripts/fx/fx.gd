@@ -427,6 +427,18 @@ static func _add_splat(parent: Node, at: Vector3, way: Vector3, size: float, del
 		dec.queue_free())
 
 
+## Keeps the splatter textures in the renderer's decal atlas for as long as `parent` lives: one
+## hidden decal per texture. Otherwise the atlas lets a texture go once every splat using it has
+## faded, and the next blood makes the renderer pack it in again, a hitch.
+static func keep_splats(parent: Node3D) -> void:
+	for i in SPLAT_TEXTURES:
+		var dec := Decal.new()
+		dec.name = "SplatAtlas%d" % i
+		dec.texture_albedo = _splat_texture(i)
+		dec.visible = false
+		parent.add_child(dec)
+
+
 static func _splat_texture(i: int) -> Texture2D:
 	var key := "splat_%d" % i
 	if not _textures.has(key):
@@ -506,6 +518,30 @@ static func kanji(attach_to: Node3D, offset: Vector3, texture: Texture2D, color:
 	tw.chain().tween_property(s, "modulate:a", 0.0, 0.25)
 	tw.chain().tween_callback(s.queue_free)
 	return s
+
+
+## Everything above, once, for the warm-up (Warmup: the renderer builds each one's pipelines
+## behind the loading screen, not the first time it shows in the fight): every kind of spark
+## (streaks, embers, flash and star, light), blood with its haze, a splatter decal in each
+## texture, dust, the kanji and a glow sprite. `at` is in view in front of the camera, `floor_at` a
+## spot on the floor in view. All of it goes under `parent`, which the warm-up frees.
+static func warm_up(parent: Node3D, at: Vector3, floor_at: Vector3, kanji_tex: Texture2D) -> void:
+	for kind in [SPARK_DEFLECT, SPARK_BLOCK, SPARK_PARRY, SPARK_MIKIRI, SPARK_BREAK, SPARK_GROUND]:
+		sparks(parent, at, Vector3.UP, kind)
+	blood(parent, at, Vector3.RIGHT, 40)
+	blood(parent, at, Vector3.LEFT, 60, true)
+	for i in SPLAT_TEXTURES:
+		var dec := Decal.new()
+		dec.texture_albedo = _splat_texture(i)
+		dec.size = Vector3(0.8, 0.14, 0.8)
+		parent.add_child(dec)
+		dec.global_position = floor_at + Vector3(0.9 * (i - 1), 0.0, 0.0)
+	dust(parent, floor_at)
+	if kanji_tex != null:
+		kanji(parent, at + Vector3(0, 0.6, 0), kanji_tex, Color(2.4, 0.12, 0.06, 1.0), 5.0)
+	var g := glow_sprite(radial_texture("warm_glow", Color(1, 1, 1, 1), Color(1, 1, 1, 0)), Color(1, 1, 1, 1), 0.4)
+	parent.add_child(g)
+	g.global_position = at
 
 
 static func glow_sprite(texture: Texture2D, color: Color, size: float) -> Sprite3D:

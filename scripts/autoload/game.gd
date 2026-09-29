@@ -55,6 +55,11 @@ var music_volume := DEFAULT_MUSIC_VOLUME
 ## Set before reloading the scene to go straight back into the fight (retry, restart)
 ## instead of the title menu.
 var skip_title := false
+## Warmup (every effect drawn once behind a loading screen as the game starts, so none stutters
+## the first time it shows): `warmup` whether to (the capture harness turns it off), `warmed_up`
+## once it's done (once per launch).
+var warmup := true
+var warmed_up := false
 ## Tests switch this off so they never overwrite the player's saved options.
 var save_enabled := true
 

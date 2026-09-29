@@ -1,12 +1,13 @@
 extends Node3D
-## Builds the fight and runs the flow: title menu -> intro -> fight -> death / victory (and the
-## end screen) -> retry (straight back into the fight) or the title menu.
+## Builds the fight and runs the flow: (the first time: every effect drawn once behind a loading
+## screen, Warmup) -> title menu -> intro -> fight -> death / victory (and the end screen) ->
+## retry (straight back into the fight) or the title menu.
 ## Gameplay lives under `World` (pausable); HUD, menu and this node keep running while paused.
 ## It also tells Music what to play: the phase's track from the namecard on, crossfading into
 ## the next as he rises and roars; it sinks under a deathblow and fades out when you die or he
 ## does, and on the way to the title.
 
-enum Flow { INTRO, FIGHT, DEAD, VICTORY, TITLE }
+enum Flow { INTRO, FIGHT, DEAD, VICTORY, TITLE, LOADING }
 
 const PLAYER_START := Vector3(0, 0, 6.5)
 const BOSS_START := Vector3(0, 0, -5.0)
@@ -40,6 +41,7 @@ func _ready() -> void:
 	arena = Arena.new()
 	arena.name = "Arena"
 	world.add_child(arena)
+	Fx.keep_splats(world)
 
 	# Positions are set before entering the tree so the bodies never spawn overlapping.
 	player = Player.new()
@@ -89,11 +91,19 @@ func _ready() -> void:
 	boss.executed.connect(_on_boss_executed)
 	boss.phase_changed.connect(_on_phase_changed)
 	Sfx.start_ambience()
+	var warm: Warmup = null
+	if Warmup.wanted():
+		flow = Flow.LOADING
+		warm = Warmup.new()
+		add_child(warm)
+		await warm.run(self)
 	if Game.skip_title:
 		Game.skip_title = false
 		_start_fight()
 	else:
 		_show_title()
+	if warm != null:
+		warm.finish()
 
 
 ## The title menu, over a slow orbit around him while he waits.
@@ -154,6 +164,8 @@ func _process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if flow == Flow.LOADING:
+		return
 	if menu.is_open():
 		# Esc / (B) / Start: back out of Options or Controls; on the pause menu, resume.
 		if event.is_action_pressed("ui_cancel") or event.is_action_pressed("pause"):

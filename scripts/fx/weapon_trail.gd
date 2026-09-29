@@ -101,6 +101,19 @@ func _ready() -> void:
 	_apply_palette()      # `brightness` may have been set after setup()
 
 
+## The warm-up (Warmup): a short ribbon at `at`, as if the blade had just swept past, so the
+## renderer builds the trail's pipelines before the first swing. It fades like any stroke.
+func warm_up(at: Vector3) -> void:
+	clear_trail()
+	for i in 4:
+		var p := at + Vector3(0.15 * i - 0.2, 0.0, 0.0)
+		_bases.append(p)
+		_tips.append(p + Vector3(0.0, 0.45, 0.0))
+		_ages.append(0.0)
+		_starts.append(1 if i == 0 else 0)
+	_draw()
+
+
 func clear_trail() -> void:
 	_bases.clear()
 	_tips.clear()

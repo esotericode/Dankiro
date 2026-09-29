@@ -40,12 +40,16 @@ func _ready() -> void:
 	var music := OS.get_environment("DANKIRO_MUSIC")
 	Game.save_enabled = false
 	Game.music_volume = clampf(float(music), 0.0, 1.0) if music != "" else Game.DEFAULT_MUSIC_VOLUME
+	# No loading screen (Warmup) before the shot unless it asks: `-- stutter warm`.
+	Game.warmup = args.has("warm")
 	main = (load("res://scenes/main.tscn") as PackedScene).instantiate()
 	add_child(main)
 	var flat := OS.get_environment("DANKIRO_FLAT")
 	if flat != "":
 		_flat_background(flat)
 	await get_tree().physics_frame
+	while Game.warmup and not Game.warmed_up:
+		await get_tree().process_frame
 	if shot.begins_with("menu"):
 		call("shot_" + shot)
 		return
@@ -99,6 +103,8 @@ func at(time: float, fn: Callable) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if Game.warmup and not Game.warmed_up:
+		return                                   # (the shot's clock starts once the warm-up is over)
 	t += delta
 	var due: Array = []
 	for s in _steps:
@@ -110,6 +116,8 @@ func _physics_process(delta: float) -> void:
 	if has_meta("inferno_bot") and boss != null:
 		_inferno_bot_tick()
 	if t >= _end_at:
+		if has_meta("stutter"):
+			_stutter_report()
 		get_tree().quit()
 
 
@@ -124,6 +132,8 @@ func auto_guard(lead := 0.05, hold := 0.12) -> void:
 
 
 func _process(_delta: float) -> void:
+	if has_meta("stutter"):
+		_stutter_frame()
 	if _orbit_cam != null and boss != null:
 		var subject: Combatant = _orbit_on if _orbit_on != null else boss
 		var a := deg_to_rad(float(_orbit["start"]) + t * float(_orbit["speed"]))
@@ -786,6 +796,169 @@ func shot_tempest() -> void:
 		auto_guard(0.06, 0.05)
 	at(0.3, func(): boss_string(["b_tempest"]))
 	_end_at = 0.3 + AnimLibrary.get_clip("b_tempest").length + 0.4
+
+
+# ------------------------------------------------------------------------- stutter
+## Stutter check: every effect in the game once, one after another, in real time (run it WITHOUT
+## --write-movie), logging each frame's real length and the pipelines the renderer compiled. A
+## pipeline built mid-fight is a stall the first time a player sees that effect. It prints a line
+## per moment as the next begins: frames, the median and worst frame, and the pipelines built,
+## by what asked for them (draw: while drawing; surface / mesh: as a new effect's surfaces
+## appear. All three hold the frame up. Canvas: the UI; spec: optimised versions built in the
+## background, harmless). `-- stutter warm` runs the loading screen's warm-up first, as the game
+## does (Warmup). Clear the shader caches first to see a first launch (see CLAUDE.md).
+var _moments: Array = []          ## [time, name]
+var _frames: Array = []           ## [t, real ms, [pipeline compilation counters]]
+var _last_usec := 0
+
+
+func _moment(time: float, name: String, fn: Callable) -> void:
+	_moments.append([time, name])
+	at(time, fn)
+
+
+func shot_stutter() -> void:
+	_stage(3.0)
+	player.max_hp = 1.0e6
+	player.hp = player.max_hp
+	auto_guard(0.05, 0.12)
+	set_meta("stutter", true)
+	var fx := player.get_parent()
+	var mid := func() -> Vector3: return (player.global_position + boss.global_position) * 0.5 + Vector3(0, 1.2, 0)
+	_moments.append([0.0, "the fight (first frames)"])
+	_moment(0.5, "his combo, deflected (trails, deflect sparks)", func(): boss_string(["b_combo_1", "b_combo_2"]))
+	_moment(3.0, "block sparks", func(): Fx.sparks(fx, mid.call(), Vector3.UP, Fx.SPARK_BLOCK))
+	_moment(3.6, "parry sparks", func(): Fx.sparks(fx, mid.call(), Vector3.UP, Fx.SPARK_PARRY))
+	_moment(4.2, "mikiri sparks, dust", func():
+		Fx.sparks(fx, mid.call(), Vector3.UP, Fx.SPARK_MIKIRI)
+		Fx.dust(fx, player.global_position, 22, 0.9))
+	_moment(4.8, "ground sparks", func(): Fx.sparks(fx, mid.call() - Vector3(0, 1.1, 0), Vector3.UP, Fx.SPARK_GROUND))
+	_moment(5.4, "your slash (trail)", func(): player.press_action("attack", Game.clock))
+	_moment(6.4, "blood", func(): Fx.blood(fx, mid.call(), Vector3(1, 0.3, 0), 40))
+	_moment(7.2, "blood, big, and splatter", func(): Fx.blood(fx, mid.call(), Vector3(-1, 0.3, 0), 60, true))
+	_moment(8.0, "perilous (kanji)", func(): boss._begin_perilous("thrust"))
+	_moment(8.8, "shuriken", func():
+		boss._end_perilous()
+		for i in 3:
+			boss._throw_shuriken(i))
+	_moment(10.0, "fire burst, smoke", func():
+		FireFx.burst(fx, mid.call())
+		FireFx.smoke(fx, mid.call()))
+	_moment(11.0, "posture break", func(): boss._posture_break())
+	_moment(11.6, "deathblow (camera, blood, 忍殺), he rises into phase 2", func(): pass)
+	for k in 20:
+		at(11.6 + 0.15 * k, func():
+			if boss.is_deathblow_ready() and player.distance_to_opponent() < 3.0:
+				player.press_action("attack", Game.clock))
+	_moment(20.0, "the Inferno, phase 2", func():
+		boss.global_position = Vector3(0, 0, -1.0)
+		player.global_position = Vector3(0, 0, 6.0)
+		boss.begin_inferno()
+		set_meta("inferno_bot", "jump"))
+	_moment(38.0, "the Inferno, phase 3 (waves)", func():
+		boss._enter_phase(3, false)
+		boss.begin_inferno())
+	_moment(57.0, "the Tempest of Fangs", func():
+		remove_meta("inferno_bot")
+		_stage(2.6)
+		boss_string(["b_tempest"]))
+	_moment(64.0, "death screen", func(): Game.hud.call("show_death"))
+	_moment(66.0, "victory, end screen", func():
+		Game.hud.call("hide_overlay")
+		Game.hud.call("show_victory"))
+	_moment(76.0, "pause menu", func(): main.call("_toggle_pause"))
+	_moment(77.5, "resume", func(): main.call("_toggle_pause"))
+	_end_at = 79.0
+
+
+func _stutter_frame() -> void:
+	var now := Time.get_ticks_usec()
+	var counts := []
+	for info in [RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_DRAW,
+			RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_SURFACE,
+			RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_MESH,
+			RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_CANVAS,
+			RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_SPECIALIZATION]:
+		counts.append(RenderingServer.get_rendering_info(info))
+	# where the frame went: scripts (process, physics) and the renderer (CPU, GPU), ms
+	var vp := get_viewport().get_viewport_rid()
+	RenderingServer.viewport_set_measure_render_time(vp, true)
+	counts.append_array([Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0,
+		Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0,
+		RenderingServer.viewport_get_measured_render_time_cpu(vp) + RenderingServer.get_frame_setup_time_cpu(),
+		RenderingServer.viewport_get_measured_render_time_gpu(vp)])
+	if _last_usec == 0:
+		_boot_counts = counts
+		print("STUTTER boot to the fight %d ms; pipelines built before it (draw, surface, mesh, canvas, spec): %s" % [
+			Time.get_ticks_msec(), str(counts)])
+		print("STUTTER %-58s %6s %9s %9s %6s %8s %5s %7s %5s" % ["moment", "frames", "median ms", "worst ms", "draw",
+			"surface", "mesh", "canvas", "spec"])
+	else:
+		_frames.append([t, (now - _last_usec) / 1000.0, counts])
+	_last_usec = now
+	# a moment's line as soon as the next one begins (a slow machine may not see the end)
+	while _reported + 1 < _moments.size() and t >= float(_moments[_reported + 1][0]):
+		_stutter_line(_reported)
+		_reported += 1
+
+
+var _reported := 0
+var _total_draw := 0
+var _total_stalls := 0
+var _boot_counts: Array = [0, 0, 0, 0, 0]
+
+
+## Frames drawn during moment `i`, and what the renderer compiled meanwhile.
+func _stutter_line(i: int) -> void:
+	var t0: float = _moments[i][0]
+	var t1: float = _moments[i + 1][0] if i + 1 < _moments.size() else INF
+	var in_it := _frames.filter(func(f): return float(f[0]) >= t0 and float(f[0]) < t1)
+	if in_it.is_empty():
+		return
+	var lens := PackedFloat32Array()
+	for f in in_it:
+		lens.append(float(f[1]))
+	lens.sort()
+	var first := _frames.find(in_it[0])
+	var before: Array = _frames[first - 1][2] if first > 0 else _boot_counts
+	var after: Array = in_it[in_it.size() - 1][2]
+	var d := []
+	for k in 5:
+		d.append(int(after[k]) - int(before[k]))
+	_total_draw += int(d[0])
+	if i > 0:
+		_total_stalls += int(d[0]) + int(d[1]) + int(d[2])
+	var worst: Array = in_it[0]
+	for f in in_it:
+		if float(f[1]) > float(worst[1]):
+			worst = f
+	var c: Array = worst[2]
+	print("STUTTER %-58s %6d %9.0f %9.0f %6d %8d %5d %7d %5d   worst: process %.0f, physics %.0f, render cpu %.0f, gpu %.0f" % [
+		str(_moments[i][1]), in_it.size(), lens[lens.size() / 2], lens[lens.size() - 1], d[0], d[1], d[2], d[3], d[4],
+		float(c[5]), float(c[6]), float(c[7]), float(c[8])])
+
+
+func _stutter_report() -> void:
+	while _reported < _moments.size():
+		_stutter_line(_reported)
+		_reported += 1
+	var lens := PackedFloat32Array()
+	for f in _frames:
+		lens.append(float(f[1]))
+	lens.sort()
+	print("STUTTER %d frames, median %.0f ms; after the fight's first frames, pipelines built mid-fight (draw + surface + mesh, each a stall): %d" % [
+		lens.size(), lens[lens.size() / 2] if lens.size() > 0 else 0.0, _total_stalls])
+	# the slowest frames, when they came and what was built during them
+	var order := range(_frames.size())
+	order.sort_custom(func(a, b): return float(_frames[a][1]) > float(_frames[b][1]))
+	for k in mini(6, order.size()):
+		var i: int = order[k]
+		var d := []
+		for c in 5:
+			d.append(int(_frames[i][2][c]) - int((_frames[i - 1][2] if i > 0 else _boot_counts)[c]))
+		var c: Array = _frames[i][2]
+		print("STUTTER slow frame at %.2f s: %.0f ms (process %.0f, physics %.0f, render cpu %.0f, gpu %.0f), built %s" % [
+			float(_frames[i][0]), float(_frames[i][1]), float(c[5]), float(c[6]), float(c[7]), float(c[8]), str(d)])
 
 
 ## Phase 2's fire move (the Inferno) from the lock-on camera: he leaps to the middle, you back

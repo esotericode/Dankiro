@@ -63,6 +63,19 @@ the script backs off and retries, so let it run. For another version, set
   that start every session at 1 and off (`load_settings` ignores the `[fight]` keys earlier
   builds saved). `load_settings` / `save_settings` take a path, for tests.
 - Quick script-error check: `godot --headless --quit-after 600`.
+- First-launch stutter (see Warmup below): the capture shot `stutter` plays every effect once in
+  real time and prints, per moment, the frames, median and worst frame time and the pipelines
+  the renderer built (draw / surface / mesh mid-fight are stalls; spec is background), then the
+  slowest frames. `-- stutter warm` runs the loading-screen warm-up first. To see a first launch,
+  delete `~/.local/share/godot/app_userdata/Dankiro/shader_cache` and `.../vulkan`, set
+  `MESA_SHADER_CACHE_DISABLE=true`, and run it without `--write-movie` under xvfb + lavapipe
+  with a 160x90 window and `[rendering] lights_and_shadows/directional_shadow/size=1024` in
+  `override.cfg` (same pipelines, cheaper frames). It still takes about 22 min (the first frame
+  alone about 100 s). Cold, with no warm-up, it built 11 pipelines mid-fight (the first deflect,
+  mikiri dust, blood, shuriken) with frame spikes of up to 4.4 s under lavapipe; with it, none.
+  Each moment's worst frame is split into process, physics, render CPU and GPU time. Lavapipe
+  still shows smaller bumps at some first effects with nothing built: it generates code lazily
+  as it draws, which real GPU drivers don't do. The scripts' first calls cost 3 ms at most.
 
 ## The UI (built in code)
 
@@ -249,6 +262,17 @@ godot --headless --editor --quit               # import
   quitting mid-fight doesn't leave a loaded file in use at exit. Headless, the audio clock runs in real time while the lab runs much faster, so
   the lab seeks to test the loop. On the title's Options page, changing the volume plays a
   preview (`Music.preview`), ended when the page closes.
+- The warm-up (`scripts/fx/warmup.gd`, run by main.gd as the game starts, behind a
+  `LoadingScreen`): the first draw of a material builds its GPU pipelines, a stall mid-fight on a
+  first launch. Godot builds them for everything present at load, even hidden (the Inferno, the
+  staff fire), so what stuttered was what's created on demand: Fx's materials (sparks, flash,
+  dust and blood puffs), the shuriken's. `Warmup` calls each class's `warm_up` (Fx, FireFx, Boss
+  with its kanji, trails, StaffFire and Inferno, Player with the gourd and trail, Hud), waits until
+  `Warmup.pipelines()` (RenderingServer's counters, background builds included) stops changing,
+  restores everything and preloads the music. A new effect made on the spot needs adding to its
+  class's `warm_up`, or it stutters the first time. Skipped headless (the lab) and in the capture
+  harness unless a shot passes `warm` (`Game.warmup`); once per launch (`Game.warmed_up`). While
+  it runs, main.gd's flow is LOADING (input ignored, the intro timer not running).
 - The victory flows into the end screen: `Hud.show_victory` (忍殺, no hints), then after
   `Hud.VICTORY_HOLD` `show_end` (black, "Thanks for Playing", then the hints). main.gd's `_over()`
   lets Enter / Esc act after a victory only once `Hud.end_ready()`, so a jump (A is also
@@ -258,7 +282,9 @@ godot --headless --editor --quit               # import
   lab seeds the global RNG and the AI draws from it, so an effect that called `randf()` would
   change how fights play out.
 - Blood on the stones is `Decal`s (`Fx._splatter`: at most 36, each fading after 12 s) with the
-  `textures/fx/blood_splat_*.png` from `tools/gen_fx_textures.py`.
+  `textures/fx/blood_splat_*.png` from `tools/gen_fx_textures.py`. `Fx.keep_splats` (main.gd) keeps
+  a hidden decal per texture, so the renderer's decal atlas never lets them go and re-packs it
+  at the next blood (a hitch) once every splat has faded.
 - `foliage.gdshader` and `leaves.gdshader` spot the moon's shadow pass by its orthographic
   projection (`PROJECTION_MATRIX[3][3]`) and drop every other shadow-map texel there (the clumps
   also get gaps), so tree crowns cast a light dappled shade on the plaza instead of dark smears.

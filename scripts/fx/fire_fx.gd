@@ -524,6 +524,12 @@ static func burst(parent: Node, pos: Vector3, scale := 1.0) -> void:
 	Fx.light_pulse(parent, pos + Vector3(0, 0.2, 0), Color(1.0, 0.5, 0.15), 1.8 * scale, 4.0 * scale, 0.35)
 
 
+## A burst and smoke for the warm-up (Warmup; the Inferno and the staff warm their own fire).
+static func warm_up(parent: Node3D, at: Vector3) -> void:
+	burst(parent, at, 1.0)
+	smoke(parent, at)
+
+
 static func smoke(parent: Node, pos: Vector3, amount := 10, size := 0.6) -> void:
 	if parent == null or not parent.is_inside_tree():
 		return

@@ -81,6 +81,19 @@ func set_level(target: float, rate := 2.0, blade := "") -> void:
 			_rate[bname] = rate
 
 
+## The warm-up (Warmup): both blades ablaze and the shaft alight (`on`), then out again with
+## every flame cleared.
+func warm_up(on: bool) -> void:
+	for bname in _level:
+		_level[bname] = 1.0 if on else 0.0
+		_target[bname] = _level[bname]
+	climb = 0.5 if on else -1.0
+	if not on:
+		for p in _licks.values() + _blaze.values() + _embers.values() + [_shaft]:
+			(p as CPUParticles3D).restart()
+			(p as CPUParticles3D).emitting = false
+
+
 func level(blade := "upper") -> float:
 	return float(_level.get(blade, 0.0))
 

@@ -96,6 +96,12 @@ func end_preview(fade := 1.2) -> void:
 		fade_out(fade)
 
 
+## Loads the three tracks now (the loading screen: Warmup) instead of as each first plays.
+func preload_tracks() -> void:
+	for i in TRACKS.size():
+		_stream(i)
+
+
 ## The phase whose track is playing (fading in or dipped included), 0 in silence.
 func current_phase() -> int:
 	return _current.track + 1 if _current != null else 0

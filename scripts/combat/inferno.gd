@@ -152,6 +152,33 @@ var _erupt_vis := -1.0             ## seconds since the eruption (drives its fir
 var _erupt_bands: Array = []       ## [MeshInstance3D, ShaderMaterial, radius]
 var _erupt_light: OmniLight3D
 var _wave_vis: Array = []          ## per slot: {band, mat, glow, light}
+var _warm_saved: Array = []        ## [node, visible, emitting] while warm_up shows everything
+
+
+## The warm-up (Warmup): every part of the move shown at once for a few frames (`on`), so the
+## renderer builds their pipelines before the fight, not as the move first plays; then each back
+## as it was built, its flames cleared. (_process would hide them again, so it waits meanwhile.)
+func warm_up(on: bool) -> void:
+	if on:
+		set_process(false)
+		_warm_saved.clear()
+		for n in find_children("*", "Node3D", true, false):
+			var n3 := n as Node3D
+			_warm_saved.append([n3, n3.visible, (n3 as CPUParticles3D).emitting if n3 is CPUParticles3D else false])
+			n3.visible = true
+			if n3 is CPUParticles3D:
+				(n3 as CPUParticles3D).emitting = true
+		return
+	for saved in _warm_saved:
+		var n3: Node3D = saved[0]
+		if not is_instance_valid(n3):
+			continue
+		n3.visible = bool(saved[1])
+		if n3 is CPUParticles3D:
+			(n3 as CPUParticles3D).restart()
+			(n3 as CPUParticles3D).emitting = bool(saved[2])
+	_warm_saved.clear()
+	set_process(true)
 
 
 func setup(b: Boss) -> void:

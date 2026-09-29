@@ -1266,6 +1266,23 @@ func _enter_phase(n: int, fanfare := true) -> void:
 		Fx.light_pulse(get_parent(), global_position + Vector3(0, 1.6, 0), Color(1.0, 0.35, 0.1), 6.0, 7.0, 0.8)
 
 
+## The warm-up (Warmup): his effects shown for a few frames (`on`) so the renderer builds their
+## pipelines before the fight: the deathblow mark, the 危 kanji (under `root`, which the
+## warm-up frees), his blades' trails at `at`, the staff ablaze and every part of the Inferno;
+## then all of it back as it was.
+func warm_up(on: bool, root: Node3D, at: Vector3) -> void:
+	deathblow_marker.visible = on
+	if on and _danger_tex != null:
+		Fx.kanji(root, at + Vector3(0.5, 0.8, 0), _danger_tex, Color(2.4, 0.12, 0.06, 1.0), 5.0)
+	for t in trails:
+		if on:
+			(t as WeaponTrail).warm_up(at)
+		else:
+			(t as WeaponTrail).clear_trail()
+	staff_fire.warm_up(on)
+	inferno.warm_up(on)
+
+
 ## Starts the fight in phase `n` (a testing option): the earlier lives count as taken.
 func set_start_phase(n: int) -> void:
 	n = clampi(n, 1, Combat.BOSS_LIVES)

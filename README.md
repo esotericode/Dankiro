@@ -97,6 +97,32 @@ little under the deflect, as the other sounds do, but gently.
 three are evened out to -12 LUFS) and where its ending has died away. Run it after replacing
 a track.
 
+## No stutter the first time
+
+The first time a GPU draws a material, its driver has to build a *pipeline* for it (the
+shaders compiled for that GPU), and the frame waits while it does. Godot keeps what it builds
+on disk (the shader and pipeline caches in `user://`), so this only happens the first time
+something appears on a machine, or after a driver update. That's the familiar stutter the
+first time each effect shows up, and not after. Godot builds pipelines for everything in
+the scene as it loads, even hidden things (the Inferno's fire, the staff's flames), so what
+stuttered here was what's made on the spot in the middle of the fight: the first deflect's
+sparks, the first dust, blood, shuriken.
+
+So the game warms up as it starts (`scripts/fx/warmup.gd`). A black loading screen (the name
+and a thin line) covers the plaza while everything the fight can show is drawn once behind it:
+every kind of spark, blood and a splatter in each texture, dust, fire and smoke, the 危 kanji,
+a shuriken, the weapon trails, the gourd, the deathblow mark, the staff ablaze, every part of
+the Inferno, and the HUD's overlays. It waits until the renderer has stopped building pipelines
+(the background ones too), clears it all away, and fades into the title. It also loads the
+three music tracks then (up to 63 ms each, which would otherwise land as he roars into the
+next phase). On a first launch it can take several seconds, while the shaders compile (the
+title used to take that hit on its first frame anyway); after that, a moment. Blood's splatter textures stay in the renderer's decal atlas the whole time
+(hidden decals), so the next blood never has to put them back in once the last splat has faded.
+
+When you export the game, also turn on **Shader Baker** in the export preset (Project > Export
+> your preset > Options > Shader Baker > Enabled). It compiles the shaders for the target
+when you export, so a player's first launch has less to do behind the loading screen.
+
 ## Combat
 
 ### Deflecting (and blocking)
@@ -369,7 +395,9 @@ for his last life, then the victory screen and the end screen), `inferno` for hi
 arms, `inferno wide` from high above the arena, `inferno spin` straight to the arms of fire, `inferno plunge`
 straight to the finisher; add `p3` for phase three's, with the waves), `attack <clip> [distance]` for any single boss attack from
 the lock-on camera, `recovery <clip>` for one attack played to the end from a fixed 3/4 view,
-`fire_staff [level]` and `fire_combo` for the fire on his staff, `diagnostics` for the overlay, the menus `menu_title`, `menu_options`, `menu_controls`, `menu_lore`, `menu_pause` and `menu_start` (boot,
+`fire_staff [level]` and `fire_combo` for the fire on his staff, `stutter [warm]` (run in real time, without
+`--write-movie`: every effect once, printing each moment's frame times and the GPU pipelines built, with or without the
+loading screen's warm-up; see *No stutter the first time*), `diagnostics` for the overlay, the menus `menu_title`, `menu_options`, `menu_controls`, `menu_lore`, `menu_pause` and `menu_start` (boot,
 then press Start), `help` for the controls sheet (F1) over the fight, the HUD `ui_hud`, `ui_hud_fresh` and
 `ui_hud_low` (both fighters hurt, the fight's start, nearly finished), `ui_moment <what>` for one of its
 moments (`namecard`, `callout`, `deathblow`, `execution`, `death`, `victory`, `end` (the end screen), `help`), the model close-ups `model`, `model_head`, `model_face`,
@@ -496,7 +524,15 @@ This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (1
 a full-fight soak), the game boots and runs with no script errors, and every change to the
 visuals was checked on frames rendered with Movie Maker.
 
-**Latest: music, an end screen and sane defaults.** Each of his phases has its own track now,
+**Latest: no stutter the first time.** On a first launch the game stuttered the first time
+each effect appeared (the first deflect, the first blood, the first shuriken): the GPU driver
+builds a pipeline the first time a material is drawn, and the frame waits. Now a brief loading
+screen at launch draws every effect once behind it and waits for the renderer to finish, and
+the music loads then too (see [No stutter the first time](#no-stutter-the-first-time)).
+Measured from a cold start (caches cleared, software rendering): 11 pipelines built mid-fight
+before, 0 after. The capture shot `stutter` measures it.
+
+**Before that: music, an end screen and sane defaults.** Each of his phases has its own track now,
 quiet by default. The fight's track comes in with his name and sinks under each deathblow; as he
 rises and roars, the next phase's track crossfades in. A phase that outlasts its track starts
 it again as its ending fades, and the music fades out when you die or when he does (see
