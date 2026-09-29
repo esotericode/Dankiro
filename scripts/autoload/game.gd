@@ -40,12 +40,18 @@ var boss: Node = null
 var camera: Node = null
 var hud: Node = null
 
-## Options (saved to SETTINGS_PATH). `debug` is the diagnostics overlay: hitboxes, hit windows
-## and live combat readouts (Options menu or F3). `start_phase` is the phase the fight starts
-## in (for testing the later phases).
+## Options. `music_volume` (0..1, the Options slider, see Music.volume_db) is kept between
+## sessions in SETTINGS_PATH. The testing options aren't: every session starts in phase 1 with
+## diagnostics off, whatever the last one was set to. `debug` is the diagnostics overlay:
+## hitboxes, hit windows and live combat readouts (Options menu or F3). `start_phase` is the
+## phase the fight starts in (for testing the later phases).
 const SETTINGS_PATH := "user://settings.cfg"
+## Quiet: the music sits under the fight (16 dB under full, see Music.FULL_DB).
+const DEFAULT_MUSIC_VOLUME := 0.4
+const MUSIC_VOLUME_STEP := 0.1
 var debug := false
 var start_phase := 1
+var music_volume := DEFAULT_MUSIC_VOLUME
 ## Set before reloading the scene to go straight back into the fight (retry, restart)
 ## instead of the title menu.
 var skip_title := false
@@ -65,32 +71,40 @@ func _ready() -> void:
 	load_settings()
 
 
-func load_settings() -> void:
+## Reads the saved options. Earlier builds saved the starting phase and diagnostics too
+## ([fight]): those are left alone, so a phase picked for testing doesn't stick.
+func load_settings(path := SETTINGS_PATH) -> void:
 	var cfg := ConfigFile.new()
-	if cfg.load(SETTINGS_PATH) != OK:
+	if cfg.load(path) != OK:
 		return
-	start_phase = clampi(int(cfg.get_value("fight", "start_phase", 1)), 1, Combat.BOSS_LIVES)
-	debug = bool(cfg.get_value("fight", "diagnostics", false))
+	music_volume = _music_step(float(cfg.get_value("audio", "music_volume", DEFAULT_MUSIC_VOLUME)))
 
 
-func save_settings() -> void:
+func save_settings(path := SETTINGS_PATH) -> void:
 	if not save_enabled:
 		return
 	var cfg := ConfigFile.new()
-	cfg.set_value("fight", "start_phase", start_phase)
-	cfg.set_value("fight", "diagnostics", debug)
-	cfg.save(SETTINGS_PATH)
+	cfg.set_value("audio", "music_volume", music_volume)
+	cfg.save(path)
 
 
 func set_diagnostics(on: bool) -> void:
 	debug = on
 	debug_toggled.emit(debug)
-	save_settings()
 
 
 func set_start_phase(n: int) -> void:
 	start_phase = clampi(n, 1, Combat.BOSS_LIVES)
+
+
+func set_music_volume(v: float) -> void:
+	music_volume = _music_step(v)
 	save_settings()
+
+
+## On the slider's steps (tenths), within 0..1.
+static func _music_step(v: float) -> float:
+	return clampf(snappedf(v, MUSIC_VOLUME_STEP), 0.0, 1.0)
 
 
 func _physics_process(delta: float) -> void:

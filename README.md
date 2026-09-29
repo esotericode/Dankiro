@@ -23,9 +23,9 @@ The boss up close: [docs/boss_model.png](docs/boss_model.png), and
    and **Quit**. Use the mouse, or the arrows and Enter, or a gamepad (D-pad or left stick,
    A to select, B to go back).
 
-Everything is generated from code: the effects and HUD are built at runtime, and both
-fighters, the arena's flagstone floor and the world round it (forest, torii, shrine, lanterns,
-mountains) are models that scripts build with Blender (see [Content pipeline](#content-pipeline-python)). `scenes/main.tscn` is just a root node with
+Everything but the music (a track for each of his phases) is generated from code: the effects
+and HUD are built at runtime, and both fighters, the arena's flagstone floor and the world round
+it (forest, torii, shrine, lanterns, mountains) are models that scripts build with Blender (see [Content pipeline](#content-pipeline-python)). `scenes/main.tscn` is just a root node with
 `scripts/main.gd`.
 
 ## Controls
@@ -56,12 +56,19 @@ The input map is registered in code (`scripts/autoload/game_input.gd`); actions 
   select, B to go back). Left / right change an option's value; the list wraps round. Going
   back from Options, Controls or Lore returns to the item you came from.
 - **Pause menu** (Esc / Start): Resume, Restart fight, Options, Controls, Lore, Quit to title.
-  After a death or a victory, Enter / (A) goes straight back into the fight and Esc / (Start)
-  goes to the title.
+  After a death, Enter / (A) goes straight back into the fight and Esc / (Start) goes to the
+  title. After the victory they do the same once the end screen is up: 忍殺 holds over the
+  scene for a few seconds, then everything fades to black and **Thanks for Playing** comes up
+  (a button pressed as he falls can't skip it).
 - **Lore**: a long chronicle, all of it, with no title, in 4 px type (on the 1080p canvas):
   the whole thing fits on one screen and can barely be read, if at all. That's the point. The
   text is `LoreText.CHRONICLE` (`scripts/ui/lore_text.gd`).
-- **Options** (saved to `user://settings.cfg`):
+- **Options**. The music volume is saved (`user://settings.cfg`); the two testing options go
+  back to their defaults each time the game starts (phase 1, diagnostics off), whatever they
+  were set to last time.
+  - **Music** (0 to 100, 40 by default): how loud the music is. The default keeps it quietly
+    under the fight; it's squared on the way to the mixer, so the steps sound about even. On
+    the title, which is quiet, changing it plays some music so you hear what you're setting.
   - **Starting phase** (1, 2 or 3): start the fight in a later phase, for testing. The
     earlier lives count as taken. It applies when a fight starts.
   - **Diagnostics** (also F3 in a fight): draws both fighters' hurtboxes at the radius the
@@ -74,6 +81,21 @@ The input map is registered in code (`scripts/autoload/game_input.gd`); actions 
     rate, your deflect window and spam level, his phase, lives, sequence, break-out and
     parry counters, his current clip and hit window, and how you timed your last guard. It
     keeps drawing while the game is paused.
+
+## Music
+
+Each of his three phases has its own track (`audio/music/phase_1.mp3` to `phase_3.mp3`),
+played by the `Music` autoload (`scripts/autoload/music.gd`) on a bus of its own at the
+Options' music volume, quiet by default. The title menu is quiet but for the wind. The fight's
+track comes in with his name; a deathblow sinks it under the kill, and as he rises into the
+next phase and roars, that phase's track crossfades in (at equal power, so the level holds
+through it). A phase that outlasts its track starts it again as its closing fade dies away,
+so it never stops for the silence at the end. Dying fades it out, and so does his last
+deathblow. Fades run in real time, through hit-stop and the pause menu. The music dips a
+little under the deflect, as the other sounds do, but gently.
+`tools/music_levels.py` measures the tracks into `data/music.json`: each one's loudness (the
+three are evened out to -12 LUFS) and where its ending has died away. Run it after replacing
+a track.
 
 ## Combat
 
@@ -253,7 +275,8 @@ the beat of the quick blows gets you hit by the one after the pause.
 - He has **three lives**, one per phase. After each deathblow he rises into the next phase.
   Phase two is faster, more aggressive and parries more, and he opens it with the Inferno.
   Phase three adds his Tempest of Fangs (see above) and a harder Inferno (waves of fire between
-  the arms), and he opens it with that one.
+  the arms), and he opens it with that one. The last deathblow ends the fight: he falls, 忍殺
+  holds over the scene, then it fades to black: *Thanks for Playing*.
 
 ### His behaviour
 
@@ -309,7 +332,9 @@ godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--v
 | `phases` | Three lives, one per phase: the starting-phase option starts a fight in phase 2 or 3 with the earlier lives taken, each deathblow raises him into the next phase, the last one ends the fight |
 | `camera` | In the real arena: with your back to the fence anywhere round the rim, the lock-on camera keeps its full distance (the wall that keeps the fighters in doesn't squeeze it onto your back), and that wall still stops both fighters |
 | `ribbons` | Cloth and hair (your scarf and headband tails, his mane, sashes and tassels): on a bench, a scarf on a walking body sways gently and a towed or turned chain never folds; in the arena every tip sways under 2.5 Hz while you both stand and while you walk round him, and through his combo his hair and sashes move no quicker than his body |
-| `menu` | The menus with a gamepad only (simulated pad input through Godot's input pipeline): D-pad and stick move one row per push, A selects, left / right change options, B goes back, Start pauses and A on Resume carries on; Lore (on both menus) shows the whole chronicle in type of 5 px or less, all on one screen, and B comes back to it; a closed menu lets go of its highlight; the hints show the keyboard's keys until the pad is used, then its buttons |
+| `menu` | The menus with a gamepad only (simulated pad input through Godot's input pipeline): D-pad and stick move one row per push, A selects, left / right change options and move the music slider a step at a time (stopping at 0 and 100; on the quiet title, changing it plays some music, which fades out when you go back; in a fight it turns the fight's music up and plays nothing else), B goes back, Start pauses and A on Resume carries on; Lore (on both menus) shows the whole chronicle in type of 5 px or less, all on one screen, and B comes back to it; a closed menu lets go of its highlight; the hints show the keyboard's keys until the pad is used, then its buttons |
+| `music` | A fresh start is in phase 1 with diagnostics off and the music at 40, and a settings file that saved phase 3 and diagnostics on (an earlier build) can't bring them back: only the music volume is kept. The volume: 40 is 16 dB under full, 0 is off, and it keeps to the slider's steps. Fades take their length in real time (through hit-stop); a crossfade from one phase's track to the next holds the level (equal power); a dip sinks it 10 dB; a track that runs out starts again where its ending dies away, at the level it was at, the old tail let go when it ends; a fade to silence ends them all. In the real game: the title is quiet, the fight's track comes in with his name, a deathblow sinks it, he rises into phase 2's, and dying fades it out |
+| `ending` | His last deathblow: the music fades out as he falls, 忍殺 comes up first and Enter / Esc do nothing yet; a few seconds on the screen fades to black and "Thanks for Playing" comes up (Enter and Esc work from then on, under 9 s after he fell), the hints under it, the black covering the whole screen |
 | `loop` | Two 90 s fights against bots that deflect everything, one hitting him only when he's open and one hitting whenever he's in reach: no more than 3 hits leave him reeling between his attacks, and he rarely reopens with the attack he was just punished for |
 | `spam` | The window shrinks 200/133/100/67/0 ms when mashing, clears after 0.5 s and on a deflect |
 | `mikiri` | Only a neutral step from the release on counters the thrust; during the pull-back is too early; forward-held and side steps never counter. Backstepping (once or twice), an early side step, or a backstep into a sprint all still get stabbed, from 2.4 to 4.4 m |
@@ -327,7 +352,7 @@ godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--v
 | `inferno` | Phases 2 and 3 open with the Inferno (starting there, or rising into it; phase 3's with its waves); he lands in the middle of the arena; the blast misses you outside its radius, knocks you down and throws you out of it inside, and walking away locked on from right beside him gets clear in time (stepping through it doesn't); jumping each arm clears all four from 4 to 14 m out, the beat holds (1.5, 1.5, 1.0 s) wherever you stand and while you walk round him; standing, guarding and dodging get burned by every arm and by the eruption; jumping on the beat gets caught by the fourth; one jump timed to the eruption clears it (in the air you're clear), earlier or later burns (it prints the window), and it rolls outward, reaching the wall a moment after it bursts beside him; after a burn the next arm, or the eruption, waits until you can jump it. Phase 3: jumping each arm, each wave and the eruption clears them all from 4 to 14 m out, each wave comes on the half-beat between two arms and there's never less than 0.9 s between two things to jump, still so walking round him or backing away; watching only the arms, a wave burns you; after any burn nothing reaches you for 2 s; it prints how early or late a jump over a wave may be; phase 2 has no waves. The ring stops you and burns; your sword glances off him; his posture holds through it; he's open afterwards; he uses it again once it's off cooldown |
 | `soak` | A full fight against the real AI (charges, repositioning, volleys) with a bot player that reacts to the blade and to incoming shuriken: deflects, blocks, posture breaks, deathblows (each signalling 忍殺 once, the last as the final one), the next phase and the Inferno it opens with |
 
-The run exits with code 0 when every check passes (1054 checks, including the soak). It also
+The run exits with code 0 when every check passes (1095 checks, including the soak). It also
 fails if the engine or a script reports any error during the run (it listens through a
 `Logger`), so runtime errors can't hide behind passing gameplay checks.
 
@@ -340,14 +365,14 @@ the escape to film that one), `tempest` for phase three's six-blow string (`temp
 the fighters, `tempest hold` holding guard through it), `edge` (the lock-on camera with your back to the fence at eight
 places round the rim), `ribbons` for cloth and hair in motion (`ribbons close` behind you, `ribbons boss`
 behind him through his combo), `deathblow` (a posture break and the kill; `deathblow final`
-for his last life, then the victory screen), `inferno` for his fire move (`inferno stand` to take the
+for his last life, then the victory screen and the end screen), `inferno` for his fire move (`inferno stand` to take the
 arms, `inferno wide` from high above the arena, `inferno spin` straight to the arms of fire, `inferno plunge`
 straight to the finisher; add `p3` for phase three's, with the waves), `attack <clip> [distance]` for any single boss attack from
 the lock-on camera, `recovery <clip>` for one attack played to the end from a fixed 3/4 view,
 `fire_staff [level]` and `fire_combo` for the fire on his staff, `diagnostics` for the overlay, the menus `menu_title`, `menu_options`, `menu_controls`, `menu_lore`, `menu_pause` and `menu_start` (boot,
 then press Start), `help` for the controls sheet (F1) over the fight, the HUD `ui_hud`, `ui_hud_fresh` and
 `ui_hud_low` (both fighters hurt, the fight's start, nearly finished), `ui_moment <what>` for one of its
-moments (`namecard`, `callout`, `deathblow`, `execution`, `death`, `victory`, `help`), the model close-ups `model`, `model_head`, `model_face`,
+moments (`namecard`, `callout`, `deathblow`, `execution`, `death`, `victory`, `end` (the end screen), `help`), the model close-ups `model`, `model_head`, `model_face`,
 `model_face_p2`, `model_combo`, `model_flourish`, `player_model`, `player_head`, `player_face`,
 `player_moves` (the shinobi: an orbit, his head and face, and his slashes, a backstep, a jump and
 the gourd), `floor <view>` for the plaza from fixed
@@ -364,7 +389,9 @@ godot --write-movie out/frame.png --fixed-fps 30 res://tests/capture.tscn -- def
 To record at a smaller size, put an `override.cfg` with
 `window/size/window_width_override` / `window_height_override` under `[display]` in the
 project folder (it's git-ignored). Without a GPU, this works under `xvfb-run` with Mesa's
-lavapipe Vulkan driver.
+lavapipe Vulkan driver. Movie Maker writes the game's sound to a WAV beside the frames, the
+music at its default volume whatever this machine has saved (`DANKIRO_MUSIC=<0..1>` sets it:
+0 for the sounds alone).
 
 For UI work there's a flat mode: with `DANKIRO_FLAT=<png>` set, the 3D world isn't drawn and
 that still picture stands behind the live HUD or menu instead. Render the picture once with the
@@ -379,7 +406,7 @@ scenes/main.tscn           root node -> scripts/main.gd (builds and runs the fig
 tests/                     combat lab (automated checks) and the Movie Maker capture director
 docs/SEKIRO_MECHANICS.md   the combat spec: what Sekiro does and how this project implements it
 scripts/
-  autoload/                GameInput (input map), Game (clock, hit-stop, shake), Sfx (audio)
+  autoload/                GameInput (input map), Game (clock, hit-stop, shake, options), Sfx (sounds), Music
   anim/                    PoseAnimator, ClipData, HumanoidRig (FK + two-bone IK), PoseMath
   rig/                     MeshKit (procedural meshes), ModelBuilder, SkinnedModel, SpringChain (cloth/hair)
   characters/              Combatant (base), Player, Boss (+ AI)
@@ -389,10 +416,11 @@ scripts/
 shaders/                   night sky, flagstones, mortar bed, puddle, fire, and the scenery's: foliage and
                            leaf cards, bark, stone, lacquer and timber, roof, lattice doors, terrain,
                            mountains, cloud sea
-data/                      rigs.json, animations.json, models.json (generated, see below)
+data/                      rigs.json, animations.json, models.json, music.json (generated, see below)
 models/                    player.glb, player_katana.glb, boss.glb, boss_staff.glb + ribbon textures,
                            arena_floor.glb, scenery/*.glb (generated with Blender)
-audio/, textures/, fonts/  sound effects (+ CREDITS.md), brush kanji, floor and scenery textures, UI fonts (OFL)
+audio/, textures/, fonts/  sound effects (+ CREDITS.md) and music/ (a track per phase), brush kanji, floor and
+                           scenery textures, UI fonts (OFL)
 tools/                     Python content pipeline + previewers (ignored by Godot)
   model3d/                 scripted Blender modelling: mesh builders, pattern, floor and scenery textures, baking
 ```
@@ -413,6 +441,7 @@ models, the floor or the scenery also needs Blender as a Python module: `pip ins
 | The world round the plaza (trees, torii, shrine, lanterns, fence, terrain, mountains) | `tools/build_scenery.py`, `tools/model3d/scenery_textures.py`, `scripts/world/scenery.gd` (placement, and the material table that maps each model material to a shader) | `python3 tools/build_scenery.py` (about a minute; `--only trees torii props approach backdrop textures` for some, `--no-bake` to skip the occlusion bakes), then `godot --headless --editor --quit` to import | `--preview` renders `tools/preview_out/scenery_*.png`; in the engine, the capture shots `scenery torii`, `scenery vista`, `scenery grove`, ... |
 | The fighters' materials, ribbons (scarves, sashes, hair, headband tails) and the gourd | `tools/build_models.py` | `python3 tools/build_models.py` | |
 | Sound effects | `tools/gen_audio.py` (the recipes), `tools/audio_sources.py` (the recordings: where each comes from, its author and licence) | `python3 tools/gen_audio.py [name]` (needs `ffmpeg`; the first run fetches the recordings from pinned commits into `tools/.cache/audio_src/`; a full build rewrites `audio/CREDITS.md`), then `godot --headless --editor --quit` to import new files | every sound is set to a loudness (K-weighted, the loudest 100 ms) and peak-limited, so the volumes the game plays them at mean the same for all |
+| Music levels and loop points | replace `audio/music/phase_N.mp3` | `python3 tools/music_levels.py` (needs `ffmpeg`): writes `data/music.json`, each track's loudness and trim to -12 LUFS and where its ending has died away (where it starts again) | the `music` lab suite |
 | Effect textures: the noise the fire, weapon trails and dust scroll through, and the blood splatter | `tools/gen_fx_textures.py` | `python3 tools/gen_fx_textures.py` | the capture shots `fire_staff 0.3`, `fire_staff 1`, `fire_combo`, `inferno spin`, `deathblow` |
 | Kanji + UI fonts | `tools/gen_textures.py` | `python3 tools/gen_textures.py` | |
 | GDScript sanity | | | `python3 tools/check_gdscript.py` cross-checks member and function names and call arity across the scripts |
@@ -463,11 +492,21 @@ How the boss model is built (PS2-style: ~25k triangles, one 2048 px atlas with b
 
 ## Status
 
-This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (1054 checks, including
+This milestone was built and tested in **Godot 4.7.2**. The combat lab passes (1095 checks, including
 a full-fight soak), the game boots and runs with no script errors, and every change to the
 visuals was checked on frames rendered with Movie Maker.
 
-**Latest: the kick only works off his sweep.** Any jump next to him let you kick off him,
+**Latest: music, an end screen and sane defaults.** Each of his phases has its own track now,
+quiet by default. The fight's track comes in with his name and sinks under each deathblow; as he
+rises and roars, the next phase's track crossfades in. A phase that outlasts its track starts
+it again as its ending fades, and the music fades out when you die or when he does (see
+[Music](#music)). Options has a **Music** slider (0 to 100, 40 by default; the one setting that's
+saved), and the testing options no longer stick between sessions: every launch starts in phase
+1 with diagnostics off. Beating him ends on an end screen: 忍殺 holds over the scene, then it
+fades to black and *Thanks for Playing* comes up, and a button pressed as he falls can't skip
+it. The new `music` and `ending` lab suites check all of it.
+
+**Before that: the kick only works off his sweep.** Any jump next to him let you kick off him,
 for posture and a stagger, whenever you liked. Now the kick is his sweep's answer only: in the
 jump over it, or jumping again as you land, until 0.6 s after the blade has passed
 (`Boss.kick_open`). Any other time (he's standing, guarding, swinging anything else, or the
@@ -785,6 +824,7 @@ and a settings menu.
 - Fonts: *Jost* (the UI's text), *Cormorant Garamond* (titles and names) and *Yuji Boku* (used
   to render the kanji textures). All are SIL Open Font License 1.1, and the license texts are in
   `fonts/` and `textures/`.
+- Music: the three tracks in `audio/music/`, one for each phase, were provided for the project.
 - Sounds: built by `tools/gen_audio.py` from recordings that are CC0 or public domain (the
   Versilian Community Sample Library, Sonic Pi's freesound samples, Kenney (footsteps and RPG
   Audio), Blanket's wind and

@@ -36,6 +36,10 @@ func _ready() -> void:
 	Game.skip_title = not shot.begins_with("menu") or shot == "menu_pause"
 	Game.start_phase = 1
 	Game.debug = shot == "diagnostics"
+	# The music at its default volume (not this machine's), or DANKIRO_MUSIC=<0..1>.
+	var music := OS.get_environment("DANKIRO_MUSIC")
+	Game.save_enabled = false
+	Game.music_volume = clampf(float(music), 0.0, 1.0) if music != "" else Game.DEFAULT_MUSIC_VOLUME
 	main = (load("res://scenes/main.tscn") as PackedScene).instantiate()
 	add_child(main)
 	var flat := OS.get_environment("DANKIRO_FLAT")
@@ -318,7 +322,7 @@ func shot_slashes() -> void:
 
 ## Posture break and deathblow: his posture all but full, deflecting his cut breaks it, and the
 ## player executes him (the camera's deathblow shot, blood, 忍殺). `-- deathblow final` makes it
-## his last life: he falls, then the victory screen.
+## his last life: he falls, then the victory screen, the fade to black and "Thanks for Playing".
 func shot_deathblow() -> void:
 	var final := OS.get_cmdline_user_args().has("final")
 	if final:
@@ -330,7 +334,7 @@ func shot_deathblow() -> void:
 		at(1.0 + 0.15 * k, func():
 			if boss.is_deathblow_ready() and player.distance_to_opponent() < 3.0:
 				player.press_action("attack", Game.clock))
-	_end_at = 8.0 if final else 5.6
+	_end_at = 15.5 if final else 5.6
 
 
 func shot_parried() -> void:
@@ -632,7 +636,8 @@ func shot_ribbons() -> void:
 
 ## UI work: one of the HUD's moments over the fight, `-- ui_moment <what>`: namecard (as the fight
 ## begins), callout (MIKIRI COUNTER), deathblow (his posture broken: the red mark and the
-## prompt), execution (忍殺), death, victory or help (F1).
+## prompt), execution (忍殺), death, victory, end (the end screen: the fade to black and "Thanks
+## for Playing") or help (F1).
 func shot_ui_moment() -> void:
 	var args := OS.get_cmdline_user_args()
 	var what: String = args[1] if args.size() > 1 else "namecard"
@@ -660,6 +665,9 @@ func shot_ui_moment() -> void:
 		"victory":
 			at(0.1, func(): Game.hud.call("show_victory"))
 			_end_at = 2.2
+		"end":
+			at(0.1, func(): Game.hud.call("show_end"))
+			_end_at = 5.6
 		"help":
 			at(0.1, func(): Game.hud.set_panel_visible(true))
 			_end_at = 0.8

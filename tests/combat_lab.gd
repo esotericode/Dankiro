@@ -5,7 +5,7 @@ extends Node3D
 ##
 ## Run (from the project folder):
 ##   godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--verbose]
-## Suites: reach, tells, deflect, flurry, punish, loop, phases, menu, spam, mikiri, dodge, sweep, shuriken, attack, cancel, inferno, soak (default: all).
+## Suites: reach, tells, deflect, flurry, punish, loop, phases, menu, music, ending, spam, mikiri, dodge, sweep, shuriken, attack, cancel, inferno, soak (default: all).
 ## Exit code 0 when every check passes, including "no engine or script errors during the run".
 
 const DT := 1.0 / 120.0
@@ -56,11 +56,13 @@ func _ready() -> void:
 		if not a.begins_with("--"):
 			suites.append(a)
 	if suites.is_empty():
-		suites = ["reach", "tells", "deflect", "flurry", "tempest", "punish", "escape", "loop", "phases", "menu", "camera", "ribbons", "spam", "mikiri", "dodge", "sweep", "shuriken", "leap", "circle", "attack", "cancel", "hitstop", "deathblow", "inferno", "soak"]
+		suites = ["reach", "tells", "deflect", "flurry", "tempest", "punish", "escape", "loop", "phases", "menu", "music", "ending", "camera", "ribbons", "spam", "mikiri", "dodge", "sweep", "shuriken", "leap", "circle", "attack", "cancel", "hitstop", "deathblow", "inferno", "soak"]
 	await get_tree().physics_frame
 	for s in suites:
 		print("\n=== suite: %s ===" % s)
 		await call("suite_" + s)
+	Music.stop_all()                 # (the suites that load the real game leave it playing)
+	await ticks(2)
 	var errs := _errors.lines.duplicate()
 	check(errs.is_empty(), "no engine or script errors during the run (%d)%s" % [errs.size(),
 		"" if errs.is_empty() else ": " + " | ".join(errs.slice(0, 5))])
@@ -992,15 +994,19 @@ func _deflect_arrivals(t0: float, arrivals: Array) -> void:
 
 ## The menus with a gamepad only (simulated pad events through the real input pipeline): the
 ## title menu boots with an item highlighted, the D-pad and the left stick move one row per
-## press, A presses, left / right change an option, B goes back, Start pauses the fight and A on
-## Resume carries on. Closing a menu lets go of the highlight so A in the fight can't press it.
-## The hint bar shows the keyboard's keys until a pad is used, then the pad's buttons.
+## press, A presses, left / right change an option or move the music slider (a step at a time,
+## stopping at its ends; on the title, where it's quiet, changing it plays some music to hear,
+## which fades out when you go back), B goes back, Start pauses the fight and A on Resume carries
+## on. Closing a menu lets go of the highlight so A in the fight can't press it. The hint bar
+## shows the keyboard's keys until a pad is used, then the pad's buttons.
 func suite_menu() -> void:
-	var saved := [Game.start_phase, Game.debug, Game.save_enabled]
+	var saved := [Game.start_phase, Game.debug, Game.save_enabled, Game.music_volume]
 	Game.save_enabled = false
 	Game.skip_title = false
 	Game.start_phase = 1
 	Game.debug = false
+	Game.music_volume = Game.DEFAULT_MUSIC_VOLUME
+	Music.stop_all()
 	if world != null:
 		world.queue_free()
 		world = null
@@ -1024,7 +1030,26 @@ func suite_menu() -> void:
 	check(str(focus.call()) == "Options", "a push up moves one row back (%s)" % focus.call())
 	await _pad_button(JOY_BUTTON_A)
 	check(menu._page == "options", "A on Options opens the Options page (%s)" % menu._page)
-	check(str(focus.call()).begins_with("Starting phase"), "Options opens on Starting phase (%s)" % focus.call())
+	check(str(focus.call()) == "Music", "Options opens on the music volume (%s)" % focus.call())
+	check(Music.voices() == 0, "the title is quiet: no music (%d playing)" % Music.voices())
+	var vol := func() -> int: return roundi(Game.music_volume * 100.0)
+	await _pad_button(JOY_BUTTON_DPAD_RIGHT)
+	check(vol.call() == 50, "D-pad right turns the music up a step, 40 to 50 (%d)" % vol.call())
+	check(Music.current_phase() == 1, "on the title, changing it plays phase 1's track, to hear it by (%d)" % Music.current_phase())
+	await _pad_stick(JOY_AXIS_LEFT_X, [-0.8, -1.0, 0.0])
+	await _pad_button(JOY_BUTTON_DPAD_LEFT)
+	check(vol.call() == 30, "the stick and the D-pad turn it down a step at a time (%d)" % vol.call())
+	for _i in 5:
+		await _pad_button(JOY_BUTTON_DPAD_LEFT)
+	var low: int = vol.call()
+	for _i in 12:
+		await _pad_button(JOY_BUTTON_DPAD_RIGHT)
+	check(low == 0 and vol.call() == 100, "it stops at 0 and at 100 (%d, %d)" % [low, vol.call()])
+	for _i in 6:
+		await _pad_button(JOY_BUTTON_DPAD_LEFT)
+	check(vol.call() == 40, "and back to 40 (%d)" % vol.call())
+	await _pad_button(JOY_BUTTON_DPAD_DOWN)
+	check(str(focus.call()).begins_with("Starting phase"), "below it, Starting phase (%s)" % focus.call())
 	await _pad_button(JOY_BUTTON_DPAD_RIGHT)
 	check(Game.start_phase == 2, "D-pad right steps the starting phase to 2 (%d)" % Game.start_phase)
 	await _pad_stick(JOY_AXIS_LEFT_X, [0.8, 1.0, 0.0])
@@ -1039,6 +1064,8 @@ func suite_menu() -> void:
 	await _pad_button(JOY_BUTTON_B)
 	check(menu._page == "title" and str(focus.call()) == "Options", "B goes back to the title menu, on Options (%s, %s)" % [
 		menu._page, focus.call()])
+	await ticks(160)
+	check(Music.voices() == 0, "and the music played to set its volume fades out (%d playing)" % Music.voices())
 	# Lore: the whole Chronicle of the Dried Root, in type too small to read.
 	await _pad_button(JOY_BUTTON_DPAD_DOWN)
 	await _pad_button(JOY_BUTTON_DPAD_DOWN)
@@ -1078,6 +1105,14 @@ func suite_menu() -> void:
 	await _pad_button(JOY_BUTTON_DPAD_DOWN)
 	await _pad_button(JOY_BUTTON_A)
 	check(menu._page == "options", "A on Options (pause menu) opens Options (%s)" % menu._page)
+	var fight_music := Music.current_phase()
+	await _pad_button(JOY_BUTTON_DPAD_RIGHT)
+	var bus := AudioServer.get_bus_index("Music")
+	check(vol.call() == 50 and is_equal_approx(AudioServer.get_bus_volume_db(bus), Music.volume_db(0.5))
+		and fight_music == 1 and Music.current_phase() == 1 and Music.voices() == 1,
+		"in a fight the slider turns the fight's music up (50: %.1f dB) and plays nothing else (phase %d, %d playing)" % [
+			AudioServer.get_bus_volume_db(bus), Music.current_phase(), Music.voices()])
+	await _pad_button(JOY_BUTTON_DPAD_LEFT)
 	await _pad_button(JOY_BUTTON_B)
 	check(menu._page == "pause" and str(focus.call()) == "Options", "B goes back to the pause menu, on Options (%s, %s)" % [
 		menu._page, focus.call()])
@@ -1101,7 +1136,253 @@ func suite_menu() -> void:
 	Game.start_phase = int(saved[0])
 	Game.debug = bool(saved[1])
 	Game.save_enabled = bool(saved[2])
+	Game.music_volume = float(saved[3])
 	GameInput.gamepad = false
+	Music.stop_all()
+
+
+## The music (the Music autoload: a track for each phase) and its option. A fresh start is in
+## phase 1 with diagnostics off and the music quiet, and a settings file from an earlier build
+## that saved phase 3 and diagnostics on can't bring them back: only the music volume is kept.
+## The volume: 40 by default, 16 dB under full; 0 is off. Fades take their length, in real time
+## (through hit-stop); a crossfade from one phase's track to the next holds the level (equal
+## power); a dip sinks it 10 dB; a track that runs out starts again where its closing fade dies
+## away, at the level it was at, the old tail playing out under it; a fade to silence ends them
+## all. Then in the real game: the title is quiet, the fight's track comes in with his name, a
+## deathblow sinks it, he rises into phase 2's, and dying fades it out.
+func suite_music() -> void:
+	var saved := [Game.music_volume, Game.save_enabled, Game.skip_title, Game.start_phase]
+	Game.save_enabled = false
+	Music.stop_all()
+	if world != null:
+		world.queue_free()
+		world = null
+	# -------------------------------------------------------------------- options
+	var fresh: Node = (load("res://scripts/autoload/game.gd") as GDScript).new()
+	fresh.set("save_enabled", false)
+	check(int(fresh.get("start_phase")) == 1 and not bool(fresh.get("debug"))
+		and is_equal_approx(float(fresh.get("music_volume")), 0.4),
+		"a fresh start: phase 1, diagnostics off, music at 40 (%d, %s, %.2f)" % [int(fresh.get("start_phase")),
+			str(fresh.get("debug")), float(fresh.get("music_volume"))])
+	var tmp := "user://lab_settings.cfg"
+	var old := ConfigFile.new()
+	old.set_value("fight", "start_phase", 3)
+	old.set_value("fight", "diagnostics", true)
+	old.set_value("audio", "music_volume", 0.7)
+	old.save(tmp)
+	fresh.call("load_settings", tmp)
+	check(int(fresh.get("start_phase")) == 1 and not bool(fresh.get("debug"))
+		and is_equal_approx(float(fresh.get("music_volume")), 0.7),
+		"settings saved with phase 3 and diagnostics on still start in phase 1 with diagnostics off; the music volume is kept (%d, %s, %.2f)" % [
+			int(fresh.get("start_phase")), str(fresh.get("debug")), float(fresh.get("music_volume"))])
+	fresh.set("music_volume", 0.3)
+	fresh.set("save_enabled", true)
+	fresh.call("save_settings", tmp)
+	var back := ConfigFile.new()
+	back.load(tmp)
+	check(is_equal_approx(float(back.get_value("audio", "music_volume", -1.0)), 0.3) and not back.has_section("fight"),
+		"only the music volume is saved (%s)" % ", ".join(back.get_sections()))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(tmp))
+	fresh.free()
+	check(is_equal_approx(Game._music_step(0.73), 0.7) and Game._music_step(1.4) == 1.0 and Game._music_step(-0.2) == 0.0,
+		"the volume keeps to the slider's steps, 0 to 100")
+	var bus := AudioServer.get_bus_index("Music")
+	check(bus >= 0 and bus < AudioServer.get_bus_index("Deflect"),
+		"the music has a bus of its own, mixed after the deflect's so it can dip under it (%d, %d)" % [bus,
+			AudioServer.get_bus_index("Deflect")])
+	var levels := []
+	for v in [0.4, 0.0, 1.0]:
+		Game.music_volume = v
+		await ticks(2)
+		levels.append([AudioServer.get_bus_volume_db(bus), AudioServer.is_bus_mute(bus)])
+	check(is_equal_approx(float(levels[0][0]), Music.volume_db(0.4)) and float(levels[0][0]) <= Music.FULL_DB - 15.0
+		and not bool(levels[0][1]),
+		"at the default volume the music sits %.1f dB under full" % (Music.FULL_DB - float(levels[0][0])))
+	check(bool(levels[1][1]), "at 0 it's off")
+	check(is_equal_approx(float(levels[2][0]), Music.FULL_DB) and not bool(levels[2][1]), "at 100 it's at full (%.1f dB)" % float(levels[2][0]))
+	Game.music_volume = 0.4
+	# -------------------------------------------------------------------- fades
+	Music.play_phase(1, 2.0)
+	await ticks(120)
+	var mid := Music.level()
+	await ticks(128)
+	check(mid > 0.62 and mid < 0.78 and is_equal_approx(Music.level(), 1.0) and Music.voices() == 1,
+		"phase 1's track fades in over its 2 s (%.2f at 1 s, %.2f after 2)" % [mid, Music.level()])
+	var first: Object = Music._current
+	Music.play_phase(1, 2.0)
+	await ticks(4)
+	check(Music._current == first and Music.voices() == 1, "asked for again, it carries on (no restart)")
+	Music.play_phase(2, 2.0)
+	await ticks(120)
+	var power := 0.0
+	for v in Music._voices:
+		power += pow(sin(float(v.gain) * PI * 0.5), 2.0)
+	check(Music.voices() == 2 and Music.current_phase() == 2 and absf(power - 1.0) < 0.06,
+		"halfway through a crossfade to phase 2's track both sound, at equal power (%.2f)" % power)
+	await ticks(128)
+	check(Music.voices() == 1 and Music.current_phase() == 2 and is_equal_approx(Music.level(), 1.0),
+		"then phase 2's alone, at full (%d playing)" % Music.voices())
+	Game.time_effects_enabled = true
+	Music.play_phase(3, 1.0)
+	Game.hitstop(2.0, 0.02)                     # (1.4 s at HITSTOP_STRENGTH 0.7: longer than the fade)
+	await ticks(124)
+	var stopped := Engine.time_scale < 0.1
+	check(stopped and Music.voices() == 1 and Music.current_phase() == 3 and is_equal_approx(Music.level(), 1.0),
+		"fades run in real time: a 1 s crossfade is done after 1 s of hit-stop (time scale %.2f, %d playing, level %.2f)" % [
+			Engine.time_scale, Music.voices(), Music.level()])
+	Game.clear_time_effects()
+	Game.time_effects_enabled = false
+	Music.dip(-10.0, 1.0)
+	await ticks(124)
+	check(absf(Music.level() - db_to_linear(-10.0)) < 0.02 and Music.current_phase() == 3,
+		"a dip sinks it 10 dB (%.3f)" % Music.level())
+	# The track runs out: it starts again where its closing fade has died away, at the level it
+	# was at, while the tail plays out under it.
+	var tail: Object = Music._current
+	var loop_at: float = Music._loop_at(2)
+	(tail.get("player") as AudioStreamPlayer).seek(loop_at + 0.05)
+	await ticks(3)
+	var again: Object = Music._current
+	var again_player := again.get("player") as AudioStreamPlayer if again != null else null
+	check(again != tail and again_player != null and again_player.get_playback_position() < 1.0 and Music.current_phase() == 3
+		and Music.voices() == 2 and absf(Music.level() - db_to_linear(-10.0)) < 0.02,
+		"phase 3's track starts again as its closing fade dies away (%.1f s of %.1f), at the level it was at" % [loop_at,
+			(tail.get("player") as AudioStreamPlayer).stream.get_length()])
+	(tail.get("player") as AudioStreamPlayer).seek((tail.get("player") as AudioStreamPlayer).stream.get_length() - 0.05)
+	var t_real := Time.get_ticks_msec() + 3000
+	while Music.voices() > 1 and Time.get_ticks_msec() < t_real:
+		await ticks(1)                          # (the tail plays out in real time)
+	check(Music.voices() == 1 and Music._current == again, "the old tail is let go when it ends (%d playing)" % Music.voices())
+	Music.play_phase(3, 1.0)
+	await ticks(124)
+	check(is_equal_approx(Music.level(), 1.0) and Music._current == again, "and play_phase brings a dipped track back up (%.2f)" % Music.level())
+	Music.fade_out(1.0)
+	await ticks(124)
+	check(Music.voices() == 0 and Music.current_phase() == 0, "a fade to silence ends it (%d playing)" % Music.voices())
+	# -------------------------------------------------------------------- in the game
+	Game.skip_title = false
+	Game.start_phase = 1
+	var main: Node = (load("res://scenes/main.tscn") as PackedScene).instantiate()
+	add_child(main)
+	await ticks(60)
+	check(Music.voices() == 0, "the title is quiet, but for the wind (%d playing)" % Music.voices())
+	(main.get("menu") as GameMenu).start_pressed.emit()
+	await ticks(12)
+	var early := Music.level()
+	await ticks(250)
+	check(Music.current_phase() == 1 and early < 0.3 and is_equal_approx(Music.level(), 1.0),
+		"the fight's track comes in with his name (phase %d: %.2f, then %.2f)" % [Music.current_phase(), early, Music.level()])
+	var p: Player = main.get("player")
+	var b: Boss = main.get("boss")
+	b.set_passive(true)
+	await ticks(90)                             # the intro is over
+	b.global_position = Vector3(0, 0, -1.0)
+	p.global_position = Vector3(0, 0, 1.0)
+	b.face_now(p.global_position)
+	p.face_now(b.global_position)
+	p.locked = true
+	b._posture_break()
+	await ticks(10)
+	p.press_action("attack", Game.clock)
+	await ticks(150)
+	check(p.state == Player.S.DEATHBLOW or b.state == Boss.S.DEATHBLOWN or b.state == Boss.S.REVIVE, "(he's executed: %s)" % Boss.S.keys()[b.state])
+	check(Music.current_phase() == 1 and Music.level() < 0.4, "a deathblow sinks the music under it (%.2f)" % Music.level())
+	var t_end := Game.clock + 8.0
+	while b.phase < 2 and Game.clock < t_end:
+		await ticks(1)
+	var consts: Dictionary = (main.get_script() as Script).get_script_constant_map()
+	await ticks(int(float(consts["MUSIC_CROSSFADE"]) * 120.0) + 6)
+	check(b.phase == 2 and Music.current_phase() == 2 and Music.voices() == 1 and is_equal_approx(Music.level(), 1.0),
+		"as he rises into phase 2 and roars, its track crossfades in (phase %d, %d playing, %.2f)" % [Music.current_phase(),
+			Music.voices(), Music.level()])
+	p.hp = 0.0
+	p._die()
+	await ticks(int((1.6 + float(consts["MUSIC_OUT"])) * 120.0) + 12)
+	check(int(main.get("flow")) == 2 and Music.voices() == 0, "you die: the music fades out (%d playing)" % Music.voices())
+	main.queue_free()
+	await ticks(2)
+	Game.camera = null
+	Game.hud = null
+	Game.player = null
+	Game.boss = null
+	Game.clear_time_effects()
+	Music.stop_all()
+	Game.music_volume = float(saved[0])
+	Game.save_enabled = bool(saved[1])
+	Game.skip_title = bool(saved[2])
+	Game.start_phase = int(saved[3])
+
+
+## The end: his last deathblow fades the music out and 忍殺 comes up over the drained scene; a
+## few seconds later everything fades to black and "Thanks for Playing" comes up, then the hints
+## (fight again, title menu). Only then do Enter / Esc do anything: a jump pressed as he falls
+## mustn't skip it.
+func suite_ending() -> void:
+	var saved := [Game.skip_title, Game.start_phase]
+	Game.skip_title = true
+	Game.start_phase = 3
+	Music.stop_all()
+	if world != null:
+		world.queue_free()
+		world = null
+	var main: Node = (load("res://scenes/main.tscn") as PackedScene).instantiate()
+	add_child(main)
+	await ticks(4)
+	var p: Player = main.get("player")
+	var b: Boss = main.get("boss")
+	var hud: Hud = main.get("hud")
+	b.set_passive(true)
+	await ticks(320)
+	check(b.lives_left == 1 and Music.current_phase() == 3, "(the fight starts in phase 3, its track playing: lives %d, phase %d)" % [
+		b.lives_left, Music.current_phase()])
+	b.global_position = Vector3(0, 0, -1.0)
+	p.global_position = Vector3(0, 0, 1.0)
+	b.face_now(p.global_position)
+	p.face_now(b.global_position)
+	p.locked = true
+	b._posture_break()
+	await ticks(10)
+	p.press_action("attack", Game.clock)
+	var t_end := Game.clock + 12.0
+	while int(main.get("flow")) != 3 and Game.clock < t_end:
+		await ticks(1)
+	var fell_at := Game.clock
+	var black := hud.get("_end") as Control
+	var words := hud.get("_end_title") as Label
+	check(int(main.get("flow")) == 3 and b.state == Boss.S.DEAD, "the last deathblow: he's dead, the fight is won (flow %d, %s)" % [
+		int(main.get("flow")), Boss.S.keys()[b.state]])
+	check(Music.voices() == 0, "the music has faded out as he fell (%d playing)" % Music.voices())
+	check((hud.get("_overlay") as Control).visible and not black.visible and not hud.end_ready() and not main.call("_over"),
+		"first 忍殺 over the scene, no end screen yet, and Enter / Esc do nothing")
+	await ticks(int(Hud.VICTORY_HOLD * 120.0) - 30)
+	check(not black.visible and not main.call("_over"), "(still nothing %.1f s on)" % (Game.clock - fell_at))
+	while not hud.end_ready() and Game.clock < fell_at + 14.0:
+		await ticks(1)
+	var ready_after := Game.clock - fell_at
+	var dark := black.modulate.a
+	check(hud.end_ready() and main.call("_over") and black.visible and dark > 0.99 and words.text == "Thanks for Playing"
+		and words.modulate.a > 0.95 and ready_after < 9.0,
+		"then it fades to black and \"%s\" comes up; Enter and Esc work from %.1f s after he fell" % [words.text, ready_after])
+	await ticks(120)
+	var hints := hud.get("_end_hints") as Control
+	var keys := []
+	for c in hints.find_children("*", "Control", true, false):
+		if c is UiTheme.Chip:
+			keys.append((c as UiTheme.Chip).key)
+	check(hints.modulate.a > 0.99 and "Enter" in keys and "Esc" in keys, "under it, the hints: fight again, title menu (%s)" % [keys])
+	var rect := black.get_global_rect()
+	var screen := black.get_viewport_rect()
+	check(rect.encloses(screen), "the black covers the whole screen (%s over %s)" % [rect, screen])
+	main.queue_free()
+	await ticks(2)
+	Game.camera = null
+	Game.hud = null
+	Game.player = null
+	Game.boss = null
+	Game.clear_time_effects()
+	Music.stop_all()
+	Game.skip_title = bool(saved[0])
+	Game.start_phase = int(saved[1])
 
 
 ## The ribbons and his mane (SpringChain): cloth and hair should sway and trail, not buzz. First a
@@ -1218,6 +1499,7 @@ func suite_ribbons() -> void:
 	Game.boss = null
 	Game.skip_title = bool(saved[0])
 	Game.start_phase = int(saved[1])
+	Music.stop_all()                     # (the fight's music: the other suites run without it)
 
 
 func _models_json() -> Dictionary:
@@ -1393,6 +1675,7 @@ func suite_camera() -> void:
 	Game.clear_time_effects()
 	Game.skip_title = bool(saved[0])
 	Game.start_phase = int(saved[1])
+	Music.stop_all()
 
 
 ## A pad button press and release, as a pad sends them (device 0), a few frames apart.

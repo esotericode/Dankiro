@@ -21,6 +21,7 @@ config/icon="res://icon.svg"
 GameInput="*res://scripts/autoload/game_input.gd"
 Sfx="*res://scripts/autoload/sfx.gd"
 Game="*res://scripts/autoload/game.gd"
+Music="*res://scripts/autoload/music.gd"
 
 [display]
 

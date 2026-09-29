@@ -6,7 +6,8 @@ extends CanvasLayer
 ## Mouse, keyboard (arrows + Enter, Esc to go back) and gamepad (D-pad or left stick + A, B to
 ## go back) all work. Keyboard and gamepad navigation is handled here (not left to Godot's focus
 ## system) so a stick push moves exactly one row, left / right change an option, and A presses
-## the highlighted item. Options are saved by `Game` (user://settings.cfg).
+## the highlighted item. Options live in `Game` (the music volume is saved to user://settings.cfg;
+## the testing options start every session at their defaults).
 
 signal start_pressed
 signal resume_pressed
@@ -209,6 +210,30 @@ func _option(name: String, values: Array, get_index: Callable, set_index: Callab
 	return b
 
 
+## A slider row: its name, and at the right a thin bar with its value (0 to 100), arrows round
+## it while highlighted. Left / right move it a `step` (0..1) at a time, no further than the
+## ends; a click or a drag on the bar sets it. `get_value` / `set_value` read and store it (0..1).
+func _slider(name: String, get_value: Callable, set_value: Callable, step: float, note: String) -> Button:
+	var b := _button(name, func(): pass)
+	var bar := SliderBar.new()
+	bar.row = b
+	bar.get_value = get_value
+	bar.set_value = set_value
+	bar.anchor_left = 1.0
+	bar.anchor_right = 1.0
+	bar.anchor_bottom = 1.0
+	bar.offset_left = -SliderBar.WIDTH
+	b.add_child(bar)
+	b.set_meta("step", func(dir: int):
+		set_value.call(clampf(float(get_value.call()) + dir * step, 0.0, 1.0))
+		bar.queue_redraw())
+	b.focus_entered.connect(func():
+		_note.text = note
+		bar.queue_redraw())
+	b.focus_exited.connect(bar.queue_redraw)
+	return b
+
+
 func _process(delta: float) -> void:
 	if not visible:
 		return
@@ -320,6 +345,7 @@ func close() -> void:
 		get_viewport().gui_release_focus()
 	visible = false
 	_page = ""
+	Music.end_preview()
 
 
 func is_open() -> bool:
@@ -341,6 +367,8 @@ func _show(page: String, focus_on := "") -> void:
 	_page = page
 	visible = true
 	_quiet = true
+	if page != "options":
+		Music.end_preview()          # (the music played on the title's Options page to set its volume)
 	for c in _buttons.get_children():
 		_buttons.remove_child(c)
 		c.queue_free()
@@ -377,17 +405,26 @@ func _show(page: String, focus_on := "") -> void:
 		"options":
 			_heading.text = "Options"
 			var later := "" if _root_page == "title" else " Takes effect when you restart the fight."
-			first = _option("Starting phase", ["1", "2", "3"],
+			var on_title := _root_page == "title"
+			var set_music := func(v: float):
+				Game.set_music_volume(v)
+				if on_title:
+					Music.preview()        # (the title is quiet: play some, so you hear what you set)
+			first = _slider("Music", func(): return Game.music_volume, set_music, Game.MUSIC_VOLUME_STEP,
+				"How loud the music is: a track for each phase, crossfading as he rises into the " +
+				"next. %d by default, quietly under the fight." % roundi(Game.DEFAULT_MUSIC_VOLUME * 100.0))
+			_option("Starting phase", ["1", "2", "3"],
 				func(): return Game.start_phase - 1,
 				func(i: int): Game.set_start_phase(i + 1),
 				"The phase the fight starts in, for testing: the earlier lives count as taken. " +
-				"Phase 3 adds the Tempest of Fangs and waves of fire in the Inferno." + later)
+				"Phase 3 adds the Tempest of Fangs and waves of fire in the Inferno. Back to 1 " +
+				"each time the game starts." + later)
 			_option("Diagnostics", ["Off", "On"],
 				func(): return 1 if Game.debug else 0,
 				func(i: int): Game.set_diagnostics(i == 1),
 				"Shows hitboxes (hurtboxes, weapons lit while a hit window is open), your guard " +
 				"and deflect window, where each blow landed, and a live readout of both fighters. " +
-				"F3 toggles it during a fight.")
+				"F3 toggles it during a fight. Off each time the game starts.")
 			_button("Back", func(): back())
 		"controls":
 			_heading.text = "Controls"
@@ -408,3 +445,55 @@ func _show(page: String, focus_on := "") -> void:
 	tw.tween_property(_column, "modulate:a", 1.0, 0.22)
 	tw.tween_property(_column, "offset_left", COLUMN_X, 0.3).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	_marker_y = -1.0
+
+
+## The slider's bar and value, at the right of its row (see _slider): a thin line, lit up to the
+## value, with a dot on it and the value after it; the arrows either side while the row is
+## highlighted. Clicks and drags on it set the value (and highlight the row).
+class SliderBar extends Control:
+	const WIDTH := 330.0
+	const LINE_FROM := 34.0            ## the line, from here...
+	const LINE_TO := 230.0             ## ...to here; then the value, then the right arrow
+	var row: Button
+	var get_value: Callable
+	var set_value: Callable
+	var _dragging := false
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_STOP
+
+	func _gui_input(event: InputEvent) -> void:
+		if event is InputEventMouseButton and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+			_dragging = (event as InputEventMouseButton).pressed
+			if _dragging:
+				_set_from((event as InputEventMouseButton).position.x)
+			accept_event()
+		elif event is InputEventMouseMotion:
+			if not row.has_focus():
+				row.grab_focus()
+			if _dragging:
+				_set_from((event as InputEventMouseMotion).position.x)
+				accept_event()
+
+	func _set_from(x: float) -> void:
+		var v := clampf((x - LINE_FROM) / (LINE_TO - LINE_FROM), 0.0, 1.0)
+		if not is_equal_approx(v, float(get_value.call())):
+			set_value.call(v)
+			queue_redraw()
+
+	func _draw() -> void:
+		var lit := row.has_focus()
+		var v := clampf(float(get_value.call()), 0.0, 1.0)
+		var y := size.y * 0.5
+		var font := UiTheme.sans(400, 2)
+		var col := UiTheme.TEXT if lit else UiTheme.DIM
+		var base := y + 28.0 * 0.35              # (the capitals centred on the line)
+		var x := lerpf(LINE_FROM, LINE_TO, v)
+		draw_line(Vector2(LINE_FROM, y), Vector2(LINE_TO, y), UiTheme.FAINT, 2.0)
+		if v > 0.0:
+			draw_line(Vector2(LINE_FROM, y), Vector2(x, y), col, 2.0)
+		draw_circle(Vector2(x, y), 7.0 if lit else 5.0, col, true, -1.0, true)
+		draw_string(font, Vector2(LINE_TO + 16.0, base), str(roundi(v * 100.0)), HORIZONTAL_ALIGNMENT_RIGHT, 56.0, 28, col)
+		if lit:
+			draw_string(font, Vector2(0.0, base), "\u2039", HORIZONTAL_ALIGNMENT_LEFT, -1, 28, col)
+			draw_string(font, Vector2(size.x - 12.0, base), "\u203a", HORIZONTAL_ALIGNMENT_LEFT, -1, 28, col)

@@ -7,6 +7,9 @@ extends CanvasLayer
 ## Like Sekiro: his vitality and deathblow marks top left, his posture top centre, yours bottom
 ## centre, your vitality and the gourd bottom left.
 
+## After his last deathblow, how long 忍殺 holds over the drained scene before everything fades
+## to black for the end screen (real seconds).
+const VICTORY_HOLD := 3.6
 
 var player: Player
 var boss: Boss
@@ -39,6 +42,11 @@ var _overlay_title: Label
 var _overlay_hints: UiTheme.HintBar
 var _execution: Control
 var _execution_kanji: TextureRect
+var _end: ColorRect
+var _end_title: Label
+var _end_rule: ColorRect
+var _end_hints: UiTheme.HintBar
+var _end_ready := false
 var _panel: Control
 var _help_visible := false
 var _last_timing := "—"
@@ -69,6 +77,7 @@ func _ready() -> void:
 	_root.add_child(_backdrop)
 	_build_overlay()
 	_build_panel()
+	_build_end()
 	Game.debug_toggled.connect(func(_on: bool): _debug_panel.visible = Game.debug)
 	GameInput.device_changed.connect(func(_pad: bool): _build_prompt())
 
@@ -283,6 +292,29 @@ func _build_panel() -> void:
 	_root.add_child(_panel)
 
 
+## The end screen, over everything: black, "Thanks for Playing" with a vermilion line drawn out
+## under it, and what you can do next.
+func _build_end() -> void:
+	_end = ColorRect.new()
+	_end.color = Color(0, 0, 0)
+	_end.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_end.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_end.visible = false
+	_root.add_child(_end)
+	_end_title = UiTheme.label("Thanks for Playing", UiTheme.serif(500, 2), 84, UiTheme.TEXT, HORIZONTAL_ALIGNMENT_CENTER)
+	UiTheme.place(_end_title, Vector2(0.5, 0.5), Vector2(-700, -110), Vector2(1400, 120))
+	_end.add_child(_end_title)
+	_end_rule = ColorRect.new()
+	_end_rule.color = UiTheme.ACCENT
+	_end_rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	UiTheme.place(_end_rule, Vector2(0.5, 0.5), Vector2(0, 26), Vector2(0, 2))
+	_end.add_child(_end_rule)
+	_end_hints = UiTheme.HintBar.new([[["Enter"], ["A"], "Fight again"], [["Esc"], ["Start"], "Title menu"]], 30.0, 18)
+	_end_hints.alignment = BoxContainer.ALIGNMENT_CENTER
+	UiTheme.place(_end_hints, Vector2(0.5, 1), Vector2(-500, -UiTheme.MARGIN - 40), Vector2(1000, 40))
+	_end.add_child(_end_hints)
+
+
 func _show_gourd(n: int) -> void:
 	_heal_label.text = str(n)
 	_heal_label.modulate.a = 1.0 if n > 0 else 0.4
@@ -380,14 +412,45 @@ func show_death() -> void:
 	_show_overlay("kanji_death", "", [[["Enter"], ["A"], "Try again"], [["Esc"], ["Start"], "Title menu"]], 0.8)
 
 
+## His last life: 忍殺 over the drained scene, then (VICTORY_HOLD later) the end screen.
 func show_victory() -> void:
-	_show_overlay("kanji_execution", "SHINOBI EXECUTION",
-		[[["Enter"], ["A"], "Fight again"], [["Esc"], ["Start"], "Title menu"]], 0.35)
+	_show_overlay("kanji_execution", "SHINOBI EXECUTION", [], 0.35)
+	_end_ready = false
+	var tw := _end.create_tween()
+	Fx._real_time(tw)
+	tw.tween_interval(VICTORY_HOLD)
+	tw.tween_callback(show_end)
+
+
+## Everything fades to black, then "Thanks for Playing" comes up with its line, then the hints
+## (from then on Enter / Esc do something: end_ready).
+func show_end() -> void:
+	_end.visible = true
+	_end.modulate.a = 0.0
+	_end_title.modulate.a = 0.0
+	_end_hints.modulate.a = 0.0
+	_end_rule.offset_left = 0.0
+	_end_rule.offset_right = 0.0
+	var tw := _end.create_tween()
+	Fx._real_time(tw)
+	tw.tween_property(_end, "modulate:a", 1.0, 2.2).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_interval(0.3)
+	tw.tween_property(_end_title, "modulate:a", 1.0, 1.4)
+	tw.parallel().tween_property(_end_rule, "offset_left", -150.0, 1.6).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(_end_rule, "offset_right", 150.0, 1.6).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
+	tw.tween_callback(func(): _end_ready = true)
+	tw.tween_property(_end_hints, "modulate:a", 1.0, 0.8)
+
+
+## The end screen is up and its hints are showing: Enter fights again, Esc goes to the title.
+func end_ready() -> bool:
+	return _end_ready
 
 
 func hide_overlay() -> void:
 	_overlay.visible = false
 	_backdrop.visible = _help_visible
+	_end.visible = false
 
 
 func _show_overlay(tex_key: String, title: String, hints: Array, drain: float) -> void:

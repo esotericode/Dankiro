@@ -1,12 +1,19 @@
 extends Node3D
-## Builds the fight and runs the flow: title menu -> intro -> fight -> death / victory ->
-## retry (straight back into the fight) or the title menu.
+## Builds the fight and runs the flow: title menu -> intro -> fight -> death / victory (and the
+## end screen) -> retry (straight back into the fight) or the title menu.
 ## Gameplay lives under `World` (pausable); HUD, menu and this node keep running while paused.
+## It also tells Music what to play: the phase's track from the namecard on, crossfading into
+## the next as he rises and roars; it sinks under a deathblow and fades out when you die or he
+## does, and on the way to the title.
 
 enum Flow { INTRO, FIGHT, DEAD, VICTORY, TITLE }
 
 const PLAYER_START := Vector3(0, 0, 6.5)
 const BOSS_START := Vector3(0, 0, -5.0)
+## Music fades, in seconds: in as the fight begins, from one phase's track to the next, and out.
+const MUSIC_IN := 2.0
+const MUSIC_CROSSFADE := 2.5
+const MUSIC_OUT := 3.0
 
 var flow: int = Flow.INTRO
 var world: Node3D
@@ -80,6 +87,7 @@ func _ready() -> void:
 	player.died.connect(_on_player_died)
 	boss.defeated.connect(_on_boss_defeated)
 	boss.executed.connect(_on_boss_executed)
+	boss.phase_changed.connect(_on_phase_changed)
 	Sfx.start_ambience()
 	if Game.skip_title:
 		Game.skip_title = false
@@ -99,6 +107,7 @@ func _show_title() -> void:
 	_title_cam.current = true
 	_update_title_camera(0.0)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	Music.fade_out(1.5)          # the title is quiet, but for the wind
 	menu.open_title()
 
 
@@ -129,6 +138,7 @@ func _begin_intro() -> void:
 	player.controls_enabled = false
 	boss.play_intro()
 	hud.show_namecard()
+	Music.play_phase(boss.phase, MUSIC_IN)
 	_intro_timer = 2.4
 
 
@@ -153,14 +163,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event.is_action_pressed("pause"):
 		get_viewport().set_input_as_handled()
-		if flow == Flow.DEAD or flow == Flow.VICTORY:
+		if _over():
 			_to_title()
 		elif flow == Flow.FIGHT or flow == Flow.INTRO:
 			_toggle_pause()
 	elif event.is_action_pressed("help"):
 		hud.toggle_help()
 	elif event.is_action_pressed("confirm"):
-		if flow == Flow.DEAD or flow == Flow.VICTORY:
+		if _over():
 			get_viewport().set_input_as_handled()
 			_restart()
 
@@ -177,18 +187,38 @@ func _toggle_pause() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if p else Input.MOUSE_MODE_CAPTURED
 
 
+## The fight is over and waiting for you: to try again (Enter / A) or go to the title (Esc /
+## Start). After a victory, only once the end screen is up: a jump pressed as he falls mustn't
+## skip it.
+func _over() -> bool:
+	return flow == Flow.DEAD or (flow == Flow.VICTORY and hud.end_ready())
+
+
 func _on_player_died() -> void:
 	flow = Flow.DEAD
 	boss.set_passive(true)
 	hud.show_death()
+	Music.fade_out(MUSIC_OUT)
 
 
-## A deathblow: 忍殺 on the screen (the last one gets the victory screen instead).
+## He rose into the next phase (or the fight starts in a later one): its track crossfades in,
+## unless you've died meanwhile.
+func _on_phase_changed(n: int) -> void:
+	if flow != Flow.DEAD:
+		Music.play_phase(n, MUSIC_CROSSFADE)
+
+
+## A deathblow: 忍殺 on the screen and the music sinks under it (the last one gets the victory
+## screen instead, and the music fades out as he dies).
 func _on_boss_executed(final: bool) -> void:
-	if not final:
+	if final:
+		Music.fade_out(MUSIC_OUT)
+	else:
 		hud.show_execution()
+		Music.dip(-10.0, 1.0)
 
 
+## He's dead: 忍殺 over the drained scene, then the fade to black and "Thanks for Playing".
 func _on_boss_defeated() -> void:
 	flow = Flow.VICTORY
 	player.controls_enabled = false
@@ -197,11 +227,13 @@ func _on_boss_defeated() -> void:
 	hud.show_victory()
 
 
-## Straight back into the fight (same options), skipping the title menu.
+## Straight back into the fight (same options), skipping the title menu. The music starts
+## again from the top.
 func _restart() -> void:
 	Game.skip_title = true
 	get_tree().paused = false
 	Game.clear_time_effects()
+	Music.fade_out(1.0)
 	get_tree().reload_current_scene()
 
 
@@ -209,4 +241,5 @@ func _to_title() -> void:
 	Game.skip_title = false
 	get_tree().paused = false
 	Game.clear_time_effects()
+	Music.fade_out(1.5)
 	get_tree().reload_current_scene()

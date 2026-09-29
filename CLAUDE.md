@@ -28,11 +28,15 @@ the script backs off and retries, so let it run. For another version, set
 - Combat lab (headless, about 8 min for everything, exits 0 when all checks pass; any engine or
   script error during the run also fails it):
   `godot --headless --fixed-fps 120 res://tests/combat_lab.tscn -- [suite ...] [--verbose]`
-  Suites: reach, tells, deflect, flurry, punish, loop, phases, menu, camera, ribbons, spam, mikiri, dodge,
-  sweep, shuriken, leap, circle, attack, cancel, hitstop, deathblow, inferno, tempest, escape, soak. `camera` loads the real arena (main.tscn), like
-  `menu`. `menu` drives the real menus with simulated gamepad input
+  Suites: reach, tells, deflect, flurry, punish, loop, phases, menu, music, ending, camera, ribbons, spam, mikiri, dodge,
+  sweep, shuriken, leap, circle, attack, cancel, hitstop, deathblow, inferno, tempest, escape, soak. `camera`, `music` and
+  `ending` load the real arena (main.tscn), like `menu`. `menu` drives the real menus with simulated gamepad input
   (`Input.parse_input_event`); it sets `Game.save_enabled = false` so tests never overwrite the
-  saved options.
+  saved options. Never let the lab call main.gd's `_restart` or `_to_title`: they reload the
+  current scene, which is the lab. A full run crashed once (a segfault in an engine thread,
+  during `inferno`) while a lavapipe render had every core busy; clean runs, and that suite run
+  under load on the code before and after the change then being tested, never reproduced it.
+  Run the lab on its own when you need a clean result.
 - Rendered frames (to actually *see* a change), using Movie Maker with software Vulkan:
   ```
   printf '[display]\nwindow/size/window_width_override=960\nwindow/size/window_height_override=540\n' > override.cfg
@@ -52,8 +56,12 @@ the script backs off and retries, so let it run. For another version, set
   (`stand`, `wide`) films phase 2's fire move (about 16 s: render it at 640x360 to iterate). Contact-sheet the
   PNGs with PIL, then look at them. `--fixed-fps 10` renders a third of the frames for a quick look.
 - The game boots to a title menu. The capture harness sets `Game.skip_title` (and ignores the
-  saved options: `Game.start_phase`, `Game.debug`) so shots go straight into the fight; the
-  `menu_*` shots boot to the menu like the game. Options live in `user://settings.cfg`.
+  saved options: `Game.start_phase`, `Game.debug`, and the music at its default volume unless
+  `DANKIRO_MUSIC=<0..1>`, 0 for the sounds alone) so shots go straight into the fight; the
+  `menu_*` shots boot to the menu like the game. Only the music volume is saved
+  (`user://settings.cfg`, `[audio]`): the starting phase and diagnostics are testing options
+  that start every session at 1 and off (`load_settings` ignores the `[fight]` keys earlier
+  builds saved). `load_settings` / `save_settings` take a path, for tests.
 - Quick script-error check: `godot --headless --quit-after 600`.
 
 ## The UI (built in code)
@@ -228,6 +236,24 @@ godot --headless --editor --quit               # import
   (speed within `WAVE_STEER`), with the turn slowed to `GAP_WAVES` so there's 0.9 s between
   jumps (a jump and landing take ~0.77 s). The lab's `inferno` suite proves it's clearable;
   its bot can jump out of a landing after 0.08 s like a player. Captures: add `p3`.
+- The music is the `Music` autoload (`scripts/autoload/music.gd`): a track per phase in
+  `audio/music/` (supplied mp3s), on the "Music" bus, which `Sfx._setup_buses` makes before the
+  Deflect bus so its (gentle) ducker hears the deflect in the same block. main.gd drives it:
+  `play_phase` at the namecard and on `Boss.phase_changed` (the roar), `dip` under a deathblow,
+  `fade_out` when you die, on the last deathblow and before a restart or the title. Voices
+  crossfade at equal power in real time (`Game.unscaled`), and a track that reaches its
+  `loop_at` starts a new voice from the top. A voice's volume is set only while it fades (each
+  change is handed over to the audio thread; the lab runs thousands of frames a second).
+  `data/music.json` (loop points, and trims to -12 LUFS) comes from `tools/music_levels.py`:
+  re-run it after replacing a track. It plays copies of the streams (like Sfx's wind), so
+  quitting mid-fight doesn't leave a loaded file in use at exit. Headless, the audio clock runs in real time while the lab runs much faster, so
+  the lab seeks to test the loop. On the title's Options page, changing the volume plays a
+  preview (`Music.preview`), ended when the page closes.
+- The victory flows into the end screen: `Hud.show_victory` (忍殺, no hints), then after
+  `Hud.VICTORY_HOLD` `show_end` (black, "Thanks for Playing", then the hints). main.gd's `_over()`
+  lets Enter / Esc act after a victory only once `Hud.end_ready()`, so a jump (A is also
+  confirm) pressed as he falls can't skip it. Capture: `ui_moment end`, or `deathblow final`
+  for the whole thing.
 - Cosmetic randomness in effects (blood splatter) comes from `Fx._rand`, not the global RNG: the
   lab seeds the global RNG and the AI draws from it, so an effect that called `randf()` would
   change how fights play out.

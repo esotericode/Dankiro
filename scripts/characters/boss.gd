@@ -20,6 +20,7 @@ signal defeated
 signal perilous_warning(kind: String)
 signal struck(result: int, point: Vector3)   ## the player's sword reached him: Combat.RESULT_* (hit, block, parry)
 signal executed(final: bool)                 ## a deathblow's blade went in (final: his last life)
+signal phase_changed(phase: int)             ## he rose into the next phase (or the fight starts in a later one)
 
 enum S { INTRO, NEUTRAL, ATTACK, GUARD, REACT, STAGGER, DEATHBLOWN, REVIVE, DEAD, INFERNO }
 
@@ -1258,6 +1259,7 @@ func _enter_phase(n: int, fanfare := true) -> void:
 	if phase >= 3:
 		staff_fire.set_level(StaffFire.SMOULDER, 1.0)
 	vitals_changed.emit()
+	phase_changed.emit(phase)
 	if fanfare:
 		Sfx.play_ui("roar", 0.0)
 		Game.shake(0.35, 0.8)

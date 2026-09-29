@@ -8,7 +8,7 @@ extends Node
 ## The deflect is the one sound that must stand apart: play_deflect() plays it in two layers (the
 ## positional strike and a flat, wide ring carrying its note) on a bus of its own, "Deflect", and
 ## the SFX and Ambience buses duck under it (sidechain compressors), so for a moment it's all you
-## hear.
+## hear. The "Music" bus (the Music autoload's score) ducks a little too.
 
 const BANKS := {
 	"deflect": ["deflect_1", "deflect_2", "deflect_3", "deflect_4", "deflect_5", "deflect_6"],
@@ -125,6 +125,14 @@ func _setup_buses() -> void:
 		AudioServer.set_bus_name(idx2, "Ambience")
 		AudioServer.set_bus_send(idx2, "Master")
 		AudioServer.add_bus_effect(idx2, _ducker())
+	# The score (Music: a track for each phase), at the Options' music volume. It gives way to the
+	# deflect too, but gently: music pumping under every deflect of a flurry would be heard.
+	if AudioServer.get_bus_index("Music") == -1:
+		AudioServer.add_bus()
+		var idx4 := AudioServer.bus_count - 1
+		AudioServer.set_bus_name(idx4, "Music")
+		AudioServer.set_bus_send(idx4, "Master")
+		AudioServer.add_bus_effect(idx4, _ducker(-12.0, 2.0, 400.0))
 	# After the others, so it's mixed first and their duckers hear it in the same block.
 	if AudioServer.get_bus_index("Deflect") == -1:
 		AudioServer.add_bus()
@@ -153,14 +161,15 @@ func _room() -> AudioEffectReverb:
 	return rev
 
 
-## Ducks a bus under the deflect: up to ~7 dB on its strike, let go over a quarter second.
-func _ducker() -> AudioEffectCompressor:
+## Ducks a bus under the deflect: by default up to ~7 dB on its strike, let go over a quarter
+## second.
+func _ducker(threshold := -16.0, ratio := 3.0, release_ms := 260.0) -> AudioEffectCompressor:
 	var c := AudioEffectCompressor.new()
 	c.sidechain = &"Deflect"
-	c.threshold = -16.0
-	c.ratio = 3.0
+	c.threshold = threshold
+	c.ratio = ratio
 	c.attack_us = 300.0
-	c.release_ms = 260.0
+	c.release_ms = release_ms
 	c.gain = 0.0
 	return c
 
